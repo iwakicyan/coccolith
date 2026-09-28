@@ -1,9 +1,11 @@
 // Virtual joystick state — read each frame in main.js
 export const vJoy = { lx: 0, ly: 0, rx: 0, ry: 0 }
 
+const HANDLE_SHIFT = 6   // ハンドル画像のずれ幅 (px) — 中心からあまり動かさない
+
 function makeJoystick(wrapEl, onMove) {
   const handle = wrapEl.querySelector('.joy-handle')
-  const maxDist = wrapEl.offsetWidth / 2 - 23   // base radius - handle radius
+  const maxDist = wrapEl.offsetWidth / 2 - 23   // 入力の最大半径
   let touchId    = null
   let mouseActive = false
 
@@ -13,7 +15,11 @@ function makeJoystick(wrapEl, onMove) {
     let dy = cy - (rect.top  + rect.height / 2)
     const d = Math.sqrt(dx * dx + dy * dy)
     if (d > maxDist) { const s = maxDist / d; dx *= s; dy *= s }
-    handle.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`
+    // 見た目: 少しだけずらし、倒した方向へハンドルの上端を向ける
+    const k = HANDLE_SHIFT / maxDist
+    const deg = d > 4 ? Math.atan2(dx, -dy) * 180 / Math.PI : 0
+    handle.style.transform =
+      `translate(calc(-50% + ${dx * k}px), calc(-50% + ${dy * k}px)) rotate(${deg}deg)`
     onMove(dx / maxDist, dy / maxDist)
   }
 
@@ -56,10 +62,38 @@ function makeJoystick(wrapEl, onMove) {
   window.addEventListener('mouseup',   ()  => { if (mouseActive) { mouseActive = false; reset() } })
 }
 
+// 直進ボタン — 押している間だけ前進（横移動なし）
+function makeDriveButton(btn) {
+  const touches = new Set()
+  let mouseActive = false
+  const update = () => {
+    const on = touches.size > 0 || mouseActive
+    vJoy.lx = 0
+    vJoy.ly = on ? -1 : 0
+    btn.classList.toggle('pressed', on)
+  }
+
+  btn.addEventListener('touchstart', e => {
+    e.preventDefault()
+    for (const t of e.changedTouches) touches.add(t.identifier)
+    update()
+  }, { passive: false })
+  const onTouchEnd = e => {
+    for (const t of e.changedTouches) touches.delete(t.identifier)
+    update()
+  }
+  btn.addEventListener('touchend',    onTouchEnd)
+  btn.addEventListener('touchcancel', onTouchEnd)
+
+  btn.addEventListener('mousedown', e => { mouseActive = true; update(); e.stopPropagation() })
+  window.addEventListener('mouseup', () => { if (mouseActive) { mouseActive = false; update() } })
+  btn.addEventListener('contextmenu', e => e.preventDefault())
+}
+
 export function initJoysticks() {
-  const jL = document.getElementById('joy-left')
+  const drive = document.getElementById('drive-btn')
   const jR = document.getElementById('joy-right')
-  if (jL) makeJoystick(jL, (x, y) => { vJoy.lx = x; vJoy.ly = y })
+  if (drive) makeDriveButton(drive)
   if (jR) makeJoystick(jR, (x, y) => { vJoy.rx = x; vJoy.ry = y })
 
   // 俯瞰ボタン → Tab KeyboardEvent を dispatch
