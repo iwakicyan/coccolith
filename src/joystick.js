@@ -62,31 +62,45 @@ function makeJoystick(wrapEl, onMove) {
   window.addEventListener('mouseup',   ()  => { if (mouseActive) { mouseActive = false; reset() } })
 }
 
-// 直進ボタン — 押している間だけ前進（横移動なし）
+// 直進ボタン — 押している間だけ前進（横移動なし）。真後ろに引っ張ると後退
+const REVERSE_PULL = 28   // 後退に切り替わる引っ張り量 (px)
+
 function makeDriveButton(btn) {
-  const touches = new Set()
-  let mouseActive = false
+  const pointers = new Map()   // id → { sx, sy, back }
   const update = () => {
-    const on = touches.size > 0 || mouseActive
+    const on   = pointers.size > 0
+    const back = [...pointers.values()].some(p => p.back)
     vJoy.lx = 0
-    vJoy.ly = on ? -1 : 0
+    vJoy.ly = on ? (back ? 1 : -1) : 0
     btn.classList.toggle('pressed', on)
+    btn.classList.toggle('reverse', back)
   }
+  const press = (id, x, y) => { pointers.set(id, { sx: x, sy: y, back: false }); update() }
+  const drag  = (id, x, y) => {
+    const p = pointers.get(id)
+    if (!p) return
+    const dx = x - p.sx, dy = y - p.sy
+    // ほぼ真下（後ろ）方向に一定以上引っ張ったら後退、戻したら前進
+    p.back = dy > REVERSE_PULL && dy > Math.abs(dx) * 1.5
+    update()
+  }
+  const release = id => { if (pointers.delete(id)) update() }
 
   btn.addEventListener('touchstart', e => {
     e.preventDefault()
-    for (const t of e.changedTouches) touches.add(t.identifier)
-    update()
+    for (const t of e.changedTouches) press(t.identifier, t.clientX, t.clientY)
   }, { passive: false })
-  const onTouchEnd = e => {
-    for (const t of e.changedTouches) touches.delete(t.identifier)
-    update()
-  }
+  btn.addEventListener('touchmove', e => {
+    e.preventDefault()
+    for (const t of e.changedTouches) drag(t.identifier, t.clientX, t.clientY)
+  }, { passive: false })
+  const onTouchEnd = e => { for (const t of e.changedTouches) release(t.identifier) }
   btn.addEventListener('touchend',    onTouchEnd)
   btn.addEventListener('touchcancel', onTouchEnd)
 
-  btn.addEventListener('mousedown', e => { mouseActive = true; update(); e.stopPropagation() })
-  window.addEventListener('mouseup', () => { if (mouseActive) { mouseActive = false; update() } })
+  btn.addEventListener('mousedown', e => { press('mouse', e.clientX, e.clientY); e.stopPropagation() })
+  window.addEventListener('mousemove', e => drag('mouse', e.clientX, e.clientY))
+  window.addEventListener('mouseup',   () => release('mouse'))
   btn.addEventListener('contextmenu', e => e.preventDefault())
 }
 

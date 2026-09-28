@@ -59,9 +59,10 @@
       filter: drop-shadow(0 2px 6px rgba(0,0,0,0.35));
       touch-action: none; user-select: none; -webkit-user-select: none;
       -webkit-tap-highlight-color: transparent; cursor: pointer;
-      transition: transform 0.08s, opacity 0.08s;
+      transition: transform 0.12s, opacity 0.08s;
     }
     #drive-btn.pressed { transform: scale(0.9); opacity: 0.75; }
+    #drive-btn.reverse { transform: translateY(8px) rotate(180deg) scale(0.9); }  /* 後退中は矢印を下向きに */
     /* 俯瞰 ⇄ 主観 切替ボタン（左右のコントローラーと中心の高さを揃える） */
     #tab-btn {
       position: fixed; bottom: 43px; left: 50%; transform: translateX(-50%);
