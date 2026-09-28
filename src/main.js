@@ -196,6 +196,11 @@ const keys = {}
 window.addEventListener('keydown', e => {
   if (e.code === 'Tab') {
     overviewMode = !overviewMode
+    const tabBtn = document.getElementById('tab-btn')
+    if (tabBtn) {
+      tabBtn.classList.toggle('overview', overviewMode)
+      tabBtn.setAttribute('aria-label', overviewMode ? '主観に戻る' : '俯瞰')
+    }
 
     if (!overviewMode) {
       // 🔴 が指していた地表点（カメラ→原点方向のレイ）を新しい立ち位置にする
@@ -259,9 +264,18 @@ const PITCH_SPD = 1.2     // ピッチ速度 (rad/s)
 const OV_SPD    = 1.2     // 俯瞰回転速度 (rad/s)
 const OV_PITCH_MIN = -Math.PI * 0.49  // 南半球まで回せるよう負値に
 const OV_PITCH_MAX =  Math.PI * 0.49
+// ハンドル入力の立ち上がり: 入力開始時は start 倍から、time 秒かけて等倍へ
+const JOY_RAMP_YAW   = { start: 0.3,  time: 0.4 }
+const JOY_RAMP_PITCH = { start: 0.15, time: 0.7 }  // 上下はよりゆっくり
 const TARGET_FPS = 30
 const FRAME_MS   = 1000 / TARGET_FPS
 let prev = performance.now()
+let joyYawHeld = 0, joyPitchHeld = 0  // ハンドル入力の継続時間 (s)
+
+function joyRamp(ramp, held) {
+  const t = Math.min(held / ramp.time, 1)
+  return ramp.start + (1 - ramp.start) * t * t * (3 - 2 * t)  // smoothstep
+}
 
 // 雲生き物アニメーション用一時変数（GC 抑制）
 const _crQuat     = new THREE.Quaternion()
@@ -318,10 +332,16 @@ function animate() {
     c.mesh.setRotationFromMatrix(_crMat)
   }
 
+  // ハンドル入力（入力し始めはゆっくり）
+  joyYawHeld   = Math.abs(vJoy.rx) > 0.05 ? joyYawHeld   + dt : 0
+  joyPitchHeld = Math.abs(vJoy.ry) > 0.05 ? joyPitchHeld + dt : 0
+  const joyYaw   = vJoy.rx * joyRamp(JOY_RAMP_YAW,   joyYawHeld)
+  const joyPitch = vJoy.ry * joyRamp(JOY_RAMP_PITCH, joyPitchHeld)
+
   if (overviewMode) {
     // --- 俯瞰モード: A/D/Q/E で水平回転、↑↓ で仰俯角 ---
-    const ovTurnIn  = (keys['KeyA'] || keys['KeyQ'] ? 1 : 0) - (keys['KeyD'] || keys['KeyE'] ? 1 : 0) - vJoy.rx
-    const ovPitchIn = (keys['ArrowUp'] ? 1 : 0) - (keys['ArrowDown'] ? 1 : 0) - vJoy.ry
+    const ovTurnIn  = (keys['KeyA'] || keys['KeyQ'] ? 1 : 0) - (keys['KeyD'] || keys['KeyE'] ? 1 : 0) - joyYaw
+    const ovPitchIn = (keys['ArrowUp'] ? 1 : 0) - (keys['ArrowDown'] ? 1 : 0) - joyPitch
     if (Math.abs(ovTurnIn)  > 0.01) ovYaw   += OV_SPD * dt * Math.max(-1, Math.min(1, ovTurnIn))
     if (Math.abs(ovPitchIn) > 0.01) ovPitch  = Math.max(OV_PITCH_MIN, Math.min(OV_PITCH_MAX, ovPitch + OV_SPD * dt * Math.max(-1, Math.min(1, ovPitchIn))))
 
@@ -354,7 +374,7 @@ function animate() {
     // --- 通常モード: sabちゃん追従3人称 ---
     const da = (SPEED / R_C) * dt
 
-    const turnIn = (keys['KeyQ'] ? 1 : 0) - (keys['KeyE'] ? 1 : 0) - vJoy.rx
+    const turnIn = (keys['KeyQ'] ? 1 : 0) - (keys['KeyE'] ? 1 : 0) - joyYaw
     if (Math.abs(turnIn) > 0.01) { pFwd.applyAxisAngle(pDir, TURN_SPD * dt * Math.max(-1, Math.min(1, turnIn))); pFwd.normalize() }
 
     const axisWS = new THREE.Vector3().crossVectors(pDir, pFwd)
@@ -367,7 +387,7 @@ function animate() {
     pFwd.normalize()
 
     // ↑↓ / 右ジョイスティック Y でカメラ仰角を操作
-    const pitchIn = (keys['ArrowUp'] ? 1 : 0) - (keys['ArrowDown'] ? 1 : 0) - vJoy.ry
+    const pitchIn = (keys['ArrowUp'] ? 1 : 0) - (keys['ArrowDown'] ? 1 : 0) - joyPitch
     if (Math.abs(pitchIn) > 0.01) pitch = Math.max(PITCH_MIN, Math.min(PITCH_MAX, pitch + PITCH_SPD * dt * Math.max(-1, Math.min(1, pitchIn))))
 
     // --- sabちゃん配置 ---
