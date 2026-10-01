@@ -85,7 +85,7 @@ const _sabHeadGroup = sabchan.group.children.find(c => c.isGroup) ?? null
 const SAB_UNIT        = SAB_SCALE                   // モデル1unit → m
 const SAB_LIGHT_COLOR = 0xcfe6ff                    // 青白
 const SAB_LIGHT_INT   = 180                         // ON 時の強さ
-const SAB_LIGHT_INDOOR = 0.5                        // 室内ではライトの強さ・光の筋をこの倍率に
+const SAB_LIGHT_INDOOR = 0.2                        // 室内ではライトの強さ・光の筋をこの倍率に
 const SAB_LIGHT_ANGLE = 0.6                         // 照射半角 (rad)
 const SAB_LIGHT_TILT  = 0.14                        // 前方やや下向き (rad)
 const SAB_ICON_GLOW   = 0x66c8d8                    // OFF 時のアイコン発光色
