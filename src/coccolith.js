@@ -383,6 +383,30 @@ export function createCoccolith() {
   frameMW.scale.setScalar(3)
   placeOnSurface(group, frameMW, 10.6, 4.0, R_C + LAND_LIFT)
 
+  // --- ランドマーク #08: 多角形ドーム (lat=-45.0, lon=150.0) -----
+  // 直径100m の半球。少ない頂点（10×4）でもスムースシェーディングで丸く見せる
+  // 15m 沈めて置く（半径50m分の球面の丸みで縁が約3.5m 浮く分も含めて埋める）
+  // 色は頂点カラーで上 #BA6057 → 下 #6657BA のグラデーション（地上に見えている範囲で変化させる）
+  const DOME_R    = 50
+  const DOME_SINK = 15
+  const domeGeo = new THREE.SphereGeometry(DOME_R, 10, 4, 0, Math.PI * 2, 0, Math.PI / 2)
+  {
+    const top = new THREE.Color(0xBA6057), bottom = new THREE.Color(0x6657BA), c = new THREE.Color()
+    const pos = domeGeo.attributes.position
+    const col = new Float32Array(pos.count * 3)
+    for (let i = 0; i < pos.count; i++) {
+      const t = Math.min(1, (DOME_R - pos.getY(i)) / (DOME_R - DOME_SINK))  // 頂上0 → 地面の高さ1
+      c.copy(top).lerp(bottom, t).toArray(col, i * 3)
+    }
+    domeGeo.setAttribute('color', new THREE.BufferAttribute(col, 3))
+  }
+  const dome = new THREE.Mesh(domeGeo, new THREE.MeshLambertMaterial({ vertexColors: true }))
+  dome.castShadow = true
+  dome.receiveShadow = true
+  // 内壁: 太陽光が届かず真っ暗になるので、ライティングなしで頂点カラーをそのまま出す
+  dome.add(new THREE.Mesh(domeGeo, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.BackSide })))
+  placeOnSurface(group, dome, -45.0, 150.0, R_C + LAND_LIFT - DOME_SINK)
+
   // --- ランドマーク: Materis 1〜5 × 各2 ---------------------
   // Route1/2 ウェイポイント（陸地確定）をアンカーに、シード文字列で ±1° ジッター
 
