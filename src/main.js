@@ -500,6 +500,7 @@ const latlonEl = document.getElementById('latlon')
 // --- 起動演出: コイン ---------------------------------------
 // 開いた直後、sabちゃんの周り半径5mにコインが散らばり、吸い寄せられて消える
 // 保有コイン数: HUD の lat/lon の右に表示し、拾うたびに数字が跳ねる
+const coinBoxEl = document.getElementById('coin-box')
 const coinNumEl = document.getElementById('coin-num')
 let coinCount = 0
 function collectCoin() {
@@ -819,6 +820,7 @@ function animate() {
     const lon = theta * 180 / Math.PI - 180
     areaEl.textContent   = getAreaCode(pDir)
     latlonEl.textContent = `  |  lat: ${lat.toFixed(1)}°  lon: ${lon.toFixed(1)}°`
+    coinBoxEl.classList.add('ready')
   }
 
   coinIntro.update(dt, sabchan.group.position)
