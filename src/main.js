@@ -8,6 +8,7 @@ import { R_C, LAND_LIFT, ORBIT } from './constants.js'
 import { createKummo } from '../my-3d-parts/parts/kummo.jsx'
 import { createGummo } from '../my-3d-parts/parts/gummo.jsx'
 import { createSabchan } from '../my-3d-parts/parts/sabchan.jsx'
+import { setDoorGlow } from './doorGlow.js'
 
 // ============================================================
 //  LMF — Layout Master File
@@ -153,7 +154,7 @@ let sabLightOn = false
 function toggleSabLight() {
   sabLightOn = !sabLightOn
   sabLight.intensity = sabLightOn ? SAB_LIGHT_INT : 0
-  sabBeam.visible    = sabLightOn
+  sabBeam.visible    = sabLightOn && !firstPerson   // 主観中は目の前に筋が出るので隠す
   lightIconMat.map         = sabLightOn ? lightIconGrayTex : lightIconTex
   lightIconMat.emissiveMap = lightIconMat.map
   lightIconMat.emissive.set(sabLightOn ? 0x000000 : SAB_ICON_GLOW)
@@ -162,14 +163,25 @@ function toggleSabLight() {
 const _pointer = new THREE.Vector2()
 const _iconRay = new THREE.Raycaster()
 function hitLightIcon(e) {
-  if (!_sabHeadGroup) return false
+  if (!_sabHeadGroup || firstPerson) return false   // 主観中は sabちゃんが見えないので押せない
   _pointer.set((e.clientX / window.innerWidth) * 2 - 1, -(e.clientY / window.innerHeight) * 2 + 1)
   _iconRay.setFromCamera(_pointer, camera)
   return _iconRay.intersectObject(_sabHeadGroup, true).some(h => h.object !== sabBeam)
 }
-canvas.addEventListener('pointerdown', e => { if (hitLightIcon(e)) toggleSabLight() })
+// 光っているドアのタップ → 出入り、sabちゃんの頭のタップ → ライト
+function hitDoor(e) {
+  const door = activeDoorMesh()
+  if (!door) return false
+  _pointer.set((e.clientX / window.innerWidth) * 2 - 1, -(e.clientY / window.innerHeight) * 2 + 1)
+  _iconRay.setFromCamera(_pointer, camera)
+  return _iconRay.intersectObject(door, true).length > 0
+}
+canvas.addEventListener('pointerdown', e => {
+  if (hitDoor(e)) useDoor()
+  else if (hitLightIcon(e)) toggleSabLight()
+})
 canvas.addEventListener('pointermove', e => {
-  if (e.pointerType === 'mouse') canvas.style.cursor = hitLightIcon(e) ? 'pointer' : ''
+  if (e.pointerType === 'mouse') canvas.style.cursor = hitDoor(e) || hitLightIcon(e) ? 'pointer' : ''
 })
 
 // --- 3人称カメラ定数 -------------------------------------------
@@ -296,6 +308,124 @@ function resolveColliders() {
   }
 }
 
+// --- 建物の出入り（ドア → 室内シーン） ------------------------
+// ドアに近づくと輪郭が光り、タップ（または Enter）で暗転して室内シーンに切り替え。
+// 室内は建物ごとのモジュールを初回だけ読み込む
+const INTERIORS = {
+  tofu: () => import('./interiors/tofu.js').then(m => m.createTofuInterior()),
+}
+const DOOR_REACH       = 3.5   // ドアからこの距離 (m) 以内で輪郭が光り、出入りできる
+const DOOR_EXIT_DIST   = 8.5   // 外に出たときのドアからの距離 (m)
+const INTERIOR_SPEED   = 4     // 室内の移動速度 (m/s)
+const INTERIOR_CAM_DIST = 6    // 室内のカメラ距離 (m)
+const INTERIOR_BODY_R  = 0.6   // 室内の当たり判定半径 (m)（狭い扉を通れるよう耳より少し小さめ）
+const SAB_HEIGHT       = 8.35 * SAB_SCALE
+const FP_EYE_H         = 1.5   // 室内の主観モードの目の高さ (m)
+const FP_PITCH_MAX     = 1.2   // 主観モードの見上げ・見下ろし上限 (rad)
+
+// 外のドア（colliders のうち userData.door を持つもの）。位置は球面上の方向で持つ
+const _doors = colliders.filter(o => o.userData.door).map(o => {
+  const { id, mesh, local, outward } = o.userData.door
+  const pos = local.clone().applyMatrix4(o.matrixWorld)
+  const out = outward.clone().transformDirection(o.matrixWorld)
+  // 出たときはカメラ（後方 8m）が建物に埋まらない距離まで離して立たせる
+  return { id, mesh, dir: pos.clone().normalize(), spawnDir: pos.clone().addScaledVector(out, DOOR_EXIT_DIST).normalize(), out }
+})
+const _interiorCache = {}
+let interior = null          // 室内にいる間 { def, door }
+let transitioning = false
+let firstPerson = false      // 室内だけの主観モード（sabちゃんを隠して目線カメラ）
+let fpPitch = 0
+const iPos = new THREE.Vector3()
+const iFwd = new THREE.Vector3(0, 0, 1)
+const _iUp = new THREE.Vector3(0, 1, 0)
+
+const fadeEl  = document.getElementById('fade')
+const fadeTo  = (v) => new Promise(r => { fadeEl.style.opacity = v; setTimeout(r, 350) })
+
+function nearDoor() {
+  for (const d of _doors) if (R_C * pDir.angleTo(d.dir) < DOOR_REACH) return d
+  return null
+}
+
+// 俯瞰ボタンのアイコン: 屋外は 俯瞰⇄sabちゃん、室内は 主観⇄後ろからの視点 の切り替え
+// obeye = 外から見る目（俯瞰へ）、subeye = sabちゃんの目（主観へ）、insab = sabちゃん入りの視点へ
+function updateTabBtn() {
+  const tabBtn = document.getElementById('tab-btn')
+  if (!tabBtn) return
+  const toSubjective = interior ? !firstPerson : overviewMode
+  tabBtn.classList.toggle('overview', toSubjective)
+  tabBtn.classList.toggle('insab', !!interior && firstPerson)
+  tabBtn.setAttribute('aria-label', interior
+    ? (firstPerson ? '後ろからの視点' : '主観視点')
+    : (overviewMode ? '主観に戻る' : '俯瞰'))
+}
+
+// 主観モード中は sabちゃんの体を隠す（ライトの光源は頭に付いたまま照らし続ける）
+function setFirstPerson(on) {
+  firstPerson = on
+  fpPitch = 0
+  sabchan.group.traverse(o => { if (o.isMesh || o.isLine) o.visible = !on })
+  sabBeam.visible = sabLightOn && !on
+  if (on) showOccluders()
+  updateTabBtn()
+}
+
+async function enterInterior(door) {
+  transitioning = true
+  await fadeTo(1)
+  try {
+    const def = _interiorCache[door.id] ??= await INTERIORS[door.id]()
+    iPos.set(def.spawn.x, 0, def.spawn.z)
+    iFwd.copy(def.spawn.fwd)
+    pitch = 0
+    def.scene.add(sabchan.group)
+    interior = { def, door }
+    updateTabBtn()
+  } finally {
+    await fadeTo(0)
+    transitioning = false
+  }
+}
+
+async function exitInterior() {
+  transitioning = true
+  await fadeTo(1)
+  const { door } = interior
+  showOccluders()
+  scene.add(sabchan.group)
+  interior = null
+  setFirstPerson(false)
+  // ドアの外側に、ドアから離れる向きで立たせる
+  pDir.copy(door.spawnDir)
+  pFwd.copy(door.out).addScaledVector(pDir, -door.out.dot(pDir)).normalize()
+  pitch = 0
+  await fadeTo(0)
+  transitioning = false
+}
+
+function useDoor() {
+  if (transitioning || overviewMode) return
+  if (interior) { if (interior.def.atExit(iPos)) exitInterior() }
+  else { const d = nearDoor(); if (d) enterInterior(d) }
+}
+
+// 今くぐれるドアの扉メッシュ（なければ null）
+function activeDoorMesh() {
+  if (transitioning || overviewMode) return null
+  if (interior) return interior.def.atExit(iPos) ? interior.def.exitDoor : null
+  return nearDoor()?.mesh ?? null
+}
+
+// くぐれるドアだけ輪郭を光らせる
+let _glowingDoor = null
+function updateDoorGlow(now) {
+  const door = activeDoorMesh()
+  if (_glowingDoor && _glowingDoor !== door) setDoorGlow(_glowingDoor, false)
+  if (door) setDoorGlow(door, true, now / 1000)
+  _glowingDoor = door
+}
+
 // --- プレイヤー状態 -----------------------------------------
 // pDir: 足元から頭方向（球面上の法線）
 // pFwd: 進行方向
@@ -319,13 +449,15 @@ let ovPitch = Math.PI * 0.25   // 初期は斜め上から
 const keys = {}
 
 window.addEventListener('keydown', e => {
+  if (e.code === 'Enter' && !e.repeat) { useDoor(); e.preventDefault(); return }
+  if (e.code === 'Tab' && (interior || transitioning)) {
+    if (interior && !transitioning) setFirstPerson(!firstPerson)
+    e.preventDefault()
+    return
+  }
   if (e.code === 'Tab') {
     overviewMode = !overviewMode
-    const tabBtn = document.getElementById('tab-btn')
-    if (tabBtn) {
-      tabBtn.classList.toggle('overview', overviewMode)
-      tabBtn.setAttribute('aria-label', overviewMode ? '主観に戻る' : '俯瞰')
-    }
+    updateTabBtn()
 
     if (!overviewMode) {
       // 🔴 が指していた地表点（カメラ→原点方向のレイ）を新しい立ち位置にする
@@ -424,6 +556,93 @@ const _crFwd  = new THREE.Vector3()
 const _crZ    = new THREE.Vector3()
 const _crMat  = new THREE.Matrix4()
 
+// sabちゃんの頭の揺れ・鼻とセンサーの明滅（屋外・室内共通）
+function animateSabParts(now) {
+  const t = now / 1000
+  if (_sabHeadGroup) {
+    _sabHeadGroup.rotation.z = Math.sin(t * 0.51) * 0.06
+    _sabHeadGroup.rotation.x = Math.sin(t * 0.37) * 0.12
+  }
+  const pulse = 1.0 + Math.sin(t * 2.8) * 0.35
+  if (sabchan.nose)   sabchan.nose.scale.setScalar(pulse)
+  if (sabchan.sensor) sabchan.sensor.scale.setScalar(pulse)
+}
+
+// --- 室内: 平らな床の上を移動、壁・段差は室内モジュールの判定に従う ---
+const _iRight = new THREE.Vector3()
+const _iSab   = new THREE.Vector3()
+const _iCam   = new THREE.Vector3()
+const _iLook  = new THREE.Vector3()
+const _iDir   = new THREE.Vector3()
+const _iTmp   = new THREE.Vector3()
+const OCCLUDE_SAMPLES = [[0, 0], [-0.8, 0], [0.8, 0], [0, 0.9], [0, -0.4]]  // [右, 上] (m)
+const _occluders = []   // カメラの視線を遮るため隠しているメッシュ
+function showOccluders() {
+  for (const m of _occluders) m.visible = true
+  _occluders.length = 0
+}
+const _iRay   = new THREE.Raycaster()
+const _iMat   = new THREE.Matrix4()
+
+function updateInterior(dt, now, joyYaw, joyPitch) {
+  const { def } = interior
+  const turnIn = (keys['KeyQ'] ? 1 : 0) - (keys['KeyE'] ? 1 : 0) - joyYaw
+  if (Math.abs(turnIn) > 0.01) iFwd.applyAxisAngle(_iUp, TURN_SPD * dt * Math.max(-1, Math.min(1, turnIn)))
+  _iRight.crossVectors(iFwd, _iUp)   // 画面右
+  const step = INTERIOR_SPEED * dt
+  const fbIn = (keys['KeyW'] ? 1 : 0) - (keys['KeyS'] ? 1 : 0) - vJoy.ly
+  const lrIn = (keys['KeyD'] ? 1 : 0) - (keys['KeyA'] ? 1 : 0) + vJoy.lx
+  if (Math.abs(fbIn) > 0.01) iPos.addScaledVector(iFwd,   step * Math.max(-1, Math.min(1, fbIn)))
+  if (Math.abs(lrIn) > 0.01) iPos.addScaledVector(_iRight, step * Math.max(-1, Math.min(1, lrIn)))
+  def.resolve(iPos, INTERIOR_BODY_R, SAB_HEIGHT)
+  iPos.y = def.floorAt(iPos.x, iPos.z, iPos.y)
+
+  const pitchIn = (keys['ArrowUp'] ? 1 : 0) - (keys['ArrowDown'] ? 1 : 0) - joyPitch
+  if (Math.abs(pitchIn) > 0.01) {
+    const d = PITCH_SPD * dt * Math.max(-1, Math.min(1, pitchIn))
+    if (firstPerson) fpPitch = Math.max(-FP_PITCH_MAX, Math.min(FP_PITCH_MAX, fpPitch + d))   // ↑ で見上げ
+    else pitch = Math.max(PITCH_MIN, Math.min(PITCH_MAX, pitch + d))
+  }
+
+  // sabちゃん配置（屋外と同じく local Y=上、local Z=前）
+  _iMat.makeBasis(_iRight.crossVectors(_iUp, iFwd), _iUp, iFwd)
+  sabchan.group.setRotationFromMatrix(_iMat)
+  _iSab.copy(iPos).setY(iPos.y + SAB_FOOT_OFFSET)
+  sabchan.group.position.copy(_iSab).setY(_iSab.y + Math.sin(now * 0.00035) * 0.1)
+  animateSabParts(now)
+
+  // 主観モード: sabちゃんの位置、床から FP_EYE_H の高さから前を見る
+  if (firstPerson) {
+    camera.position.copy(iPos).setY(iPos.y + FP_EYE_H)
+    _iDir.copy(iFwd).multiplyScalar(Math.cos(fpPitch)).addScaledVector(_iUp, Math.sin(fpPitch)).add(camera.position)
+    camera.up.copy(_iUp)
+    camera.lookAt(_iDir)
+    return
+  }
+
+  // 3人称カメラ（屋外と同じ角度）。カメラと sabちゃんの間にある壁・天井・床はそのフレームだけ隠す
+  const camAngle = Math.max(0.05, Math.min(Math.PI * 0.45, CAM_BASE_ANGLE + pitch))
+  _iLook.copy(_iSab).addScaledVector(_iUp, -SAB_FOOT_OFFSET * 0.4)
+  _iCam.copy(iFwd).multiplyScalar(-Math.cos(camAngle)).addScaledVector(_iUp, Math.sin(camAngle))
+  camera.position.copy(_iLook).addScaledVector(_iCam, INTERIOR_CAM_DIST)
+  // sabちゃんの中心と上下左右の端からカメラへ視線を飛ばし、当たったものを隠す
+  showOccluders()
+  _iRight.crossVectors(iFwd, _iUp)
+  for (const [r, u] of OCCLUDE_SAMPLES) {
+    _iDir.copy(_iLook).addScaledVector(_iRight, r).addScaledVector(_iUp, u)
+    _iRay.set(_iDir, _iTmp.copy(camera.position).sub(_iDir).normalize())
+    _iRay.far = camera.position.distanceTo(_iDir)
+    for (const h of _iRay.intersectObjects(def.solids, false)) {
+      if (!h.object.visible) continue
+      h.object.visible = false
+      _occluders.push(h.object)
+    }
+  }
+  camera.up.copy(_iUp)
+  camera.lookAt(_iLook)
+  camera.rotateX(CAM_LIFT)
+}
+
 function animate() {
   requestAnimationFrame(animate)
   const now = performance.now()
@@ -464,7 +683,9 @@ function animate() {
   const joyYaw   = vJoy.rx * joyRamp(JOY_RAMP_YAW,   joyYawHeld)
   const joyPitch = vJoy.ry * joyRamp(JOY_RAMP_PITCH, joyPitchHeld)
 
-  if (overviewMode) {
+  if (interior) {
+    updateInterior(dt, now, joyYaw, joyPitch)
+  } else if (overviewMode) {
     // --- 俯瞰モード: A/D/Q/E で水平回転、↑↓ で仰俯角 ---
     const ovTurnIn  = (keys['KeyA'] || keys['KeyQ'] ? 1 : 0) - (keys['KeyD'] || keys['KeyE'] ? 1 : 0) - joyYaw
     const ovPitchIn = (keys['ArrowUp'] ? 1 : 0) - (keys['ArrowDown'] ? 1 : 0) - joyPitch
@@ -535,15 +756,7 @@ function animate() {
     const floatOffset = Math.sin(now * 0.00035) * 0.2
     sabchan.group.position.copy(pDir.clone().multiplyScalar(groundH + SAB_FOOT_OFFSET + floatOffset))
 
-    // 頭の揺れアニメ
-    const t = now / 1000
-    if (_sabHeadGroup) {
-      _sabHeadGroup.rotation.z = Math.sin(t * 0.51) * 0.06
-      _sabHeadGroup.rotation.x = Math.sin(t * 0.37) * 0.12
-    }
-    const pulse = 1.0 + Math.sin(t * 2.8) * 0.35
-    if (sabchan.nose)   sabchan.nose.scale.setScalar(pulse)
-    if (sabchan.sensor) sabchan.sensor.scale.setScalar(pulse)
+    animateSabParts(now)
 
     // --- 3人称カメラ ---
     // pitch を仰角オフセットとして使用（上限・下限クランプ）
@@ -592,7 +805,8 @@ function animate() {
     latlonEl.textContent = `  |  lat: ${lat.toFixed(1)}°  lon: ${lon.toFixed(1)}°`
   }
 
-  renderer.render(scene, camera)
+  updateDoorGlow(now)
+  renderer.render(interior ? interior.def.scene : scene, camera)
 }
 
 animate()
