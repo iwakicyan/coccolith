@@ -70,9 +70,9 @@
     }
     #drive-btn.pressed { transform: scale(0.9); opacity: 0.75; }
     #drive-btn.reverse { transform: translateY(8px) rotate(180deg) scale(0.9); }  /* 後退中は矢印を下向きに */
-    /* 俯瞰 ⇄ 主観 切替ボタン（左右のコントローラーと中心の高さを揃える） */
+    /* 俯瞰 ⇄ 主観 切替ボタン（sabちゃんと離すため、左右のコントローラーの中心より少し下げる） */
     #tab-btn {
-      position: fixed; bottom: 43px; left: 50%; transform: translateX(-50%);
+      position: fixed; bottom: 35px; left: 50%; transform: translateX(-50%);
       z-index: 20; width: 80px; height: 80px; padding: 0; border: none;
       background: url(/ui/obeye.png) center / contain no-repeat;
       filter: drop-shadow(0 2px 6px rgba(0,0,0,0.35));
