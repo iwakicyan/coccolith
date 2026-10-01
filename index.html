@@ -80,6 +80,12 @@
       -webkit-tap-highlight-color: transparent;
     }
     #tab-btn.overview { background-image: url(/ui/subeye.png); }
+    #tab-btn.insab { background-image: url(/ui/insab.png); }   /* 室内の主観中: sabちゃん入りの視点に戻る */
+    /* 室内⇄屋外の切り替え時の暗転 */
+    #fade {
+      position: fixed; inset: 0; z-index: 30; background: #000;
+      opacity: 0; pointer-events: none; transition: opacity 0.35s;
+    }
     #tab-btn:active { transform: translateX(-50%) scale(0.9); }
   </style>
 </head>
@@ -89,13 +95,14 @@
   <canvas id="compass" width="88" height="88"></canvas>
   <canvas id="veth-ind" width="28" height="28"></canvas>
 <footer id="copyright">© 2026 岩木しあん — <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a></footer>
-<div id="ctrl">W/S/A/D 移動 &nbsp;|&nbsp; Q/E 旋回 &nbsp;|&nbsp; ↑↓ 見上げ/見下ろし &nbsp;|&nbsp; Tab 俯瞰切替 &nbsp;|&nbsp; L ライト</div>
+<div id="ctrl">W/S/A/D 移動 &nbsp;|&nbsp; Q/E 旋回 &nbsp;|&nbsp; ↑↓ 見上げ/見下ろし &nbsp;|&nbsp; Tab 俯瞰切替（室内: 主観） &nbsp;|&nbsp; L ライト &nbsp;|&nbsp; Enter 出入り</div>
 <button id="drive-btn" aria-label="直進"></button>
 <div id="joy-right" class="joy-wrap">
   <div class="joy-base"></div>
   <div class="joy-handle"></div>
 </div>
 <button id="tab-btn" aria-label="俯瞰"></button>
+<div id="fade"></div>
   <script type="module" src="/src/main.js"></script>
 </body>
 </html>
