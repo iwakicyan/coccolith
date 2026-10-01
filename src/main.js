@@ -9,6 +9,7 @@ import { createKummo } from '../my-3d-parts/parts/kummo.jsx'
 import { createGummo } from '../my-3d-parts/parts/gummo.jsx'
 import { createSabchan } from '../my-3d-parts/parts/sabchan.jsx'
 import { setDoorGlow } from './doorGlow.js'
+import { createCoinIntro } from './coinIntro.js'
 
 // ============================================================
 //  LMF — Layout Master File
@@ -496,6 +497,21 @@ const { drawVethIndicator } = createVethIndicator(document.getElementById('veth-
 const areaEl   = document.getElementById('area-code')
 const latlonEl = document.getElementById('latlon')
 
+// --- 起動演出: コイン ---------------------------------------
+// 開いた直後、sabちゃんの周り半径5mにコインが散らばり、吸い寄せられて消える
+// 保有コイン数: HUD の lat/lon の右に表示し、拾うたびに数字が跳ねる
+const coinNumEl = document.getElementById('coin-num')
+let coinCount = 0
+function collectCoin() {
+  coinCount++
+  coinNumEl.textContent = coinCount
+  coinNumEl.classList.add('bump')
+  setTimeout(() => coinNumEl.classList.remove('bump'), 120)
+}
+const coinIntro = createCoinIntro({ scene, renderer, getGround: dir => getGroundHeight(dir) - 1, onCollect: collectCoin })
+scene.updateMatrixWorld(true)   // 地表レイキャスト用に初回描画前のワールド行列を確定
+coinIntro.start(pDir, pFwd)
+
 // pDir（正規化済み球面法線）からグリッドエリアコードを返す
 // 緯度帯 A〜J（南→北）、経度帯 1〜10（西→東）
 function getAreaCode(dir) {
@@ -805,6 +821,7 @@ function animate() {
     latlonEl.textContent = `  |  lat: ${lat.toFixed(1)}°  lon: ${lon.toFixed(1)}°`
   }
 
+  coinIntro.update(dt, sabchan.group.position)
   updateDoorGlow(now)
   renderer.render(interior ? interior.def.scene : scene, camera)
 }
