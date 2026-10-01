@@ -385,6 +385,7 @@ async function enterInterior(door) {
   await fadeTo(1)
   try {
     const def = _interiorCache[door.id] ??= await INTERIORS[door.id]()
+    overviewMode = false   // JUMP で俯瞰中から来たとき
     iPos.set(def.spawn.x, 0, def.spawn.z)
     iFwd.copy(def.spawn.fwd)
     pitch = 0
@@ -420,6 +421,32 @@ function useDoor() {
   if (interior) { if (interior.def.atExit(iPos)) exitInterior() }
   else { const d = nearDoor(); if (d) enterInterior(d) }
 }
+
+// --- JUMP: HUD 右上の一覧から施設内へワープ -------------------
+// 行き先は外のドアの id。施設が増えたらここに足す
+const JUMP_SPOTS = [
+  { id: 'tofu', label: 'TOFU-HOUSE' },
+]
+const jumpEl     = document.getElementById('jump')
+const jumpBtn    = document.getElementById('jump-btn')
+const jumpListEl = document.getElementById('jump-list')
+function setJumpOpen(open) {
+  jumpEl.classList.toggle('open', open)
+  jumpBtn.setAttribute('aria-expanded', open)
+}
+for (const { id, label } of JUMP_SPOTS) {
+  const door = _doors.find(d => d.id === id)
+  if (!door) continue
+  const item = document.createElement('button')
+  item.textContent = label
+  item.addEventListener('click', () => {
+    setJumpOpen(false)
+    if (!transitioning) enterInterior(door)
+  })
+  jumpListEl.append(item)
+}
+jumpBtn.addEventListener('click', () => setJumpOpen(!jumpEl.classList.contains('open')))
+document.addEventListener('pointerdown', e => { if (!jumpEl.contains(e.target)) setJumpOpen(false) })
 
 // 今くぐれるドアの扉メッシュ（なければ null）
 function activeDoorMesh() {

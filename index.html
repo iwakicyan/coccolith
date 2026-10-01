@@ -34,6 +34,24 @@
       position: fixed; top: 10px; right: 10px;
       pointer-events: none;
     }
+    /* JUMP: コンパスの下。押すと行き先の一覧が開き、選ぶと施設内へワープ */
+    #jump {
+      position: fixed; top: 104px; right: 10px; width: 88px; z-index: 20;
+      display: flex; flex-direction: column; align-items: center; gap: 4px;
+    }
+    #jump button {
+      padding: 0 8px; background: rgba(0,0,0,0.25);
+      border: 1px solid rgba(255,255,255,0.35); border-radius: 10px;
+      color: rgba(255,255,255,0.8); font: 11px monospace; line-height: 18px;
+      letter-spacing: 0.05em; white-space: nowrap;
+      cursor: pointer; touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
+    }
+    #jump button:hover { border-color: rgba(255,255,255,0.7); color: #fff; }
+    #jump button:active { transform: scale(0.94); }
+    #jump-list { display: none; flex-direction: column; align-items: center; gap: 4px; }
+    #jump.open #jump-list { display: flex; }
+    #jump.open #jump-btn { border-color: rgba(255,255,255,0.7); color: #fff; }
     #veth-ind {
       position: fixed; width: 28px; height: 28px;
       pointer-events: none;
@@ -105,6 +123,7 @@
   <canvas id="c"></canvas>
   <div id="hud"><img class="hud-icon" src="/ui/obeye.png" alt="">coccolith &nbsp;|&nbsp; <img class="hud-icon" src="/ui/veth_icon.png" alt="">veth<br><span id="area-code"></span><span id="latlon"></span><span id="coin-box"><img src="/ui/coin_icon.png" alt="coin"><span id="coin-num">0</span></span></div>
   <canvas id="compass" width="88" height="88"></canvas>
+  <div id="jump"><button id="jump-btn" aria-expanded="false">JUMP</button><div id="jump-list"></div></div>
   <canvas id="veth-ind" width="28" height="28"></canvas>
 <footer id="copyright">© 2026 岩木しあん — <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a></footer>
 <div id="ctrl">W/S/A/D 移動 &nbsp;|&nbsp; Q/E 旋回 &nbsp;|&nbsp; ↑↓ 見上げ/見下ろし &nbsp;|&nbsp; Tab 俯瞰切替（室内: 主観） &nbsp;|&nbsp; L ライト &nbsp;|&nbsp; Enter 出入り</div>
