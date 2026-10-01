@@ -85,6 +85,7 @@ const _sabHeadGroup = sabchan.group.children.find(c => c.isGroup) ?? null
 const SAB_UNIT        = SAB_SCALE                   // モデル1unit → m
 const SAB_LIGHT_COLOR = 0xcfe6ff                    // 青白
 const SAB_LIGHT_INT   = 180                         // ON 時の強さ
+const SAB_LIGHT_INDOOR = 0.1                        // 室内ではライトの強さ・光の筋をこの倍率に
 const SAB_LIGHT_ANGLE = 0.6                         // 照射半角 (rad)
 const SAB_LIGHT_TILT  = 0.14                        // 前方やや下向き (rad)
 const SAB_ICON_GLOW   = 0x66c8d8                    // OFF 時のアイコン発光色
@@ -151,10 +152,17 @@ sabBeam.rotation.x = SAB_LIGHT_TILT
 sabBeam.visible = false
 _sabHeadGroup?.add(sabBeam)
 
+const SAB_BEAM_OPACITY = sabBeam.material.opacity
 let sabLightOn = false
+// ライトの強さと光の筋の濃さを ON/OFF・屋内外に合わせる
+function applySabLightLevel() {
+  const k = interior ? SAB_LIGHT_INDOOR : 1
+  sabLight.intensity = sabLightOn ? SAB_LIGHT_INT * k : 0
+  sabBeam.material.opacity = SAB_BEAM_OPACITY * k
+}
 function toggleSabLight() {
   sabLightOn = !sabLightOn
-  sabLight.intensity = sabLightOn ? SAB_LIGHT_INT : 0
+  applySabLightLevel()
   sabBeam.visible    = sabLightOn && !firstPerson   // 主観中は目の前に筋が出るので隠す
   lightIconMat.map         = sabLightOn ? lightIconGrayTex : lightIconTex
   lightIconMat.emissiveMap = lightIconMat.map
@@ -317,7 +325,7 @@ const INTERIORS = {
 }
 const DOOR_REACH       = 3.5   // ドアからこの距離 (m) 以内で輪郭が光り、出入りできる
 const DOOR_EXIT_DIST   = 8.5   // 外に出たときのドアからの距離 (m)
-const INTERIOR_SPEED   = 4     // 室内の移動速度 (m/s)
+const INTERIOR_SPEED   = 2     // 室内の移動速度 (m/s)
 const INTERIOR_CAM_DIST = 6    // 室内のカメラ距離 (m)
 const INTERIOR_BODY_R  = 0.6   // 室内の当たり判定半径 (m)（狭い扉を通れるよう耳より少し小さめ）
 const SAB_HEIGHT       = 8.35 * SAB_SCALE
@@ -382,6 +390,7 @@ async function enterInterior(door) {
     pitch = 0
     def.scene.add(sabchan.group)
     interior = { def, door }
+    applySabLightLevel()
     updateTabBtn()
   } finally {
     await fadeTo(0)
@@ -396,6 +405,7 @@ async function exitInterior() {
   showOccluders()
   scene.add(sabchan.group)
   interior = null
+  applySabLightLevel()
   setFirstPerson(false)
   // ドアの外側に、ドアから離れる向きで立たせる
   pDir.copy(door.spawnDir)
