@@ -1,6 +1,7 @@
 import * as THREE from 'three'
 import { vJoy, initJoysticks } from './joystick.js'
 import { createCompass, createVethIndicator } from './hud.js'
+import { initFullscreenButton } from './fullscreen.js'
 import { createCoccolith } from './coccolith.js'
 import { createVeth } from './veth.js'
 import { createCloud1, createFlatCloud } from './cloud1.js'
@@ -529,6 +530,7 @@ window.addEventListener('keyup', e => { keys[e.code] = false })
 initJoysticks()
 
 // --- HUD ----------------------------------------------------
+initFullscreenButton(document.getElementById('fs-btn'))
 const { drawCompass }       = createCompass(document.getElementById('compass'))
 const { drawVethIndicator } = createVethIndicator(document.getElementById('veth-ind'))
 const areaEl   = document.getElementById('area-code')
