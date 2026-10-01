@@ -49,7 +49,7 @@ scene.add(new THREE.AmbientLight(0x334455, 1.0))
 
 
 // --- 天体 ---------------------------------------------------
-const { group: coccolith, terrainMeshes, oceanMesh } = createCoccolith()
+const { group: coccolith, terrainMeshes, oceanMesh, colliders } = createCoccolith()
 terrainMeshes.forEach(m => m.receiveShadow = true)
 oceanMesh.receiveShadow = true
 scene.add(coccolith)
@@ -66,8 +66,8 @@ vethOrbitGroup.add(veth)
 
 // --- sabちゃん --------------------------------------------------
 // 1 unit = 0.1m スケール系のモデルを coccolith (1 unit = 1m) に合わせる
-// 足先 local y = -5.72 → scale 0.2 で -1.144m → 地表に接地
-const SAB_SCALE       = 0.2
+// 足先 local y = -5.72 → SAB_SCALE 倍してグループ原点から下げ、地表に接地
+const SAB_SCALE       = 0.168  // 身長 ≈ 8.35unit（頭頂 2.63 〜 足先 -5.72）× 0.168 ≈ 1.4m
 const SAB_FOOT_OFFSET = 5.72 * SAB_SCALE   // 足先→グループ原点（頭部中心）距離
 
 const sabchan = createSabchan(scene)
@@ -79,15 +79,15 @@ const _sabHeadGroup = sabchan.group.children.find(c => c.isGroup) ?? null
 // 後頭部の light_icon をクリック（または L キー）でサーチライト ON/OFF
 // アイコンは OFF 時に発光し、ON 時は消灯（グレー表示）
 // アイコンは小さく押しにくいので、頭部全体（3人称カメラからは後頭部が見える）を判定対象にする
-// headGroup 内の座標は sabちゃんモデル単位（1 unit = 0.1m × 1.54 × SAB_SCALE）
-const SAB_UNIT        = 1.54 * SAB_SCALE            // モデル1unit → m
+// headGroup 内の座標は sabちゃんモデル単位（モデル内の scale 1.54 は SAB_SCALE で上書きされる）
+const SAB_UNIT        = SAB_SCALE                   // モデル1unit → m
 const SAB_LIGHT_COLOR = 0xcfe6ff                    // 青白
 const SAB_LIGHT_INT   = 180                         // ON 時の強さ
 const SAB_LIGHT_ANGLE = 0.6                         // 照射半角 (rad)
 const SAB_LIGHT_TILT  = 0.14                        // 前方やや下向き (rad)
 const SAB_ICON_GLOW   = 0x66c8d8                    // OFF 時のアイコン発光色
 const SAB_ICON_GRAY   = 0.55                        // ON 時のグレーマークの明るさ（輝度に掛ける）
-const SAB_BEAM_LEN    = 20                          // 光の筋の長さ (m)
+const SAB_BEAM_LEN    = 13                          // 光の筋の長さ (m)
 
 // 点灯中は消灯したグレーのマークにする（グレー版は元画像からキャンバスで生成）
 const lightIconTex     = new THREE.Texture()
@@ -269,6 +269,31 @@ function getGroundHeight(dir) {
   const hits = raycaster.intersectObjects(terrainMeshes, false)
   if (hits.length === 0) return R_C + 1
   return hits[0].point.length() + 1
+}
+
+// --- 建物の当たり判定 ---------------------------------------
+// 建物ローカルの XZ 矩形（footprint）＋余白の内側に sabちゃんの中心が入ったら、
+// 一番浅い辺の外へ押し戻す。建物は静的なので逆行列は起動時に一度だけ計算する
+const COLLIDER_MARGIN = 0.5   // 壁からの余白 (m)
+const SAB_BODY_R      = 4.3 * SAB_SCALE   // sabちゃんの耳端までの半径 (m)
+const _colliderData = colliders.map(obj => {
+  obj.updateWorldMatrix(true, false)
+  const { halfW, halfD } = obj.userData.footprint
+  const pad = COLLIDER_MARGIN + SAB_BODY_R
+  return { mat: obj.matrixWorld.clone(), inv: obj.matrixWorld.clone().invert(), hx: halfW + pad, hz: halfD + pad }
+})
+const _colP = new THREE.Vector3()
+
+function resolveColliders() {
+  for (const c of _colliderData) {
+    _colP.copy(pDir).multiplyScalar(R_C + LAND_LIFT).applyMatrix4(c.inv)
+    const dx = c.hx - Math.abs(_colP.x)
+    const dz = c.hz - Math.abs(_colP.z)
+    if (dx <= 0 || dz <= 0) continue
+    if (dx < dz) _colP.x = Math.sign(_colP.x || 1) * c.hx
+    else         _colP.z = Math.sign(_colP.z || 1) * c.hz
+    pDir.copy(_colP.applyMatrix4(c.mat)).normalize()
+  }
 }
 
 // --- プレイヤー状態 -----------------------------------------
@@ -483,6 +508,8 @@ function animate() {
     if (Math.abs(fbIn) > 0.01) { pDir.applyAxisAngle(axisWS, da * Math.max(-1, Math.min(1, fbIn))); pDir.normalize() }
     const lrIn = (keys['KeyD'] ? 1 : 0) - (keys['KeyA'] ? 1 : 0) + vJoy.lx
     if (Math.abs(lrIn) > 0.01) { pDir.applyAxisAngle(pFwd,   da * Math.max(-1, Math.min(1, lrIn))); pDir.normalize() }
+
+    resolveColliders()
 
     pFwd.addScaledVector(pDir, -pFwd.dot(pDir))
     pFwd.normalize()

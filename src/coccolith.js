@@ -109,6 +109,7 @@ function arcDistToSeg(px, py, pz, { ax, ay, az, bx, by, bz, gnx, gny, gnz }) {
 export function createCoccolith() {
   const group = new THREE.Group()
   const terrainMeshes = []
+  const colliders = []   // sabちゃんが侵入できない建物（userData.footprint を持つ Object3D）
 
   const noise3D = createNoise3D(Alea('coccolith'))
 
@@ -401,11 +402,25 @@ export function createCoccolith() {
     domeGeo.setAttribute('color', new THREE.BufferAttribute(col, 3))
   }
   const dome = new THREE.Mesh(domeGeo, new THREE.MeshLambertMaterial({ vertexColors: true }))
-  dome.castShadow = true
+  dome.castShadow = false   // 地面に大きな影を落とさない
   dome.receiveShadow = true
   // 内壁: 太陽光が届かず真っ暗になるので、ライティングなしで頂点カラーをそのまま出す
   dome.add(new THREE.Mesh(domeGeo, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.BackSide })))
   placeOnSurface(group, dome, -45.0, 150.0, R_C + LAND_LIFT - DOME_SINK)
+
+  // --- ランドマーク #09: 豆腐ハウス（ドーム中央, lat=-45.0, lon=150.0） -----
+  // 白い天面＋薄紫の壁の直方体に茶色のドア。ドアは北（緯度+方向）を向ける
+  const tofuWrapper = new THREE.Group()
+  const tofu = createTofuHouse()
+  tofuWrapper.add(tofu)
+  placeOnSurface(group, tofuWrapper, -45.0, 150.0, R_C + LAND_LIFT - 0.3)
+  {
+    const n = tofuWrapper.position.clone().normalize()
+    const north = new THREE.Vector3(0, 1, 0).addScaledVector(n, -n.y)
+      .applyQuaternion(tofuWrapper.quaternion.clone().invert())
+    tofu.rotation.y = Math.atan2(north.x, north.z)
+  }
+  colliders.push(tofu)
 
   // --- ランドマーク: Materis 1〜5 × 各2 ---------------------
   // Route1/2 ウェイポイント（陸地確定）をアンカーに、シード文字列で ±1° ジッター
@@ -490,11 +505,51 @@ export function createCoccolith() {
   ebWrapper.setRotationFromMatrix(new THREE.Matrix4().makeBasis(ebRight, ebN, ebFwd))
   group.add(ebWrapper)
 
-  return { group, terrainMeshes, oceanMesh }
+  return { group, terrainMeshes, oceanMesh, colliders }
 }
 
 // 島[GF] (lat 0-36°N, lon 72-108°E) に岩を InstancedMesh で散布
 // 底面クランプなし・全軸ランダム回転。draw call = 形状数（3回）
+// 豆腐ハウス: 幅15m × 奥行11m × 高さ6m。原点 = 底面中心、ドアは +Z 面
+function createTofuHouse() {
+  const W = 15, D = 11, H = 6
+  const house = new THREE.Group()
+  house.userData.footprint = { halfW: W / 2, halfD: D / 2 }  // 当たり判定用（ローカル XZ の矩形）
+
+  const boxGeo = new THREE.BoxGeometry(W, H, D)
+  boxGeo.translate(0, H / 2, 0)
+  const wall = new THREE.MeshLambertMaterial({ color: 0xD9D2EE })
+  const top  = new THREE.MeshLambertMaterial({ color: 0xFFFFFF })
+  // BoxGeometry の面順: +X, -X, +Y, -Y, +Z, -Z
+  const box = new THREE.Mesh(boxGeo, [wall, wall, top, wall, wall, wall])
+  box.castShadow = true
+  box.receiveShadow = true
+  house.add(box)
+
+  // 手描き風の白い輪郭線
+  house.add(new THREE.LineSegments(new THREE.EdgesGeometry(boxGeo), new THREE.LineBasicMaterial({ color: 0xFFFFFF })))
+
+  // ドア（正面やや左寄り）
+  const DOOR_W = 1.6, DOOR_H = 2.6, doorX = -W * 0.2
+  const door = new THREE.Mesh(new THREE.BoxGeometry(DOOR_W, DOOR_H, 0.12), new THREE.MeshLambertMaterial({ color: 0x74523F }))
+  door.position.set(doorX, DOOR_H / 2, D / 2 + 0.06)
+  house.add(door)
+
+  // ドアノブ（左）と蝶番×2（右）
+  const metal = new THREE.MeshLambertMaterial({ color: 0x3A3040 })
+  const knob = new THREE.Mesh(new THREE.SphereGeometry(0.08, 8, 6), metal)
+  knob.position.set(doorX - DOOR_W / 2 + 0.2, DOOR_H * 0.48, D / 2 + 0.15)
+  house.add(knob)
+  const hingeGeo = new THREE.BoxGeometry(0.06, 0.22, 0.06)
+  ;[0.75, 0.25].forEach((h) => {
+    const hinge = new THREE.Mesh(hingeGeo, metal)
+    hinge.position.set(doorX + DOOR_W / 2 + 0.03, DOOR_H * h, D / 2 + 0.12)
+    house.add(hinge)
+  })
+
+  return house
+}
+
 function createIslandGFRocks(noise3D) {
   const rng   = Alea('islandGF-scatter')
   const dummy = new THREE.Object3D()
