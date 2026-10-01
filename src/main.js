@@ -75,9 +75,109 @@ sabchan.group.scale.setScalar(SAB_SCALE)
 // sabchan.group の子のうち Group 型 = headGroup（耳・パッド含む）
 const _sabHeadGroup = sabchan.group.children.find(c => c.isGroup) ?? null
 
+// --- sabちゃんライト ----------------------------------------------
+// 後頭部の light_icon をクリック（または L キー）でサーチライト ON/OFF
+// アイコンは OFF 時に発光し、ON 時は消灯（グレー表示）
+// アイコンは小さく押しにくいので、頭部全体（3人称カメラからは後頭部が見える）を判定対象にする
+// headGroup 内の座標は sabちゃんモデル単位（1 unit = 0.1m × 1.54 × SAB_SCALE）
+const SAB_UNIT        = 1.54 * SAB_SCALE            // モデル1unit → m
+const SAB_LIGHT_COLOR = 0xcfe6ff                    // 青白
+const SAB_LIGHT_INT   = 180                         // ON 時の強さ
+const SAB_LIGHT_ANGLE = 0.6                         // 照射半角 (rad)
+const SAB_LIGHT_TILT  = 0.14                        // 前方やや下向き (rad)
+const SAB_ICON_GLOW   = 0x66c8d8                    // OFF 時のアイコン発光色
+const SAB_ICON_GRAY   = 0.55                        // ON 時のグレーマークの明るさ（輝度に掛ける）
+const SAB_BEAM_LEN    = 20                          // 光の筋の長さ (m)
+
+// 点灯中は消灯したグレーのマークにする（グレー版は元画像からキャンバスで生成）
+const lightIconTex     = new THREE.Texture()
+const lightIconGrayTex = new THREE.Texture()
+for (const t of [lightIconTex, lightIconGrayTex]) t.colorSpace = THREE.SRGBColorSpace
+new THREE.ImageLoader().load(`${import.meta.env.BASE_URL}ui/light_icon.png`, img => {
+  lightIconTex.image = img
+  lightIconTex.needsUpdate = true
+  const cv = document.createElement('canvas')
+  cv.width = img.width; cv.height = img.height
+  const ctx = cv.getContext('2d')
+  ctx.drawImage(img, 0, 0)
+  const data = ctx.getImageData(0, 0, cv.width, cv.height)
+  const px = data.data
+  for (let i = 0; i < px.length; i += 4) {
+    const g = (px[i] * 0.299 + px[i + 1] * 0.587 + px[i + 2] * 0.114) * SAB_ICON_GRAY
+    px[i] = px[i + 1] = px[i + 2] = g
+  }
+  ctx.putImageData(data, 0, 0)
+  lightIconGrayTex.image = cv
+  lightIconGrayTex.needsUpdate = true
+})
+const lightIconMat = new THREE.MeshLambertMaterial({
+  map: lightIconTex, emissiveMap: lightIconTex, emissive: SAB_ICON_GLOW,
+  transparent: true, alphaTest: 0.1,
+})
+const lightIcon = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 2.6), lightIconMat)
+lightIcon.position.set(0, 0.25, -2.45)   // 後頭部表面（head 半径 z ≈ 2.31）のすぐ外
+lightIcon.rotation.y = Math.PI          // 後ろ向き
+_sabHeadGroup?.add(lightIcon)
+
+// センサー位置から前方へ照らす。シェーダ再コンパイルを避けるため常に存在させ intensity で切替
+const sabLight = new THREE.SpotLight(SAB_LIGHT_COLOR, 0, 100, SAB_LIGHT_ANGLE, 0.6, 1.2)
+sabLight.position.set(0, 0.3, 2.4)
+sabLight.target.position.set(0, 0.3 - Math.sin(SAB_LIGHT_TILT) * 40, 2.4 + Math.cos(SAB_LIGHT_TILT) * 40)
+_sabHeadGroup?.add(sabLight, sabLight.target)
+
+// 光の筋: 先端→奥でフェードする加算合成コーン
+const beamH = SAB_BEAM_LEN / SAB_UNIT
+const beamGeo = new THREE.ConeGeometry(Math.tan(SAB_LIGHT_ANGLE) * beamH, beamH, 32, 8, true)
+beamGeo.translate(0, -beamH / 2, 0)     // 先端を原点へ
+{
+  const pos = beamGeo.attributes.position
+  const col = new Float32Array(pos.count * 3)
+  const c = new THREE.Color(SAB_LIGHT_COLOR)
+  for (let i = 0; i < pos.count; i++) {
+    const f = Math.pow(1 - (-pos.getY(i) / beamH), 2)
+    col.set([c.r * f, c.g * f, c.b * f], i * 3)
+  }
+  beamGeo.setAttribute('color', new THREE.BufferAttribute(col, 3))
+}
+beamGeo.rotateX(-Math.PI / 2)           // 開き方向を +Z（前方）へ
+const sabBeam = new THREE.Mesh(beamGeo, new THREE.MeshBasicMaterial({
+  vertexColors: true, transparent: true, opacity: 0.22,
+  blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false,
+}))
+sabBeam.position.copy(sabLight.position)
+sabBeam.rotation.x = SAB_LIGHT_TILT
+sabBeam.visible = false
+_sabHeadGroup?.add(sabBeam)
+
+let sabLightOn = false
+function toggleSabLight() {
+  sabLightOn = !sabLightOn
+  sabLight.intensity = sabLightOn ? SAB_LIGHT_INT : 0
+  sabBeam.visible    = sabLightOn
+  lightIconMat.map         = sabLightOn ? lightIconGrayTex : lightIconTex
+  lightIconMat.emissiveMap = lightIconMat.map
+  lightIconMat.emissive.set(sabLightOn ? 0x000000 : SAB_ICON_GLOW)
+}
+
+const _pointer = new THREE.Vector2()
+const _iconRay = new THREE.Raycaster()
+function hitLightIcon(e) {
+  if (!_sabHeadGroup) return false
+  _pointer.set((e.clientX / window.innerWidth) * 2 - 1, -(e.clientY / window.innerHeight) * 2 + 1)
+  _iconRay.setFromCamera(_pointer, camera)
+  return _iconRay.intersectObject(_sabHeadGroup, true).some(h => h.object !== sabBeam)
+}
+canvas.addEventListener('pointerdown', e => { if (hitLightIcon(e)) toggleSabLight() })
+canvas.addEventListener('pointermove', e => {
+  if (e.pointerType === 'mouse') canvas.style.cursor = hitLightIcon(e) ? 'pointer' : ''
+})
+
 // --- 3人称カメラ定数 -------------------------------------------
 const CAM_DIST       = 8     // sabちゃんからの距離 (m)
 const CAM_BASE_ANGLE = 0.35  // 水平面からの基本仰角 (rad)
+const CAM_SAB_SCREEN_Y = -0.5   // sabちゃんを置く画面上の高さ（NDC: -1=下端, 0=中央）→ 下から1/4
+// 注視点にsabちゃんを置いたまま、カメラをこの角度だけ見上げると sabちゃんが CAM_SAB_SCREEN_Y に来る
+const CAM_LIFT = Math.atan(Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * -CAM_SAB_SCREEN_Y)
 
 // --- 雲 -------------------------------------------------------
 // 惑星中心から (0, CLOUD_H, 0) に配置し、傾いた軸で周回
@@ -225,6 +325,7 @@ window.addEventListener('keydown', e => {
     e.preventDefault()
     return
   }
+  if (e.code === 'KeyL' && !e.repeat) toggleSabLight()
   keys[e.code] = true
   e.preventDefault()
 })
@@ -427,6 +528,7 @@ function animate() {
     // 胴体あたり（頭部中心から足方向へ少し）を注視
     const lookTarget = sabPos.clone().addScaledVector(pDir, -SAB_FOOT_OFFSET * 0.4)
     camera.lookAt(lookTarget)
+    camera.rotateX(CAM_LIFT)   // 見上げて sabちゃんを画面下寄りに
   }
 
   // --- 北極霧（y軸頂点から20m以内で発生、35mまでフェード）---
