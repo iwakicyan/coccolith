@@ -5,6 +5,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>coccolith</title>
   <link rel="icon" type="image/png" href="/favicon.png" />
+  <!-- ホーム画面に追加したとき、アドレスバーなしの専用画面で開く -->
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <link rel="apple-touch-icon" href="/favicon.png" />
+  <meta name="theme-color" content="#00000a" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black" />
+  <meta name="apple-mobile-web-app-title" content="coccolith" />
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { background: #00000a; overflow: hidden; }
@@ -14,6 +22,15 @@
       color: rgba(255,255,255,0.5); font: 11px monospace;
       pointer-events: none; line-height: 1.8;
     }
+    /* 全画面ボタン（HUD 左上。#hud は pointer-events: none なのでここだけ押せるように） */
+    #fs-btn {
+      width: 18px; height: 18px; padding: 0; margin: -6px 6px -6px 0;
+      background: none; border: none; vertical-align: middle;
+      color: rgba(255,255,255,0.6); cursor: pointer; pointer-events: auto;
+      touch-action: manipulation; -webkit-tap-highlight-color: transparent;
+    }
+    #fs-btn:hover { color: #fff; }
+    #fs-btn svg { width: 100%; height: 100%; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
     .hud-icon {
       width: 22px; height: 22px; margin: -6px 0 -6px -4px;
       vertical-align: middle; opacity: 0.8;
@@ -122,7 +139,7 @@
 </head>
 <body>
   <canvas id="c"></canvas>
-  <div id="hud"><img class="hud-icon" src="/ui/obeye.png" alt="">coccolith &nbsp;|&nbsp; <img class="hud-icon" src="/ui/veth_icon.png" alt="">veth<br><span id="area-code"></span><span id="latlon"></span><span id="coin-box"><img src="/ui/coin_icon.png" alt="coin"><span id="coin-num">0</span></span></div>
+  <div id="hud"><button id="fs-btn" hidden></button><img class="hud-icon" src="/ui/obeye.png" alt="">coccolith &nbsp;|&nbsp; <img class="hud-icon" src="/ui/veth_icon.png" alt="">veth<br><span id="area-code"></span><span id="latlon"></span><span id="coin-box"><img src="/ui/coin_icon.png" alt="coin"><span id="coin-num">0</span></span></div>
   <canvas id="compass" width="88" height="88"></canvas>
   <div id="jump"><button id="jump-btn" aria-expanded="false">JUMP</button><div id="jump-list"></div></div>
   <canvas id="veth-ind" width="28" height="28"></canvas>
