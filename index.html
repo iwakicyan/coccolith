@@ -18,6 +18,16 @@
       width: 22px; height: 22px; margin: -6px 0 -6px -4px;
       vertical-align: middle; opacity: 0.8;
     }
+    #coin-box {
+      display: inline-flex; align-items: center; gap: 3px;
+      margin-left: 10px; padding: 0 7px 0 3px;
+      border: 1px solid rgba(255,255,255,0.35); border-radius: 10px;
+      line-height: 18px; vertical-align: middle;
+      position: relative; top: -2px;
+    }
+    #coin-box img { width: 18px; height: 18px; }
+    #coin-num { display: inline-block; min-width: 1ch; color: rgba(255,255,255,0.8); transition: transform 0.12s ease-out; }
+    #coin-num.bump { transform: scale(1.4); }
     #compass {
       position: fixed; top: 10px; right: 10px;
       pointer-events: none;
@@ -91,7 +101,7 @@
 </head>
 <body>
   <canvas id="c"></canvas>
-  <div id="hud"><img class="hud-icon" src="/ui/obeye.png" alt="">coccolith &nbsp;|&nbsp; <img class="hud-icon" src="/ui/veth_icon.png" alt="">veth<br><span id="area-code"></span><span id="latlon"></span></div>
+  <div id="hud"><img class="hud-icon" src="/ui/obeye.png" alt="">coccolith &nbsp;|&nbsp; <img class="hud-icon" src="/ui/veth_icon.png" alt="">veth<br><span id="area-code"></span><span id="latlon"></span><span id="coin-box"><img src="/ui/coin_icon.png" alt="coin"><span id="coin-num">0</span></span></div>
   <canvas id="compass" width="88" height="88"></canvas>
   <canvas id="veth-ind" width="28" height="28"></canvas>
 <footer id="copyright">© 2026 岩木しあん — <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a></footer>
