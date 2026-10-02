@@ -4,6 +4,7 @@ import Alea from 'alea'
 import { R_C, LAND_LIFT } from './constants.js'
 import { createTORCH } from '../my-3d-parts/landmark/TORCH.js'
 import { createChairTree } from '../my-3d-parts/landmark/chairtree.js'
+import { createTou } from '../my-3d-parts/landmark/tou.js'
 import { addDoorGlow } from './doorGlow.js'
 import { createForest1 } from '../my-3d-parts/parts/forest1.jsx'
 import { createFrame64 } from '../my-3d-parts/parts/Frame_6-4.jsx'
@@ -487,6 +488,20 @@ export function createCoccolith() {
   chairTreeWrapper.add(chairTree)
   chairTreeWrapper.scale.setScalar(6)
   placeOnSurface(group, chairTreeWrapper, 65, -180, R_C + LAND_LIFT)
+
+  // --- ランドマーク: 塔 tou (lat=-84.0, lon=113.8) ----------------
+  // 幅9m × 高さ12.6m。扉のある角（ローカル +X+Z 方向）を北（緯度+方向）に向ける
+  const touWrapper = new THREE.Group()
+  const tou = createTou()
+  touWrapper.add(tou)
+  placeOnSurface(group, touWrapper, -84.0, 113.8, R_C + LAND_LIFT - 0.3)
+  {
+    const n = touWrapper.position.clone().normalize()
+    const north = new THREE.Vector3(0, 1, 0).addScaledVector(n, -n.y)
+      .applyQuaternion(touWrapper.quaternion.clone().invert())
+    tou.rotation.y = Math.atan2(north.x, north.z) - Math.PI / 4
+  }
+  colliders.push(tou)
 
   // --- EB_v87 (lat=-72, lon=90) --------------------------------
   // local -Z が南極（coccolith -Y 頂点）方向、local +Y = 球面法線
