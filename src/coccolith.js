@@ -5,6 +5,7 @@ import { R_C, LAND_LIFT } from './constants.js'
 import { createTORCH } from '../my-3d-parts/landmark/TORCH.js'
 import { createChairTree } from '../my-3d-parts/landmark/chairtree.js'
 import { createTou } from '../my-3d-parts/landmark/tou.js'
+import { createTreehouse } from '../my-3d-parts/landmark/treehouse.js'
 import { addDoorGlow } from './doorGlow.js'
 import { createForest1 } from '../my-3d-parts/parts/forest1.jsx'
 import { createFrame64 } from '../my-3d-parts/parts/Frame_6-4.jsx'
@@ -503,6 +504,16 @@ export function createCoccolith() {
     tou.rotation.y = Math.atan2(north.x, north.z) - Math.PI / 4 + Math.PI / 2
   }
   colliders.push(tou)
+
+  // --- ランドマーク: ツリーハウス (lat=53.0, lon=-171.0) -----------
+  // 2倍で高さ約22m。当たり判定は幹のまわりだけ（部屋は頭上なので下をくぐれる）
+  const treehouseWrapper = new THREE.Group()
+  const treehouse = createTreehouse()
+  treehouse.rotation.y = Math.PI   // 正面（扉・はしご側）の向きを 180° 回す
+  treehouseWrapper.add(treehouse)
+  treehouseWrapper.scale.setScalar(2)
+  placeOnSurface(group, treehouseWrapper, 53.0, -171.0, R_C + LAND_LIFT - 0.3)
+  colliders.push(treehouse)
 
   // --- EB_v87 (lat=-72, lon=90) --------------------------------
   // local -Z が南極（coccolith -Y 頂点）方向、local +Y = 球面法線
