@@ -301,7 +301,8 @@ const SAB_BODY_R      = 4.3 * SAB_SCALE   // sabちゃんの耳端までの半�
 const _colliderData = colliders.map(obj => {
   obj.updateWorldMatrix(true, false)
   const { halfW, halfD } = obj.userData.footprint
-  const pad = COLLIDER_MARGIN + SAB_BODY_R
+  // 判定は建物ローカル座標で行うので、拡大した建物では余白 (m) をスケールで割る
+  const pad = (COLLIDER_MARGIN + SAB_BODY_R) / obj.getWorldScale(new THREE.Vector3()).x
   return { mat: obj.matrixWorld.clone(), inv: obj.matrixWorld.clone().invert(), hx: halfW + pad, hz: halfD + pad }
 })
 const _colP = new THREE.Vector3()
