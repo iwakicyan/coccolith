@@ -490,17 +490,17 @@ export function createCoccolith() {
   placeOnSurface(group, chairTreeWrapper, 65, -180, R_C + LAND_LIFT)
 
   // --- ランドマーク: 塔 tou (lat=-8.4, lon=113.8) -----------------
-  // 2倍で幅18m × 高さ25.2m。扉のある角（ローカル +X+Z 方向）を北（緯度+方向）に向ける
+  // 2倍で幅18m × 高さ25.2m。扉のある角（ローカル +X+Z 方向）を北（緯度+方向）から 90° 回した向きにする
   const touWrapper = new THREE.Group()
   const tou = createTou()
   touWrapper.add(tou)
   touWrapper.scale.setScalar(2)
-  placeOnSurface(group, touWrapper, -8.4, 113.8, R_C + LAND_LIFT - 0.3)
+  placeOnSurface(group, touWrapper, -8.4, 113.8, R_C + LAND_LIFT - 0.8)
   {
     const n = touWrapper.position.clone().normalize()
     const north = new THREE.Vector3(0, 1, 0).addScaledVector(n, -n.y)
       .applyQuaternion(touWrapper.quaternion.clone().invert())
-    tou.rotation.y = Math.atan2(north.x, north.z) - Math.PI / 4
+    tou.rotation.y = Math.atan2(north.x, north.z) - Math.PI / 4 + Math.PI / 2
   }
   colliders.push(tou)
 
