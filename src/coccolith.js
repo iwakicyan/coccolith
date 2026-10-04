@@ -518,9 +518,10 @@ export function createCoccolith() {
   colliders.push(treehouse)
 
   // --- ランドマーク: 看板 kanban (lat=85.0, lon=-164.0) ------------
-  // 16.7倍で高さ約20m。地面に 2m めり込ませる。表（黒板・ローカル +Z）を北（緯度+方向）へ向ける
+  // 16.7倍で高さ約20m、横幅だけさらに 1.5 倍（約15m）。地面に 2m めり込ませる。表（黒板・ローカル +Z）を北（緯度+方向）へ向ける
   const kanbanWrapper = new THREE.Group()
   const kanban = createKanban()
+  kanban.scale.x = 1.5   // 横幅（ローカル X）だけ広げる。弓なりは Z 方向なので形は崩れない
   kanbanWrapper.add(kanban)
   kanbanWrapper.scale.setScalar(16.7)
   placeOnSurface(group, kanbanWrapper, 85.0, -164.0, R_C + LAND_LIFT - 2.0)
@@ -536,7 +537,7 @@ export function createCoccolith() {
     const board = kanban.userData.board
     board.geometry.computeBoundingBox()
     const size = board.geometry.boundingBox.getSize(new THREE.Vector3())
-    addLedBoard(board, size.x / size.y, __CHANGELOG__)
+    addLedBoard(board, size.x * kanban.scale.x / size.y, __CHANGELOG__)   // 横に広げたぶん列を増やし、ドットを丸いままにする
   }
 
   // --- EB_v87 (lat=-72, lon=90) --------------------------------
