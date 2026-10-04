@@ -16,7 +16,7 @@ import { createMateris3 } from '../my-3d-parts/parts/Materis3.jsx'
 import { createMateris4 } from '../my-3d-parts/parts/Materis4.jsx'
 import { createMateris5 } from '../my-3d-parts/parts/Materis5.jsx'
 import { createGrassTuftGeometry, createGrassMaterial } from '../my-3d-parts/parts/2dgrass.js'
-import { createField01 } from '../my-3d-parts/parts/field01.jsx'
+import { createGrass2TuftGeometry, createGrass2Material } from '../my-3d-parts/parts/2dgrass2.js'
 import { createEB_v87 } from '../my-3d-parts/parts/EB_v87.jsx'
 
 // ============================================================
@@ -473,14 +473,14 @@ export function createCoccolith() {
     [{lat:73.3,lon:7.2},{lat:42.4,lon:-33.8},{lat:42.4,lon:-16.6},{lat:56.3,lon:62.4}],
     [{lat:59.9,lon:157.6},{lat:59.9,lon:80.2},{lat:44.4,lon:117.3}],
   ]
-  for (const poly of GRASS_AREAS) group.add(createGrassField(poly, noise3D))
+  for (const poly of GRASS_AREAS) group.add(createGrassField(poly, noise3D, GRASS_KIND_1))
 
   const FIELD01_AREAS = [
     [{lat:-60,lon:30},{lat:-37,lon:62},{lat:-43,lon:82},{lat:-60,lon:82}],
     [{lat:-21.7,lon:23.4},{lat:-37.7,lon:15},{lat:-20.5,lon:10.6}],
     [{lat:-44,lon:-134},{lat:-67,lon:-114},{lat:-67,lon:-151.6}],
   ]
-  for (const poly of FIELD01_AREAS) group.add(createField01Area(poly, noise3D))
+  for (const poly of FIELD01_AREAS) group.add(createGrassField(poly, noise3D, GRASS_KIND_2))
 
   // --- ランドマーク: ChairTree (lat=65, lon=-180) ---------------
   const chairTreeWrapper = new THREE.Group()
@@ -769,19 +769,32 @@ function _distToSeg(plat, plon, alat, alon, blat, blon) {
   return Math.sqrt((px - t * dx) ** 2 + (py - t * dy) ** 2)
 }
 
-// ポリゴン境界をパーリンノイズでぼかして草地を配置
-// 草は my-3d-parts の 2dgrass（板ポリ3枚の房）。GRASS_SCALE=2.5 → 地上の高さ約1.75m、y軸ランダム回転
-function createGrassField(poly, noise3D) {
+// 草の種類（my-3d-parts の板ポリ草）。scale=2.5 → 地上の高さ約1.75m
+//   lift: 地面からの高さ (m)。房ごとの埋め具合の違いをここで吸収する
+//   seed: 境界ノイズ・位置ずらし・回転の乱数シード
+//   density: 被覆率 (FOOTPRINT/間隔)²。省略時は 2/3
+//   emissive: テクスチャ自身の発光の強さ（省略時はパーツの既定値）。暗い場所で浮いて見えるなら下げる
+const GRASS_KIND_1 = {   // 2dgrass：細い葉の房（下部を大きく埋める形なので少し持ち上げる）
+  geometry: createGrassTuftGeometry, material: createGrassMaterial,
+  scale: 2.5, lift: 0.2, seed: 'grass', emissive: 0.1,
+}
+const GRASS_KIND_2 = {   // 2dgrass2：手描きの幅広い葉の房（旧 field01 の場所）
+  geometry: createGrass2TuftGeometry, material: createGrass2Material,
+  scale: 2.5, lift: 0.0, seed: 'grass2', emissive: 0, density: 2 / 3 * 0.8,
+}
+
+// ポリゴン境界をパーリンノイズでぼかして草地を配置（y軸ランダム回転・位置ランダムずらし）
+function createGrassField(poly, noise3D, kind) {
   const DEG            = Math.PI / 180
-  const GRASS_SCALE    = 2.5
+  const GRASS_SCALE    = kind.scale
   const FOOTPRINT      = 1.6                 // 配置間隔の基準 (m)
-  const DENSITY        = 2 / 3               // 被覆率: (FOOTPRINT/間隔)²
+  const DENSITY        = kind.density ?? 2 / 3   // 被覆率: (FOOTPRINT/間隔)²
   const dlatDeg        = FOOTPRINT / (Math.sqrt(DENSITY) * R_C * DEG)
   const EDGE_WIDTH     = 6.0   // 境界フェード幅 (度 ≈ 37.5m)
   const NOISE_FREQ     = 25
   const NOISE_STRENGTH = 0.8
 
-  const edgeNoise = createNoise3D(Alea('grass-edge'))
+  const edgeNoise = createNoise3D(Alea(kind.seed + '-edge'))
 
   const latMin = Math.min(...poly.map(p => p.lat))
   const latMax = Math.max(...poly.map(p => p.lat))
@@ -799,7 +812,7 @@ function createGrassField(poly, noise3D) {
 
   // グリッド位置を収集（境界外EDGE_WIDTH分まで走査）
   const posBuf = []
-  const jitRng = Alea('grass-jitter')   // 格子の列が見えないよう、間隔の±半分ずらす
+  const jitRng = Alea(kind.seed + '-jitter')   // 格子の列が見えないよう、間隔の±半分ずらす
   for (let lat = latMin - EDGE_WIDTH; lat <= latMax + EDGE_WIDTH + 1e-9; lat += dlatDeg) {
     const dlonDeg = dlatDeg / Math.cos(lat * DEG)
     const dlon20  = COAST_DEG / Math.cos(lat * DEG)
@@ -844,7 +857,9 @@ function createGrassField(poly, noise3D) {
   }
   const count = posBuf.length / 2
 
-  const im = new THREE.InstancedMesh(createGrassTuftGeometry(), createGrassMaterial(), count)
+  const mat = kind.material()
+  if (kind.emissive !== undefined) mat.emissiveIntensity = kind.emissive
+  const im = new THREE.InstancedMesh(kind.geometry(), mat, count)
   im.castShadow    = true
   im.receiveShadow = true
 
@@ -856,8 +871,8 @@ function createGrassField(poly, noise3D) {
   const yRot     = new THREE.Quaternion()
   const scaleV   = new THREE.Vector3(GRASS_SCALE, GRASS_SCALE, GRASS_SCALE)
   const instMat  = new THREE.Matrix4()
-  const r        = R_C + LAND_LIFT + 0.2   // 2dgrass は下部を埋める前提の形なので、沈めすぎない
-  const rotRng   = Alea('grass-rot')
+  const r        = R_C + LAND_LIFT + kind.lift
+  const rotRng   = Alea(kind.seed + '-rot')
 
   for (let idx = 0; idx < count; idx++) {
     const lat   = posBuf[idx * 2]
@@ -885,111 +900,3 @@ function createGrassField(poly, noise3D) {
   return group
 }
 
-// lat/lon ポリゴンに field01 を敷き詰める（InstancedMesh方式）
-function createField01Area(poly, noise3D) {
-  const DEG            = Math.PI / 180
-  const FOOTPRINT      = 6.0                              // タイル間隔 (m)
-  const EDGE_WIDTH     = 6.0                              // 境界フェード幅 (度)
-  const NOISE_FREQ     = 25
-  const NOISE_STRENGTH = 0.8
-  const COAST_DEG      = (20 / R_C) * (180 / Math.PI)
-
-  const edgeNoise = createNoise3D(Alea('field01-edge'))
-  const dlatDeg   = (FOOTPRINT / R_C) * (180 / Math.PI)
-
-  const latMin = Math.min(...poly.map(p => p.lat))
-  const latMax = Math.max(...poly.map(p => p.lat))
-  const lonMin = Math.min(...poly.map(p => p.lon))
-  const lonMax = Math.max(...poly.map(p => p.lon))
-
-  const landN = (plat, plon) => {
-    const pp = (90 - plat) * DEG, pt = (plon + 180) * DEG
-    const x = Math.sin(pp)*Math.cos(pt), y = Math.cos(pp), z = Math.sin(pp)*Math.sin(pt)
-    return noise3D(x*1.8,y*1.8,z*1.8)*0.7 + noise3D(x*4.2,y*4.2,z*4.2)*0.2 + noise3D(x*9.0,y*9.0,z*9.0)*0.1
-  }
-
-  // --- 配置候補を先に収集 ---
-  const posBuf = []
-  let idx = 0
-  for (let lat = latMin - EDGE_WIDTH; lat <= latMax + EDGE_WIDTH + 1e-9; lat += dlatDeg) {
-    const dlonDeg = dlatDeg / Math.cos(lat * DEG)
-    const dlon20  = COAST_DEG / Math.cos(lat * DEG)
-    for (let lon = lonMin - EDGE_WIDTH; lon <= lonMax + EDGE_WIDTH + 1e-9; lon += dlonDeg) {
-      const np = poly.length
-      let minDist = Infinity
-      for (let i = 0; i < np; i++) {
-        const d = _distToSeg(lat, lon, poly[i].lat, poly[i].lon, poly[(i+1)%np].lat, poly[(i+1)%np].lon)
-        if (d < minDist) minDist = d
-      }
-      const inside     = _polyContains(lat, lon, poly)
-      const edgeFactor = (inside ? 1 : -1) * minDist / EDGE_WIDTH
-      if (edgeFactor <= -NOISE_STRENGTH) continue
-
-      const phi   = (90 - lat) * DEG
-      const theta = (lon + 180) * DEG
-      const nx    = Math.sin(phi)*Math.cos(theta)
-      const ny    = Math.cos(phi)
-      const nz    = Math.sin(phi)*Math.sin(theta)
-
-      const n = noise3D(nx*1.8,ny*1.8,nz*1.8)*0.7 + noise3D(nx*4.2,ny*4.2,nz*4.2)*0.2 + noise3D(nx*9.0,ny*9.0,nz*9.0)*0.1
-      if (n < LAND_THRESHOLD) continue
-
-      if (landN(lat+COAST_DEG,lon) < LAND_THRESHOLD || landN(lat-COAST_DEG,lon) < LAND_THRESHOLD ||
-          landN(lat,lon+dlon20)    < LAND_THRESHOLD || landN(lat,lon-dlon20)     < LAND_THRESHOLD) continue
-
-      if (edgeFactor < NOISE_STRENGTH) {
-        const nv = edgeNoise(nx*NOISE_FREQ, ny*NOISE_FREQ, nz*NOISE_FREQ)
-        if (edgeFactor + nv * NOISE_STRENGTH <= 0) continue
-      }
-
-      const rotStep  = ((idx * 1664525 + 1013904223) >>> 0) % 3
-      const rotAngle = rotStep * (Math.PI * 2 / 3)
-      posBuf.push(nx, ny, nz, rotAngle)
-      idx++
-    }
-  }
-
-  const count = posBuf.length / 4
-  if (count === 0) return new THREE.Group()
-
-  // --- テンプレートからサブメッシュのジオメトリ・マテリアル・ローカル行列を取得 ---
-  const template = createField01()
-  template.updateMatrixWorld(true)
-  const meshDefs = []
-  template.traverse(child => {
-    if (!child.isMesh) return
-    child.updateWorldMatrix(true, false)
-    meshDefs.push({ geometry: child.geometry, material: child.material, localMat: child.matrixWorld.clone() })
-  })
-
-  const iMeshes = meshDefs.map(({ geometry, material }) => {
-    const im = new THREE.InstancedMesh(geometry, material, count)
-    im.castShadow = true
-    return im
-  })
-
-  const up       = new THREE.Vector3(0, 1, 0)
-  const yAxis    = new THREE.Vector3(0, 1, 0)
-  const r        = R_C + LAND_LIFT
-  const groupMat = new THREE.Matrix4()
-  const instMat  = new THREE.Matrix4()
-  const scaleV   = new THREE.Vector3(2, 2, 2)
-
-  for (let i = 0; i < count; i++) {
-    const nx = posBuf[i*4], ny = posBuf[i*4+1], nz = posBuf[i*4+2], rotAngle = posBuf[i*4+3]
-    const pos3  = new THREE.Vector3(nx*r, ny*r, nz*r)
-    const yRot  = new THREE.Quaternion().setFromAxisAngle(yAxis, rotAngle)
-    const quat  = new THREE.Quaternion().setFromUnitVectors(up, new THREE.Vector3(nx, ny, nz)).multiply(yRot)
-    groupMat.compose(pos3, quat, scaleV)
-    for (let ci = 0; ci < meshDefs.length; ci++) {
-      instMat.multiplyMatrices(groupMat, meshDefs[ci].localMat)
-      iMeshes[ci].setMatrixAt(i, instMat)
-    }
-  }
-
-  for (const im of iMeshes) im.instanceMatrix.needsUpdate = true
-
-  const group = new THREE.Group()
-  for (const im of iMeshes) group.add(im)
-  return group
-}
