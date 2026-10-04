@@ -573,7 +573,7 @@ export function createCoccolith({ renderer = null } = {}) {
       piece.updateMatrix()
       _m.multiplyMatrices(sakuWrapper.matrix, sakuField.matrix).multiply(piece.matrix).decompose(_p, _q, _s)
       const n = _p.clone().normalize()
-      piece.position.copy(n).multiplyScalar(SAKU_RADIUS)
+      piece.position.copy(n).multiplyScalar(piece.userData.onGround ? R_C + LAND_LIFT - 0.05 : SAKU_RADIUS)
       piece.quaternion.setFromUnitVectors(n0, n).multiply(_q)
       piece.scale.copy(_s)
       group.add(piece)   // 球面に直接置く（sakuField には当たり判定の矩形だけ残る）
@@ -802,6 +802,31 @@ function createSakuField() {
   box(0, 0, W, A)
   box(X, A, W, 2 * A)
   box(0, 2 * A, W, H)
+
+  // 階段: 囲いの内側、凹みの奥の柵から少し東。幅・奥行きとも杭1区間（3倍で3.6m）、3段で高さ約2.25m（3倍時）
+  // 高い面を西（凹み側）に向け、東（囲いの奥）へ下る。色と輪郭線は柵と同じ
+  {
+    const SW = SPAN, SD = SPAN, SH = 0.75, STEPS = 3, X0 = 7.19   // 幅（南北）・奥行き（東西）・高さ・段数・西の面の位置
+    const t = SD / STEPS, h = SH / STEPS
+    const shape = new THREE.Shape()   // 横から見た段の形（x = 東へ、y = 上へ）
+    shape.moveTo(0, 0)
+    shape.lineTo(SD, 0)
+    for (let i = STEPS; i >= 1; i--) {
+      shape.lineTo(i * t, (STEPS - i + 1) * h)
+      shape.lineTo((i - 1) * t, (STEPS - i + 1) * h)
+    }
+    const geo = new THREE.ExtrudeGeometry(shape, { depth: SW, bevelEnabled: false })
+    geo.translate(0, 0, -SW / 2)
+    const fenceMesh = field.children[0].getObjectByProperty('isMesh', true)
+    const line = fenceMesh.children[0]
+    const stairs = new THREE.Mesh(geo, fenceMesh.material)
+    stairs.name = '階段'
+    stairs.castShadow = true
+    stairs.add(new THREE.LineSegments(new THREE.EdgesGeometry(geo), line.material))
+    stairs.position.set(X0 - W / 2, 0, 0)
+    stairs.userData.onGround = true   // 柵のように地面へめり込ませない
+    field.add(stairs)
+  }
   return field
 }
 
