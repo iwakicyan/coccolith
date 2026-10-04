@@ -580,6 +580,7 @@ export function createCoccolith({ renderer = null } = {}) {
     }
     colliders.push(...sakuField.children)
     group.add(createSakuGrass(sakuWrapper, sakuField, { ...GRASS_KIND_1, density: 2 / 3 * 0.5 }))   // 草地の半分の量
+    group.add(createSakuGrass(sakuWrapper, sakuField, FLOWER_STEM_KIND))
   }
 
   // --- EB_v87 (lat=-72, lon=90) --------------------------------
@@ -973,6 +974,39 @@ const GRASS_KIND_1 = {   // 2dgrass：細い葉の房（下部を大きく埋め
 const GRASS_KIND_2 = {   // 2dgrass2：手描きの幅広い葉の房（旧 field01 の場所）
   geometry: createGrass2TuftGeometry, material: createGrass2Material,
   scale: 2.5, lift: 0.0, seed: 'grass2', emissive: 0, density: 2 / 3 * 0.8,
+}
+
+const FLOWER_STEM_KIND = {   // 花の茎：途中で折れた茎（6頂点）に葉（4頂点）を2枚。テクスチャは 2dgrass と同じ
+  geometry: createFlowerStemGeometry, material: createGrassMaterial,
+  scale: 2.2, lift: 0.0, seed: 'flowerstem', emissive: 0.1, density: 0.1,
+}
+
+// 花の茎のジオメトリ（手描きラフの形）。原点 = 根元・地面、高さ 1（茎の先端）
+// UV は u = 板の横、v = 高さ（草のテクスチャのグラデーションが根元→先端にかかる）
+function createFlowerStemGeometry() {
+  const HW = 0.012                                       // 茎の半分の幅
+  const STEM = [[-0.005, -0.05], [0.115, 0.53], [0.085, 1.0]]   // 茎の中心線（根元・折れ目・先端）。根元は少し地面に埋める
+  const LEAVES = [                                       // 葉（x, y, z）。最初の点が茎の付け根
+    [[0.07, 0.34, 0], [0, 0.454, 0.06], [-0.216, 0.49, 0.12], [-0.08, 0.314, 0.06]],      // 左の葉
+    [[0.09, 0.416, 0], [0.224, 0.554, -0.06], [0.406, 0.472, -0.15], [0.286, 0.34, -0.06]], // 右の葉
+  ]
+  const pos = [], uv = [], idx = []
+  STEM.forEach(([x, y]) => {
+    pos.push(x - HW, y, 0, x + HW, y, 0)
+    uv.push(0, Math.max(y, 0), 1, Math.max(y, 0))
+  })
+  idx.push(0, 1, 3, 0, 3, 2, 2, 3, 5, 2, 5, 4)
+  LEAVES.forEach(leaf => {
+    const base = pos.length / 3
+    leaf.forEach(([x, y, z], i) => { pos.push(x, y, z); uv.push(i === 2 ? 1 : i === 0 ? 0 : 0.5, y) })
+    idx.push(base, base + 1, base + 2, base, base + 2, base + 3)
+  })
+  const g = new THREE.BufferGeometry()
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3))
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2))
+  g.setIndex(idx)
+  g.computeVertexNormals()
+  return g
 }
 
 // ポリゴン境界をパーリンノイズでぼかして草地を配置（y軸ランダム回転・位置ランダムずらし）
