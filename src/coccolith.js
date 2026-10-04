@@ -551,10 +551,10 @@ export function createCoccolith({ renderer = null } = {}) {
   }
 
   // --- ランドマーク: 柵 saku_1 (lat=-5.6, lon=100.0) ----------------
-  // 3倍で高さ約3.3m。上から見て左がコの字に凹んだ囲い（約35m × 26m）を、直線と角のピースで組む
+  // 3倍で高さ約3.3m（地面に 0.5m めり込ませる）。上から見て左がコの字に凹んだ囲い（約35m × 26m）を、直線と角のピースで組む
   // 図の上（ローカル -Z）を北（緯度+方向）へ向ける。囲いの中には入れない（外側の凹みには入れる）
   {
-    const SAKU_RADIUS = R_C + LAND_LIFT - 0.15
+    const SAKU_RADIUS = R_C + LAND_LIFT - 0.5
     const sakuWrapper = new THREE.Group()
     const sakuField = createSakuField()
     sakuWrapper.add(sakuField)
