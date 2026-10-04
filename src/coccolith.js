@@ -8,6 +8,7 @@ import { createTou } from '../my-3d-parts/landmark/tou.js'
 import { createTreehouse } from '../my-3d-parts/landmark/treehouse.js'
 import { createKanban } from '../my-3d-parts/landmark/kanban.js'
 import { addDoorGlow } from './doorGlow.js'
+import { addLedBoard } from './ledBoard.js'
 import { createForest1 } from '../my-3d-parts/parts/forest1.jsx'
 import { createFrame64 } from '../my-3d-parts/parts/Frame_6-4.jsx'
 import { createFrameM, createFrameL } from '../my-3d-parts/parts/Frame.jsx'
@@ -530,6 +531,13 @@ export function createCoccolith() {
     kanban.rotation.y = Math.atan2(north.x, north.z)
   }
   colliders.push(kanban)
+  {
+    // 黒板に更新履歴を電光掲示板風に出す（__CHANGELOG__ はビルド時に git log から作る。vite.config.js）
+    const board = kanban.userData.board
+    board.geometry.computeBoundingBox()
+    const size = board.geometry.boundingBox.getSize(new THREE.Vector3())
+    addLedBoard(board, size.x / size.y, __CHANGELOG__)
+  }
 
   // --- EB_v87 (lat=-72, lon=90) --------------------------------
   // local -Z が南極（coccolith -Y 頂点）方向、local +Y = 球面法線

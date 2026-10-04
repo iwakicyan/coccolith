@@ -10,6 +10,7 @@ import { createKummo } from '../my-3d-parts/parts/kummo.jsx'
 import { createGummo } from '../my-3d-parts/parts/gummo.jsx'
 import { createSabchan } from '../my-3d-parts/parts/sabchan.jsx'
 import { setDoorGlow } from './doorGlow.js'
+import { updateLedBoards } from './ledBoard.js'
 import { createCoinIntro } from './coinIntro.js'
 
 // ============================================================
@@ -865,6 +866,7 @@ function animate() {
 
   coinIntro.update(dt, sabchan.group.position)
   updateDoorGlow(now)
+  updateLedBoards(now / 1000)
   renderer.render(interior ? interior.def.scene : scene, camera)
 }
 
