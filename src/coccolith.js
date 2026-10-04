@@ -579,6 +579,7 @@ export function createCoccolith({ renderer = null } = {}) {
       group.add(piece)   // 球面に直接置く（sakuField には当たり判定の矩形だけ残る）
     }
     colliders.push(...sakuField.children)
+    group.add(createSakuGrass(sakuWrapper, sakuField, GRASS_KIND_1))
   }
 
   // --- EB_v87 (lat=-72, lon=90) --------------------------------
@@ -798,7 +799,9 @@ function createSakuField() {
     o.position.set((x0 + x1) / 2 - W / 2, 0, (z0 + z1) / 2 - H / 2)
     o.userData.footprint = { halfW: (x1 - x0 + RAIL_T) / 2, halfD: (z1 - z0 + RAIL_T) / 2 }
     field.add(o)
+    field.userData.areas.push([x0 - W / 2, z0 - H / 2, x1 - W / 2, z1 - H / 2])
   }
+  field.userData.areas = []   // 囲いの中の矩形（ローカル XZ の [x0, z0, x1, z1]。草を生やす範囲に使う）
   box(0, 0, W, A)
   box(X, A, W, 2 * A)
   box(0, 2 * A, W, H)
@@ -826,8 +829,51 @@ function createSakuField() {
     stairs.position.set(X0 - W / 2, 0, 0)
     stairs.userData.onGround = true   // 柵のように地面へめり込ませない
     field.add(stairs)
+    field.userData.stairsArea = [X0 - W / 2, -SW / 2, X0 + SD - W / 2, SW / 2]
   }
   return field
+}
+
+// 柵の囲いの中に草（kind）を生やす。囲いの矩形から柵の際と階段の下を除いた範囲に、ずらした格子で並べる
+// 位置は sakuWrapper・sakuField のローカル XZ から球面へ下ろす（間隔・高さは createGrassField と同じ）
+function createSakuGrass(sakuWrapper, sakuField, kind) {
+  const STEP   = 1.6 / Math.sqrt(kind.density ?? 2 / 3) / sakuWrapper.scale.x   // 配置間隔（ローカル単位）
+  const MARGIN = 0.15                                                           // 柵の際の余白（ローカル単位、3倍で約0.45m）
+  const { areas, stairsArea: st } = sakuField.userData
+  const inUnion = (x, z) => areas.some(([x0, z0, x1, z1]) => x >= x0 && x <= x1 && z >= z0 && z <= z1)
+  // 柵の際の余白は外周からだけ取る（矩形どうしの境目には隙間を作らない）
+  const inArea = (x, z) => [[0, 0], [MARGIN, 0], [-MARGIN, 0], [0, MARGIN], [0, -MARGIN], [MARGIN, MARGIN], [MARGIN, -MARGIN], [-MARGIN, MARGIN], [-MARGIN, -MARGIN]]
+    .every(([dx, dz]) => inUnion(x + dx, z + dz))
+  const onStairs = (x, z) => x > st[0] - MARGIN && x < st[2] + MARGIN && z > st[1] - MARGIN && z < st[3] + MARGIN
+
+  const toPlanet = new THREE.Matrix4().multiplyMatrices(sakuWrapper.matrix, sakuField.matrix)
+  const xs = areas.flatMap(a => [a[0], a[2]]), zs = areas.flatMap(a => [a[1], a[3]])
+  const rng = Alea(kind.seed + '-saku')
+  const points = []
+  for (let x = Math.min(...xs); x <= Math.max(...xs); x += STEP) {
+    for (let z = Math.min(...zs); z <= Math.max(...zs); z += STEP) {
+      const px = x + (rng() - 0.5) * STEP, pz = z + (rng() - 0.5) * STEP   // 格子の列が見えないよう、間隔の±半分ずらす
+      if (inArea(px, pz) && !onStairs(px, pz)) points.push(new THREE.Vector3(px, 0, pz).applyMatrix4(toPlanet))
+    }
+  }
+
+  const mat = kind.material()
+  if (kind.emissive !== undefined) mat.emissiveIntensity = kind.emissive
+  const im = new THREE.InstancedMesh(kind.geometry(), mat, points.length)
+  im.castShadow    = true
+  im.receiveShadow = true
+  const up = new THREE.Vector3(0, 1, 0), quat = new THREE.Quaternion(), yRot = new THREE.Quaternion()
+  const scaleV = new THREE.Vector3().setScalar(kind.scale), instMat = new THREE.Matrix4()
+  const r = R_C + LAND_LIFT + kind.lift
+  points.forEach((p, i) => {
+    const n = p.clone().normalize()
+    yRot.setFromAxisAngle(up, rng() * Math.PI * 2)
+    quat.setFromUnitVectors(up, n).multiply(yRot)
+    instMat.compose(n.multiplyScalar(r), quat, scaleV)
+    im.setMatrixAt(i, instMat)
+  })
+  im.instanceMatrix.needsUpdate = true
+  return im
 }
 
 // 球面上の指定緯度経度にオブジェクトを配置するユーティリティ
