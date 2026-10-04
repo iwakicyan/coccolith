@@ -9,6 +9,7 @@ import { createTreehouse } from '../my-3d-parts/landmark/treehouse.js'
 import { createKanban } from '../my-3d-parts/landmark/kanban.js'
 import { addDoorGlow } from './doorGlow.js'
 import { addLedBoard } from './ledBoard.js'
+import { applyNightEnv } from './nightEnv.js'
 import { createForest1 } from '../my-3d-parts/parts/forest1.jsx'
 import { createFrame64 } from '../my-3d-parts/parts/Frame_6-4.jsx'
 import { createFrameM, createFrameL } from '../my-3d-parts/parts/Frame.jsx'
@@ -534,21 +535,11 @@ export function createCoccolith({ renderer = null } = {}) {
   }
   colliders.push(kanban)
   {
-    // フレーム（黒板以外の板）をメタリックにする。映り込みは看板まわりの夜景のパノラマ（public/env/kanban.png, 2:1 正距円筒）
+    // フレーム（黒板以外の板）をメタリックにする。映り込みは看板まわりの夜景（nightEnv.js）
     const frame = kanban.children.find(o => o.isMesh && o !== kanban.userData.board)
-    const frameMat = new THREE.MeshStandardMaterial({ color: 0xc2c6dc, metalness: 1, roughness: 0.3, envMapIntensity: 1.0 })
+    const frameMat = new THREE.MeshStandardMaterial({ color: 0xc2c6dc, metalness: 1, roughness: 0.15, envMapIntensity: 2.0 })
     frame.material = frameMat
-    if (renderer) {
-      new THREE.TextureLoader().load(`${import.meta.env.BASE_URL}env/kanban.png`, tex => {
-        tex.mapping = THREE.EquirectangularReflectionMapping
-        tex.colorSpace = THREE.SRGBColorSpace
-        const pmrem = new THREE.PMREMGenerator(renderer)
-        frameMat.envMap = pmrem.fromEquirectangular(tex).texture   // roughness に合わせてぼかせるよう PMREM にする
-        frameMat.needsUpdate = true
-        pmrem.dispose()
-        tex.dispose()
-      })
-    }
+    applyNightEnv(renderer, frameMat)
   }
   {
     // 黒板に更新履歴を電光掲示板風に出す（__CHANGELOG__ はビルド時に git log から作る。vite.config.js）

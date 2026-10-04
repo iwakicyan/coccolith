@@ -1,11 +1,12 @@
 import * as THREE from 'three'
+import { applyNightEnv } from './nightEnv.js'
 
 // ============================================================
 //  coin — 猫エンブレムのメタリックコイン（ローポリ）
 //  my-3d-parts/workspace/coin.html より Three.js 単体版として移植
 //
 //  createCoin({ renderer, radius })
-//    renderer: 金属の映り込み用 envMap を作るのに使う（省略時は映り込みなし）
+//    renderer: 金属の映り込み（夜景・nightEnv.js）を作るのに使う（省略時は映り込みなし）
 //    radius:   コインの半径 (m)
 //  コインは XY 平面に立ち、表面が +Z を向く。厚みの中心が原点。
 // ============================================================
@@ -23,37 +24,6 @@ const DISC_SEG  = 12  // 外側の円の頂点数
 const CURVE_SEG = 4   // 頭の上辺（曲線）の分割数
 
 const deg = Math.PI / 180
-
-// 金属の映り込み用の環境マップ（空・床のグラデーション + 明るいパネル）。renderer ごとに1回だけ作る
-const envCache = new WeakMap()
-function getMetalEnv(renderer) {
-  if (!renderer) return null
-  if (envCache.has(renderer)) return envCache.get(renderer)
-  const env = new THREE.Scene()
-  const sky = new THREE.SphereGeometry(10, 32, 16)
-  const cols = [], c = new THREE.Color(), top = new THREE.Color(0xfff6e8), pos = sky.attributes.position
-  for (let i = 0; i < pos.count; i++) {
-    const t = pos.getY(i) / 10  // -1(下)〜1(上)
-    c.setHex(0x6a5e52).lerp(top, THREE.MathUtils.smoothstep(t, -0.6, 0.3))
-    cols.push(c.r, c.g, c.b)
-  }
-  sky.setAttribute('color', new THREE.Float32BufferAttribute(cols, 3))
-  env.add(new THREE.Mesh(sky, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.BackSide })))
-  ;[[5, 6, 4], [-6, 3, -3], [0, -2, 7]].forEach(([x, y, z], i) => {
-    const panel = new THREE.Mesh(
-      new THREE.PlaneGeometry(4, 2),
-      new THREE.MeshBasicMaterial({ color: i === 2 ? 0x888888 : 0xffffff, side: THREE.DoubleSide }),
-    )
-    panel.position.set(x, y, z)
-    panel.lookAt(0, 0, 0)
-    env.add(panel)
-  })
-  const pmrem = new THREE.PMREMGenerator(renderer)
-  const tex = pmrem.fromScene(env, 0.02).texture
-  pmrem.dispose()
-  envCache.set(renderer, tex)
-  return tex
-}
 
 export function createCoin({ renderer = null, radius = 4.38 } = {}) {
   const S = radius / COIN_R
@@ -116,13 +86,14 @@ export function createCoin({ renderer = null, radius = 4.38 } = {}) {
 
   const group = new THREE.Group()
   group.name = 'coin'
-  const envMap = getMetalEnv(renderer)
   const lineMat = new THREE.LineBasicMaterial({ color: LINE_COLOR })
   function part(shape, depth, color, roughness, z) {
     const geo = new THREE.ExtrudeGeometry(shape, { depth, bevelEnabled: false, curveSegments: CURVE_SEG })
-    const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({
-      color, metalness: 1, roughness, envMap, envMapIntensity: 1.2, flatShading: true,
-    }))
+    const mat = new THREE.MeshStandardMaterial({
+      color, metalness: 1, roughness, envMapIntensity: 1.2, flatShading: true,
+    })
+    applyNightEnv(renderer, mat)
+    const mesh = new THREE.Mesh(geo, mat)
     mesh.position.z = z
     mesh.castShadow = true
     mesh.add(new THREE.LineSegments(new THREE.EdgesGeometry(geo, 20), lineMat))
