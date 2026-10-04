@@ -579,7 +579,7 @@ export function createCoccolith({ renderer = null } = {}) {
       group.add(piece)   // 球面に直接置く（sakuField には当たり判定の矩形だけ残る）
     }
     colliders.push(...sakuField.children)
-    group.add(createSakuGrass(sakuWrapper, sakuField, GRASS_KIND_1))
+    group.add(createSakuGrass(sakuWrapper, sakuField, { ...GRASS_KIND_1, density: 2 / 3 * 0.5 }))   // 草地の半分の量
   }
 
   // --- EB_v87 (lat=-72, lon=90) --------------------------------
