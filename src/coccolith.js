@@ -551,17 +551,34 @@ export function createCoccolith({ renderer = null } = {}) {
   }
 
   // --- ランドマーク: 柵 saku_1 (lat=-5.6, lon=100.0) ----------------
-  // 実寸（高さ1.1m）。上から見て左がコの字に凹んだ囲い（約11.6m × 8.6m）を、直線と角のピースで組む
-  // 図の上（ローカル -Z）を北（緯度+方向）へ向ける
+  // 3倍で高さ約3.3m。上から見て左がコの字に凹んだ囲い（約35m × 26m）を、直線と角のピースで組む
+  // 図の上（ローカル -Z）を北（緯度+方向）へ向ける。囲いの中には入れない（外側の凹みには入れる）
   {
+    const SAKU_RADIUS = R_C + LAND_LIFT - 0.15
     const sakuWrapper = new THREE.Group()
     const sakuField = createSakuField()
     sakuWrapper.add(sakuField)
-    placeOnSurface(group, sakuWrapper, -5.6, 100.0, R_C + LAND_LIFT - 0.05)
-    const n = sakuWrapper.position.clone().normalize()
-    const north = new THREE.Vector3(0, 1, 0).addScaledVector(n, -n.y)
+    sakuWrapper.scale.setScalar(3)
+    placeOnSurface(group, sakuWrapper, -5.6, 100.0, SAKU_RADIUS)
+    const n0 = sakuWrapper.position.clone().normalize()
+    const north = new THREE.Vector3(0, 1, 0).addScaledVector(n0, -n0.y)
       .applyQuaternion(sakuWrapper.quaternion.clone().invert())
     sakuField.rotation.y = Math.atan2(north.x, north.z) + Math.PI
+
+    // 囲いが広く、平らなままだと端が球面から浮く（端で約0.6m）ので、ピースごとに根元を球面へ下ろして法線に合わせて傾ける
+    sakuWrapper.updateMatrix()
+    sakuField.updateMatrix()
+    const _m = new THREE.Matrix4(), _p = new THREE.Vector3(), _q = new THREE.Quaternion(), _s = new THREE.Vector3()
+    for (const piece of sakuField.children.filter(o => !o.userData.footprint)) {
+      piece.updateMatrix()
+      _m.multiplyMatrices(sakuWrapper.matrix, sakuField.matrix).multiply(piece.matrix).decompose(_p, _q, _s)
+      const n = _p.clone().normalize()
+      piece.position.copy(n).multiplyScalar(SAKU_RADIUS)
+      piece.quaternion.setFromUnitVectors(n0, n).multiply(_q)
+      piece.scale.copy(_s)
+      group.add(piece)   // 球面に直接置く（sakuField には当たり判定の矩形だけ残る）
+    }
+    colliders.push(...sakuField.children)
   }
 
   // --- EB_v87 (lat=-72, lon=90) --------------------------------
@@ -774,6 +791,17 @@ function createSakuField() {
       put(createSaku1({ spans: 2 }), [p[0] + d[0] * s, p[1] + d[1] * s], d)
     }
   })
+
+  // 当たり判定: 囲いの中（凹みを除く）を矩形3つ（上の帯・右の塊・下の帯）で覆う。横板の厚みぶん外へ広げる
+  const box = (x0, z0, x1, z1) => {
+    const o = new THREE.Object3D()
+    o.position.set((x0 + x1) / 2 - W / 2, 0, (z0 + z1) / 2 - H / 2)
+    o.userData.footprint = { halfW: (x1 - x0 + RAIL_T) / 2, halfD: (z1 - z0 + RAIL_T) / 2 }
+    field.add(o)
+  }
+  box(0, 0, W, A)
+  box(X, A, W, 2 * A)
+  box(0, 2 * A, W, H)
   return field
 }
 
