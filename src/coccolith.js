@@ -15,7 +15,7 @@ import { createMateris2 } from '../my-3d-parts/parts/Materis2.jsx'
 import { createMateris3 } from '../my-3d-parts/parts/Materis3.jsx'
 import { createMateris4 } from '../my-3d-parts/parts/Materis4.jsx'
 import { createMateris5 } from '../my-3d-parts/parts/Materis5.jsx'
-import { createLowpolyGrass1 } from '../my-3d-parts/parts/lowpoly-grass1.jsx'
+import { createGrassTuftGeometry, createGrassMaterial } from '../my-3d-parts/parts/2dgrass.js'
 import { createField01 } from '../my-3d-parts/parts/field01.jsx'
 import { createEB_v87 } from '../my-3d-parts/parts/EB_v87.jsx'
 
@@ -770,11 +770,11 @@ function _distToSeg(plat, plon, alat, alon, blat, blon) {
 }
 
 // ポリゴン境界をパーリンノイズでぼかして草地を配置
-// GRASS_SCALE=0.5 → max cone高さ2m、台形フットプリント1.6m、y軸90°刻みランダム回転
+// 草は my-3d-parts の 2dgrass（板ポリ3枚の房）。GRASS_SCALE=2.5 → 地上の高さ約1.75m、y軸ランダム回転
 function createGrassField(poly, noise3D) {
   const DEG            = Math.PI / 180
-  const GRASS_SCALE    = 0.5
-  const FOOTPRINT      = 3.2 * GRASS_SCALE   // 1.6m (台形底面幅)
+  const GRASS_SCALE    = 2.5
+  const FOOTPRINT      = 1.6                 // 配置間隔の基準 (m)
   const DENSITY        = 2 / 3               // 被覆率: (FOOTPRINT/間隔)²
   const dlatDeg        = FOOTPRINT / (Math.sqrt(DENSITY) * R_C * DEG)
   const EDGE_WIDTH     = 6.0   // 境界フェード幅 (度 ≈ 37.5m)
@@ -799,6 +799,7 @@ function createGrassField(poly, noise3D) {
 
   // グリッド位置を収集（境界外EDGE_WIDTH分まで走査）
   const posBuf = []
+  const jitRng = Alea('grass-jitter')   // 格子の列が見えないよう、間隔の±半分ずらす
   for (let lat = latMin - EDGE_WIDTH; lat <= latMax + EDGE_WIDTH + 1e-9; lat += dlatDeg) {
     const dlonDeg = dlatDeg / Math.cos(lat * DEG)
     const dlon20  = COAST_DEG / Math.cos(lat * DEG)
@@ -838,22 +839,14 @@ function createGrassField(poly, noise3D) {
         const nv = edgeNoise(nx * NOISE_FREQ, ny * NOISE_FREQ, nz * NOISE_FREQ)
         if (edgeFactor + nv * NOISE_STRENGTH <= 0) continue
       }
-      posBuf.push(lat, lon)
+      posBuf.push(lat + (jitRng() - 0.5) * dlatDeg, lon + (jitRng() - 0.5) * dlonDeg)
     }
   }
   const count = posBuf.length / 2
 
-  // テンプレートからサブメッシュのジオメトリ・マテリアル・ローカル行列を取得
-  const template  = createLowpolyGrass1()
-  const subMeshes = template.children
-  const localMats = subMeshes.map(m => { m.updateMatrix(); return m.matrix.clone() })
-
-  const iMeshes = subMeshes.map(m => {
-    const im = new THREE.InstancedMesh(m.geometry, m.material, count)
-    im.castShadow    = true
-    im.receiveShadow = true
-    return im
-  })
+  const im = new THREE.InstancedMesh(createGrassTuftGeometry(), createGrassMaterial(), count)
+  im.castShadow    = true
+  im.receiveShadow = true
 
   const up       = new THREE.Vector3(0, 1, 0)
   const yAxis    = new THREE.Vector3(0, 1, 0)
@@ -862,9 +855,9 @@ function createGrassField(poly, noise3D) {
   const quat     = new THREE.Quaternion()
   const yRot     = new THREE.Quaternion()
   const scaleV   = new THREE.Vector3(GRASS_SCALE, GRASS_SCALE, GRASS_SCALE)
-  const groupMat = new THREE.Matrix4()
   const instMat  = new THREE.Matrix4()
-  const r        = R_C + LAND_LIFT - 0.3
+  const r        = R_C + LAND_LIFT + 0.2   // 2dgrass は下部を埋める前提の形なので、沈めすぎない
+  const rotRng   = Alea('grass-rot')
 
   for (let idx = 0; idx < count; idx++) {
     const lat   = posBuf[idx * 2]
@@ -878,22 +871,17 @@ function createGrassField(poly, noise3D) {
       r * Math.sin(phi) * Math.sin(theta)
     )
     normal.copy(pos3).normalize()
-    // 90°刻みランダムy軸回転（LCGハッシュで決定論的）
-    const rotStep = ((idx * 1664525 + 1013904223) >>> 0) & 3
-    yRot.setFromAxisAngle(yAxis, rotStep * Math.PI / 2)
+    // ランダムy軸回転（シード固定で決定論的）
+    yRot.setFromAxisAngle(yAxis, rotRng() * Math.PI * 2)
     quat.setFromUnitVectors(up, normal).multiply(yRot)
-    groupMat.compose(pos3, quat, scaleV)
-
-    for (let ci = 0; ci < iMeshes.length; ci++) {
-      instMat.multiplyMatrices(groupMat, localMats[ci])
-      iMeshes[ci].setMatrixAt(idx, instMat)
-    }
+    instMat.compose(pos3, quat, scaleV)
+    im.setMatrixAt(idx, instMat)
   }
 
-  for (const im of iMeshes) im.instanceMatrix.needsUpdate = true
+  im.instanceMatrix.needsUpdate = true
 
   const group = new THREE.Group()
-  for (const im of iMeshes) group.add(im)
+  group.add(im)
   return group
 }
 
