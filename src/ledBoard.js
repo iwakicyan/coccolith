@@ -6,11 +6,11 @@ import * as THREE from 'three'
 //  1 行に収まらない行は、頭で止まる → 左へ流す → 末尾で止まる → 頭に戻る、をくり返す
 // ============================================================
 
-const LINES     = 8      // 表示する行数（一番下が最新）
-const PITCH     = 18     // 1 行の高さ（ドット）
-const FONT_PX   = 14     // 文字の大きさ（ドット）
+const ROWS      = 240    // 縦のドット数（行数は ROWS / PITCH で決まる。一番下が最新）
+const PITCH     = 13     // 1 行の高さ（ドット）
+const FONT_PX   = 11     // 文字の大きさ（ドット）
 const MARGIN    = 3      // 左右の余白（ドット）
-const DOT       = 6      // 1 ドットのテクスチャ上の大きさ (px)
+const DOT       = 4      // 1 ドットのテクスチャ上の大きさ (px)
 const SPEED     = 14     // 流れる速さ（ドット/秒）
 const PAUSE     = 2.0    // 頭と末尾で止まる時間（秒）
 const COLOR_DATE   = [255, 90, 40]    // 日付
@@ -24,7 +24,8 @@ const boards = []
 // mesh: UV が黒板の正面に 0〜1 で張られたメッシュ、aspect: 黒板の幅/高さ
 // entries: [{ date: 'YYYY-MM-DD', subject }]（新しい順）
 export function addLedBoard(mesh, aspect, entries) {
-  const rows = LINES * PITCH + 4
+  const rows = ROWS
+  const nLines = Math.floor((rows - 4) / PITCH)
   const cols = Math.round(rows * aspect)
 
   // 粗い格子（1 px = 1 ドット）と、表示用の大きいキャンバス
@@ -51,8 +52,8 @@ export function addLedBoard(mesh, aspect, entries) {
 
   // 古い順に上から並べ、最新を一番下に置く（件数が少なければ上を空ける）
   lctx.font = FONT
-  const items = entries.slice(0, LINES).reverse()
-  const top = LINES - items.length
+  const items = entries.slice(0, nLines).reverse()
+  const top = nLines - items.length
   const lines = items.map((e, i) => {
     const date = e.date.slice(5).replace('-', '/') + ' '
     const latest = i === items.length - 1
