@@ -53,7 +53,7 @@ scene.add(new THREE.AmbientLight(0x334455, 1.0))
 
 
 // --- 天体 ---------------------------------------------------
-const { group: coccolith, terrainMeshes, oceanMesh, colliders } = createCoccolith()
+const { group: coccolith, terrainMeshes, oceanMesh, colliders } = createCoccolith({ renderer })
 terrainMeshes.forEach(m => m.receiveShadow = true)
 oceanMesh.receiveShadow = true
 scene.add(coccolith)

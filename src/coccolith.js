@@ -9,6 +9,7 @@ import { createTreehouse } from '../my-3d-parts/landmark/treehouse.js'
 import { createKanban } from '../my-3d-parts/landmark/kanban.js'
 import { addDoorGlow } from './doorGlow.js'
 import { addLedBoard } from './ledBoard.js'
+import { getMetalEnv } from './coin.js'
 import { createForest1 } from '../my-3d-parts/parts/forest1.jsx'
 import { createFrame64 } from '../my-3d-parts/parts/Frame_6-4.jsx'
 import { createFrameM, createFrameL } from '../my-3d-parts/parts/Frame.jsx'
@@ -111,7 +112,8 @@ function arcDistToSeg(px, py, pz, { ax, ay, az, bx, by, bz, gnx, gny, gnz }) {
 
 // { group, terrainMeshes } を返す
 // terrainMeshes: レイキャスト対象メッシュ（山などを追加する時はここに push する）
-export function createCoccolith() {
+// renderer: 金属の映り込み用 envMap を作るのに使う（省略時は映り込みなし）
+export function createCoccolith({ renderer = null } = {}) {
   const group = new THREE.Group()
   const terrainMeshes = []
   const colliders = []   // sabちゃんが侵入できない建物（userData.footprint を持つ Object3D）
@@ -532,6 +534,13 @@ export function createCoccolith() {
     kanban.rotation.y = Math.atan2(north.x, north.z)
   }
   colliders.push(kanban)
+  {
+    // フレーム（黒板以外の板）をメタリックにする。映り込みはコインと同じ envMap
+    const frame = kanban.children.find(o => o.isMesh && o !== kanban.userData.board)
+    frame.material = new THREE.MeshStandardMaterial({
+      color: 0xc2c6dc, metalness: 1, roughness: 0.3, envMap: getMetalEnv(renderer), envMapIntensity: 0.6,
+    })
+  }
   {
     // 黒板に更新履歴を電光掲示板風に出す（__CHANGELOG__ はビルド時に git log から作る。vite.config.js）
     const board = kanban.userData.board

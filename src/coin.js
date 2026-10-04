@@ -26,7 +26,7 @@ const deg = Math.PI / 180
 
 // 金属の映り込み用の環境マップ（空・床のグラデーション + 明るいパネル）。renderer ごとに1回だけ作る
 const envCache = new WeakMap()
-function getMetalEnv(renderer) {
+export function getMetalEnv(renderer) {   // 看板のフレームなど、ほかの金属にも使う
   if (!renderer) return null
   if (envCache.has(renderer)) return envCache.get(renderer)
   const env = new THREE.Scene()
