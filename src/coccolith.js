@@ -7,6 +7,7 @@ import { createChairTree } from '../my-3d-parts/landmark/chairtree.js'
 import { createTou } from '../my-3d-parts/landmark/tou.js'
 import { createTreehouse } from '../my-3d-parts/landmark/treehouse.js'
 import { createKanban } from '../my-3d-parts/landmark/kanban.js'
+import { createSaku1, createSaku1Corner, SAKU1 } from '../my-3d-parts/landmark/saku_1.js'
 import { addDoorGlow } from './doorGlow.js'
 import { addLedBoard } from './ledBoard.js'
 import { applyNightEnv } from './nightEnv.js'
@@ -549,6 +550,20 @@ export function createCoccolith({ renderer = null } = {}) {
     addLedBoard(board, size.x * kanban.scale.x / size.y, __CHANGELOG__)   // 横に広げたぶん列を増やし、ドットを丸いままにする
   }
 
+  // --- ランドマーク: 柵 saku_1 (lat=-5.6, lon=100.0) ----------------
+  // 実寸（高さ1.1m）。上から見て左がコの字に凹んだ囲い（約11.6m × 8.6m）を、直線と角のピースで組む
+  // 図の上（ローカル -Z）を北（緯度+方向）へ向ける
+  {
+    const sakuWrapper = new THREE.Group()
+    const sakuField = createSakuField()
+    sakuWrapper.add(sakuField)
+    placeOnSurface(group, sakuWrapper, -5.6, 100.0, R_C + LAND_LIFT - 0.05)
+    const n = sakuWrapper.position.clone().normalize()
+    const north = new THREE.Vector3(0, 1, 0).addScaledVector(n, -n.y)
+      .applyQuaternion(sakuWrapper.quaternion.clone().invert())
+    sakuField.rotation.y = Math.atan2(north.x, north.z) + Math.PI
+  }
+
   // --- EB_v87 (lat=-72, lon=90) --------------------------------
   // local -Z が南極（coccolith -Y 頂点）方向、local +Y = 球面法線
   const _ebLat = -72 * Math.PI / 180
@@ -716,6 +731,50 @@ function createLatLonGrid() {
     color: 0xffffff, transparent: true, opacity: 0.4,
   })
   return new THREE.LineSegments(geo, mat)
+}
+
+// 柵 saku_1 の囲い。上から見て（ローカル X=右、Z=下）左側がコの字に凹んだ形
+// 角はすべて L 字の角ピース（各辺1区間）、その間に直線ピース（2区間）を並べ、横板の端どうしは少しすき間を空ける
+// 原点 = 囲いの外接矩形の中心・地面
+function createSakuField() {
+  const { SPAN, OVER, RAIL_T } = SAKU1
+  const GAP = 0.15                              // ピースの横板の端どうしのすき間
+  const ARM = RAIL_T / 2 + SPAN + OVER          // 角ピースの片側の横板の長さ（角の外の面から）
+  const SL = 2 * SPAN + 2 * OVER                // 直線ピースの横板の長さ
+  const edgeLen = nS => 2 * ARM + nS * SL + (nS + 1) * GAP - RAIL_T   // 角から角（杭の中心どうし）の長さ
+  const W = edgeLen(3), X = edgeLen(1), A = edgeLen(0), H = 3 * A
+
+  // 頂点（ぐるっと一周）と、各辺に並べる直線ピースの数。右の辺はすき間で長さを合わせる
+  const P = [[0, 0], [W, 0], [W, H], [0, H], [0, 2 * A], [X, 2 * A], [X, A], [0, A]]
+  const N_STRAIGHT = [3, 2, 3, 0, 1, 0, 1, 0]
+
+  const field = new THREE.Group()
+  field.name = '柵の囲い'
+  const put = (obj, [x, z], [dx, dz]) => {      // ローカル +X を (dx,dz) へ向けて置く
+    obj.position.set(x - W / 2, 0, z - H / 2)
+    obj.rotation.y = Math.atan2(-dz, dx)
+    field.add(obj)
+  }
+  const dirOf = (p, q) => { const l = Math.hypot(q[0] - p[0], q[1] - p[1]); return [(q[0] - p[0]) / l, (q[1] - p[1]) / l] }
+
+  P.forEach((p, i) => {
+    const q = P[(i + 1) % P.length], prev = P[(i + P.length - 1) % P.length]
+    const d = dirOf(p, q), L = Math.hypot(q[0] - p[0], q[1] - p[1]), nS = N_STRAIGHT[i]
+
+    // 角ピース: +X が d、+Z が前の頂点の向きになる回転を選ぶ（逆回りなら +X を前の頂点の向きにする）
+    const back = dirOf(p, prev)
+    const zOfD = [-d[1], d[0]]                  // +X を d に向けたときの +Z の向き
+    const near = (u, v) => Math.abs(u[0] - v[0]) + Math.abs(u[1] - v[1]) < 1e-6
+    put(createSaku1Corner(), p, near(zOfD, back) ? d : back)
+
+    // 直線ピース
+    const gap = (L + RAIL_T - 2 * ARM - nS * SL) / (nS + 1)
+    for (let k = 0; k < nS; k++) {
+      const s = -RAIL_T / 2 + ARM + gap + k * (SL + gap) + OVER   // 始点の杭の位置（角からの距離）
+      put(createSaku1({ spans: 2 }), [p[0] + d[0] * s, p[1] + d[1] * s], d)
+    }
+  })
+  return field
 }
 
 // 球面上の指定緯度経度にオブジェクトを配置するユーティリティ
