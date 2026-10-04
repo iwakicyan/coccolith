@@ -517,11 +517,11 @@ export function createCoccolith() {
   colliders.push(treehouse)
 
   // --- ランドマーク: 看板 kanban (lat=85.0, lon=-164.0) ------------
-  // 8.4倍で高さ約10m。表（黒板・ローカル +Z）を北（緯度+方向）へ向ける
+  // 16.7倍で高さ約20m。表（黒板・ローカル +Z）を北（緯度+方向）へ向ける
   const kanbanWrapper = new THREE.Group()
   const kanban = createKanban()
   kanbanWrapper.add(kanban)
-  kanbanWrapper.scale.setScalar(8.4)
+  kanbanWrapper.scale.setScalar(16.7)
   placeOnSurface(group, kanbanWrapper, 85.0, -164.0, R_C + LAND_LIFT - 0.1)
   {
     const n = kanbanWrapper.position.clone().normalize()
