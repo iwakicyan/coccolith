@@ -516,13 +516,13 @@ export function createCoccolith() {
   placeOnSurface(group, treehouseWrapper, 53.0, -171.0, R_C + LAND_LIFT - 0.3)
   colliders.push(treehouse)
 
-  // --- ランドマーク: 看板 kanban (lat=45.0, lon=-164.0) ------------
-  // 2倍で高さ約2.4m。表（黒板・ローカル +Z）を南（緯度-方向）へ向け、北のツリーハウスを背にする
+  // --- ランドマーク: 看板 kanban (lat=80.0, lon=-164.0) ------------
+  // 5倍で高さ約6m。表（黒板・ローカル +Z）を南（緯度-方向）へ向ける
   const kanbanWrapper = new THREE.Group()
   const kanban = createKanban()
   kanbanWrapper.add(kanban)
-  kanbanWrapper.scale.setScalar(2)
-  placeOnSurface(group, kanbanWrapper, 45.0, -164.0, R_C + LAND_LIFT - 0.1)
+  kanbanWrapper.scale.setScalar(5)
+  placeOnSurface(group, kanbanWrapper, 80.0, -164.0, R_C + LAND_LIFT - 0.1)
   {
     const n = kanbanWrapper.position.clone().normalize()
     const north = new THREE.Vector3(0, 1, 0).addScaledVector(n, -n.y)
