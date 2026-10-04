@@ -806,7 +806,7 @@ function createSakuField() {
   // 階段: 囲いの内側、凹みの奥の柵から少し東。幅・奥行きとも杭1区間（3倍で3.6m）、3段で高さ約2.25m（3倍時）
   // 高い面を西（凹み側）に向け、東（囲いの奥）へ下る。色と輪郭線は柵と同じ
   {
-    const SW = SPAN, SD = SPAN, SH = 0.75, STEPS = 3, X0 = 7.19   // 幅（南北）・奥行き（東西）・高さ・段数・西の面の位置
+    const SW = SPAN, SD = SPAN, SH = 0.75, STEPS = 3, X0 = X + 1.04   // 幅（南北）・奥行き（東西）・高さ・段数・西の面（背面）の位置（凹みの柵から3倍時で約3.1m）
     const t = SD / STEPS, h = SH / STEPS
     const shape = new THREE.Shape()   // 横から見た段の形（x = 東へ、y = 上へ）
     shape.moveTo(0, 0)
