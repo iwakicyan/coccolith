@@ -660,7 +660,7 @@ export function createCoccolith({ renderer = null } = {}) {
   colliders.push(easel)
 
   // --- ランドマーク: 橋 bridge01 (lat=0.0, lon=-134.0) ------------
-  // 3倍で地面から6m出る、全長約44m。歩く向き（ローカル +Z）を北（緯度+方向）へ向ける
+  // 3倍で地面から6m出る、全長約44m。歩く向き（ローカル +Z）を北（緯度+方向）へ向け、北側の岸の方へ 5° 傾ける
   // 本体とステップは地表と同じレイキャスト対象にして、上を歩いて越えられるようにする（当たり判定の矩形は付けない）
   // 川をまたぐので、ステップの下端を水面より下にする。円柱・円錐は軸（円錐の先端の高さ）より下の半分を削る（軸は水面より下）
   const bridgeWrapper = new THREE.Group()
@@ -674,7 +674,9 @@ export function createCoccolith({ renderer = null } = {}) {
     const n = bridgeWrapper.position.clone().normalize()
     const north = new THREE.Vector3(0, 1, 0).addScaledVector(n, -n.y)
       .applyQuaternion(bridgeWrapper.quaternion.clone().invert())
+    bridge.rotation.order = 'YXZ'   // 橋のローカル X 軸まわりに傾けてから向きを回す
     bridge.rotation.y = Math.atan2(north.x, north.z)
+    bridge.rotation.x = THREE.MathUtils.degToRad(5)   // 上を北（+Z）へ倒す = 北の端が下がる
   }
   terrainMeshes.push(...bridge.userData.walkable)
 
