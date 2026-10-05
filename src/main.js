@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import { shotMode, applyStartPose, shotFrameRendered } from './shot.js'   // 画像の読み込み待ちのため先に読む
 import { vJoy, initJoysticks } from './joystick.js'
 import { createCompass, createVethIndicator } from './hud.js'
 import { initFullscreenButton } from './fullscreen.js'
@@ -24,7 +25,7 @@ import { createCoinIntro } from './coinIntro.js'
 // --- レンダラー ---------------------------------------------
 const canvas = document.getElementById('c')
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true })
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5))
+renderer.setPixelRatio(shotMode ? window.devicePixelRatio : Math.min(window.devicePixelRatio, 1.5))   // 撮影時は画面の解像度どおりに描く
 renderer.setSize(window.innerWidth, window.innerHeight)
 renderer.shadowMap.enabled = true
 renderer.shadowMap.type    = THREE.PCFSoftShadowMap
@@ -603,6 +604,11 @@ function collectCoin() {
   coinNumEl.classList.add('bump')
   setTimeout(() => coinNumEl.classList.remove('bump'), 120)
 }
+// URL で立ち位置の指定があればそこから始める（撮影モードではランダムな地点）
+{
+  const p = applyStartPose(pDir, pFwd, PITCH_MIN, PITCH_MAX)
+  if (p !== null) pitch = p
+}
 const coinIntro = createCoinIntro({ scene, renderer, getGround: dir => getGroundHeight(dir) - 1, onCollect: collectCoin })
 scene.updateMatrixWorld(true)   // 地表レイキャスト用に初回描画前のワールド行列を確定
 coinIntro.start(pDir, pFwd)
@@ -926,6 +932,7 @@ function animate() {
   updateDoorGlow(now)
   updateLedBoards(now / 1000)
   renderer.render(interior ? interior.def.scene : scene, camera)
+  shotFrameRendered()
 }
 
 animate()

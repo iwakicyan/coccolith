@@ -4,7 +4,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build"
+    "build": "vite build",
+    "shot": "node scripts/shot.mjs"
   },
   "dependencies": {
     "alea": "^1.0.1",
@@ -12,6 +13,7 @@
     "three": "^0.163.0"
   },
   "devDependencies": {
+    "playwright": "^1.63.0",
     "vite": "^5.0.0"
   }
 }

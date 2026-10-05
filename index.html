@@ -157,6 +157,8 @@
     }
     #tab-btn.overview { background-image: url(/ui/subeye.png); }
     #tab-btn.insab { background-image: url(/ui/insab.png); }   /* 室内の主観中: sabちゃん入りの視点に戻る */
+    /* 自動撮影モード（?shot=1。shot.js）: 下のコントローラーと操作説明を隠し、HUD は残す */
+    body.shot #drive-btn, body.shot #joy-right, body.shot #tab-btn, body.shot #ctrl { display: none; }
     /* 室内⇄屋外の切り替え時の暗転 */
     #fade {
       position: fixed; inset: 0; z-index: 30; background: #000;
