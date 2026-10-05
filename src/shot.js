@@ -3,16 +3,17 @@ import * as THREE from 'three'
 // ============================================================
 //  立ち位置の URL パラメータと、SNS 用の自動撮影モード
 //
-//  ?lat=33.5&lon=-1&heading=120&pitch=10
-//    その地点・向きから始める（heading: 北=0 東=90 の度、pitch: カメラの見上げ角の度）
+//  ?lat=33.5&lon=-1&heading=120&pitch=10&light=1
+//    その地点・向きから始める（heading: 北=0 東=90 の度、pitch: カメラの見上げ角の度、light: sabちゃんのライト 1=ON 0=OFF）
 //  ?shot=1
-//    下のコントローラーを隠し、指定がない値はランダムにして、
+//    下のコントローラーを隠し、指定がない値はランダムにして（夜側ではライトも SHOT_LIGHT_CHANCE の確率で点ける）、
 //    画像の読み込みと起動演出が済んだら window.__shot.ready を true にする（scripts/shot.mjs が待って撮る）
 //
 //  画像の読み込み待ちのため、ほかのモジュールより先に import する
 // ============================================================
 
 const SHOT_FRAMES = 90   // 起動演出（コイン）が終わるまで待つフレーム数（30fps で 3 秒）
+const SHOT_LIGHT_CHANCE = 0.5   // 撮影モードで夜側（太陽 +X の反対、pDir.x < 0）にいるとき、ライトを点けて撮る確率
 
 const params = new URLSearchParams(location.search)
 const isShot = params.has('shot')
@@ -25,6 +26,7 @@ const round2 = (v) => Math.round(v * 100) / 100
 // 撮影モードではパラメータのない値をランダムにする（球面上で一様になるよう lat は asin で引く）
 // 撮った場所をそのままリンクにできるよう、小数 2 桁に丸めた値で立たせる
 let lat = num('lat'), lon = num('lon'), heading = num('heading'), pitchDeg = num('pitch')
+const lightParam = num('light')
 if (isShot) {
   lat      ??= round2(Math.asin(Math.random() * 2 - 1) * 180 / Math.PI)
   lon      ??= round2(Math.random() * 360 - 180)
@@ -71,6 +73,15 @@ export function applyStartPose(pDir, pFwd, pitchMin, pitchMax) {
   if (isShot) Object.assign(window.__shot, { lat, lon, heading, pitch: pitchDeg })
   if (pitchDeg === null) return null
   return THREE.MathUtils.clamp(THREE.MathUtils.degToRad(pitchDeg), pitchMin, pitchMax)
+}
+
+// 最初からライトを点けておくか。applyStartPose のあとに呼ぶ
+export function startWithLight(pDir) {
+  const on = lightParam !== null
+    ? lightParam > 0
+    : isShot && pDir.x < 0 && Math.random() < SHOT_LIGHT_CHANCE
+  if (isShot) window.__shot.light = on
+  return on
 }
 
 // 毎フレームの描画のあとに呼ぶ。読み込みが済んでから SHOT_FRAMES 描いたら撮影の合図を出す

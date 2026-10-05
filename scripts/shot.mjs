@@ -37,6 +37,7 @@ try {
   await page.waitForFunction(() => window.__shot?.ready, null, { timeout: READY_TIMEOUT, polling: 500 })
   const shot = await page.evaluate(() => ({
     lat: window.__shot.lat, lon: window.__shot.lon, heading: window.__shot.heading, pitch: window.__shot.pitch,
+    light: window.__shot.light,
     area: document.getElementById('area-code').textContent,
   }))
 

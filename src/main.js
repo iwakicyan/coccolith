@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import { shotMode, applyStartPose, shotFrameRendered } from './shot.js'   // 画像の読み込み待ちのため先に読む
+import { shotMode, applyStartPose, startWithLight, shotFrameRendered } from './shot.js'   // 画像の読み込み待ちのため先に読む
 import { vJoy, initJoysticks } from './joystick.js'
 import { createCompass, createVethIndicator } from './hud.js'
 import { initFullscreenButton } from './fullscreen.js'
@@ -608,6 +608,7 @@ function collectCoin() {
 {
   const p = applyStartPose(pDir, pFwd, PITCH_MIN, PITCH_MAX)
   if (p !== null) pitch = p
+  if (startWithLight(pDir)) toggleSabLight()
 }
 const coinIntro = createCoinIntro({ scene, renderer, getGround: dir => getGroundHeight(dir) - 1, onCollect: collectCoin })
 scene.updateMatrixWorld(true)   // 地表レイキャスト用に初回描画前のワールド行列を確定
