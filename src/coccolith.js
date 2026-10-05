@@ -44,6 +44,7 @@ const OCEAN_COLOR_B = 0x5782B8
 const ROAD_HALF_WIDTH = 17.5   // 道幅35m の半分 (m)
 
 // 複数の道を座標リストで定義する。各 waypoints は {lat, lon} の配列。
+// dotLat: [最小, 最大] を付けると、道沿いの dots をその緯度の範囲だけに出す（省略時は道全体）
 const ROUTES = [
   {
     name: 'Route1',
@@ -83,6 +84,15 @@ const ROUTES = [
       { lat: 49.4, lon:  51.4 },
       { lat: 40.0, lon: 107.7 },
       { lat: 20.3, lon: 117.0 },
+    ],
+  },
+  {
+    name: 'Route3',   // スポーン地点（北極）から lon -180 に沿ってまっすぐ南へ
+    color: 0x6D7058,
+    dotLat: [54, 66],   // 道沿いの dots はこの緯度の範囲だけ（スポーン地点のまわりは暗いので出さない）
+    waypoints: [
+      { lat: 90.0, lon: -180.0 },
+      { lat: 54.0, lon: -180.0 },
     ],
   },
 ]
@@ -1022,6 +1032,10 @@ function createRoutePoints(routes, interval = 10) {
         if (t > 1) break
         const w1 = Math.sin((1 - t) * angle) / sinA
         const w2 = Math.sin(t * angle) / sinA
+        if (route.dotLat) {
+          const lat = Math.asin(Math.max(-1, Math.min(1, w1*ay + w2*by))) * 180 / Math.PI
+          if (lat < route.dotLat[0] || lat > route.dotLat[1]) continue
+        }
         const r  = R_C + LAND_LIFT + 1
         positions.push(
           (w1*ax + w2*bx) * r,
