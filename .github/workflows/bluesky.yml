@@ -1,0 +1,44 @@
+name: Post to Bluesky
+
+# 4 時間ごとに惑星内のランダムな地点を撮って @planet-coccolith.bsky.social に投稿する
+# （UTC の 0,4,8… 時 = JST の 9,13,17,21,1,5 時。混雑時は数十分遅れることがある）
+on:
+  schedule:
+    - cron: '0 */4 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bluesky
+  cancel-in-progress: false
+
+jobs:
+  post:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+          fetch-depth: 0   # 看板の更新履歴（vite.config.js）が git log を読むので全履歴を取る
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps --only-shell chromium
+      - run: npm run build
+      - run: npm run shot
+      - run: npm run post
+        env:
+          BLUESKY_HANDLE: planet-coccolith.bsky.social
+          BLUESKY_APP_PASSWORD: ${{ secrets.BLUESKY_APP_PASSWORD }}
+      - uses: actions/upload-artifact@v4   # 撮れた画像を数日だけ残す（見え方の確認用）
+        if: always()
+        with:
+          name: shot-${{ github.run_id }}
+          path: shots/
+          retention-days: 7
+          if-no-files-found: ignore
