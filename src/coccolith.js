@@ -10,6 +10,7 @@ import { createKanban } from '../my-3d-parts/landmark/kanban.js'
 import { createSaku1, createSaku1Corner, SAKU1 } from '../my-3d-parts/landmark/saku_1.js'
 import { createKaidanPalace } from '../my-3d-parts/landmark/kaidan_palace.js'
 import { createEasel } from '../my-3d-parts/landmark/easel.js'
+import { createBridge01 } from '../my-3d-parts/landmark/bridge01.js'
 import { addDoorGlow } from './doorGlow.js'
 import { createFlowerGeometry, openFlowerCut } from './flowerCut.js'
 import { addLedBoard } from './ledBoard.js'
@@ -657,6 +658,23 @@ export function createCoccolith({ renderer = null } = {}) {
     })
   }
   colliders.push(easel)
+
+  // --- ランドマーク: 橋 bridge01 (lat=0.0, lon=-134.0) ------------
+  // 実寸（地面から2m出る、全長約14.5m）。歩く向き（ローカル +Z）を北（緯度+方向）へ向ける
+  // 本体とステップは地表と同じレイキャスト対象にして、上を歩いて越えられるようにする（当たり判定の矩形は付けない）
+  // 川をまたぐので、地面の下として削る高さとステップの下端を水面より下にして、川の上で切り口や底が見えないようにする
+  const bridgeWrapper = new THREE.Group()
+  const waterDepth = R_C + LAND_LIFT - R_OCEAN   // 陸の高さから水面まで
+  const bridge = createBridge01({ cut: -waterDepth - 1, stepSink: waterDepth + 0.5 })
+  bridgeWrapper.add(bridge)
+  placeOnSurface(group, bridgeWrapper, 0.0, -134.0, R_C + LAND_LIFT)
+  {
+    const n = bridgeWrapper.position.clone().normalize()
+    const north = new THREE.Vector3(0, 1, 0).addScaledVector(n, -n.y)
+      .applyQuaternion(bridgeWrapper.quaternion.clone().invert())
+    bridge.rotation.y = Math.atan2(north.x, north.z)
+  }
+  terrainMeshes.push(...bridge.userData.walkable)
 
   // --- EB_v87 (lat=-72, lon=90) --------------------------------
   // local -Z が南極（coccolith -Y 頂点）方向、local +Y = 球面法線
