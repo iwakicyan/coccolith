@@ -2,6 +2,7 @@ import * as THREE from 'three'
 import { vJoy, initJoysticks } from './joystick.js'
 import { createCompass, createVethIndicator } from './hud.js'
 import { initFullscreenButton } from './fullscreen.js'
+import { initSettings, handleInvert, invSign } from './settings.js'
 import { createCoccolith } from './coccolith.js'
 import { createVeth } from './veth.js'
 import { createCloud1, createFlatCloud } from './cloud1.js'
@@ -534,6 +535,7 @@ initJoysticks()
 
 // --- HUD ----------------------------------------------------
 initFullscreenButton(document.getElementById('fs-btn'))
+initSettings(document.getElementById('settings-btn'), document.getElementById('settings'))
 const { drawCompass }       = createCompass(document.getElementById('compass'))
 const { drawVethIndicator } = createVethIndicator(document.getElementById('veth-ind'))
 const areaEl   = document.getElementById('area-code')
@@ -742,13 +744,16 @@ function animate() {
   const joyYaw   = vJoy.rx * joyRamp(JOY_RAMP_YAW,   joyYawHeld)
   const joyPitch = vJoy.ry * joyRamp(JOY_RAMP_PITCH, joyPitchHeld)
 
+  // 視点ごとのハンドルの反転設定（HUD の歯車。settings.js）
   if (interior) {
-    updateInterior(dt, now, joyYaw, joyPitch)
+    const inv = firstPerson ? handleInvert.fp : handleInvert.inBack
+    updateInterior(dt, now, joyYaw * invSign(inv.x), joyPitch * invSign(inv.y))
   } else if (overviewMode) {
     // --- 俯瞰モード: A/D/Q/E で水平回転、↑↓ で仰俯角 ---
     // ハンドルの横方向は A/D キーと逆向きに回す（上下はキーと同じ向き）
-    const ovTurnIn  = (keys['KeyA'] || keys['KeyQ'] ? 1 : 0) - (keys['KeyD'] || keys['KeyE'] ? 1 : 0) + joyYaw
-    const ovPitchIn = (keys['ArrowUp'] ? 1 : 0) - (keys['ArrowDown'] ? 1 : 0) - joyPitch
+    const ovInv = handleInvert.overview
+    const ovTurnIn  = (keys['KeyA'] || keys['KeyQ'] ? 1 : 0) - (keys['KeyD'] || keys['KeyE'] ? 1 : 0) + joyYaw * invSign(ovInv.x)
+    const ovPitchIn = (keys['ArrowUp'] ? 1 : 0) - (keys['ArrowDown'] ? 1 : 0) - joyPitch * invSign(ovInv.y)
     if (Math.abs(ovTurnIn)  > 0.01) ovYaw   += OV_SPD * dt * Math.max(-1, Math.min(1, ovTurnIn))
     if (Math.abs(ovPitchIn) > 0.01) ovPitch  = Math.max(OV_PITCH_MIN, Math.min(OV_PITCH_MAX, ovPitch + OV_SPD * dt * Math.max(-1, Math.min(1, ovPitchIn))))
 
@@ -781,7 +786,8 @@ function animate() {
     // --- 通常モード: sabちゃん追従3人称 ---
     const da = (SPEED / R_C) * dt
 
-    const turnIn = (keys['KeyQ'] ? 1 : 0) - (keys['KeyE'] ? 1 : 0) - joyYaw
+    const backInv = handleInvert.back
+    const turnIn = (keys['KeyQ'] ? 1 : 0) - (keys['KeyE'] ? 1 : 0) - joyYaw * invSign(backInv.x)
     if (Math.abs(turnIn) > 0.01) { pFwd.applyAxisAngle(pDir, TURN_SPD * dt * Math.max(-1, Math.min(1, turnIn))); pFwd.normalize() }
 
     const axisWS = new THREE.Vector3().crossVectors(pDir, pFwd)
@@ -796,7 +802,8 @@ function animate() {
     pFwd.normalize()
 
     // ↑↓ / 右ジョイスティック Y でカメラ仰角を操作
-    const pitchIn = (keys['ArrowUp'] ? 1 : 0) - (keys['ArrowDown'] ? 1 : 0) - joyPitch
+    // ハンドルは上に倒すとカメラが下がって見上げる（↑キーとは逆向き）
+    const pitchIn = (keys['ArrowUp'] ? 1 : 0) - (keys['ArrowDown'] ? 1 : 0) + joyPitch * invSign(backInv.y)
     if (Math.abs(pitchIn) > 0.01) pitch = Math.max(PITCH_MIN, Math.min(PITCH_MAX, pitch + PITCH_SPD * dt * Math.max(-1, Math.min(1, pitchIn))))
 
     // --- sabちゃん配置 ---
