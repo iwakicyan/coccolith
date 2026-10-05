@@ -602,18 +602,24 @@ export function createCoccolith({ renderer = null } = {}) {
   colliders.push(kaidan)
 
   // --- ランドマーク: イーゼル easel (lat=-6.6, lon=104.0) ------------
-  // 柵の囲い（花壇）の前に置く。柵と同じ 3.6倍で高さ約6m。正面（キャンバス・ローカル +Z）を花壇の中心と反対へ向ける
+  // 柵の囲い（花壇）の前に置く。2.35倍で高さ約4m、地面に 0.5m めり込ませる。正面（キャンバス・ローカル +Z）を花壇の中心と反対へ向ける
+  // 近づくとドアのようにキャンバスの輪郭が光る（入れない。main.js の _glowSpots）
   const easelWrapper = new THREE.Group()
   const easel = createEasel()
   easelWrapper.add(easel)
-  easelWrapper.scale.setScalar(3.6)
-  placeOnSurface(group, easelWrapper, -6.6, 104.0, R_C + LAND_LIFT - 0.1)
+  easelWrapper.scale.setScalar(2.35)
+  placeOnSurface(group, easelWrapper, -6.6, 104.0, R_C + LAND_LIFT - 0.5)
   {
     const bed = new THREE.Object3D()
     placeOnSurface(new THREE.Group(), bed, -5.6, 100.0, easelWrapper.position.length())   // 花壇の中心
     const away = easelWrapper.position.clone().sub(bed.position)
       .applyQuaternion(easelWrapper.quaternion.clone().invert())
     easel.rotation.y = Math.atan2(away.x, away.z)
+  }
+  {
+    const canvas = easel.userData.canvas
+    addDoorGlow(canvas)
+    easel.userData.glowSpot = { mesh: canvas, local: canvas.position.clone(), reach: 4.5 }   // local: easel のローカル座標
   }
   colliders.push(easel)
 

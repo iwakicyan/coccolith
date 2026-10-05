@@ -345,6 +345,12 @@ const _doors = colliders.filter(o => o.userData.door).map(o => {
   // 出たときはカメラ（後方 8m）が建物に埋まらない距離まで離して立たせる
   return { id, mesh, dir: pos.clone().normalize(), spawnDir: pos.clone().addScaledVector(out, DOOR_EXIT_DIST).normalize(), out }
 })
+// 近づくとドアのように輪郭が光るだけのもの（入れない。colliders のうち userData.glowSpot = { mesh, local, reach } を持つもの）
+const _glowSpots = colliders.filter(o => o.userData.glowSpot).map(o => {
+  const { mesh, local, reach } = o.userData.glowSpot
+  o.updateWorldMatrix(true, false)
+  return { mesh, reach, dir: local.clone().applyMatrix4(o.matrixWorld).normalize() }
+})
 const _interiorCache = {}
 let interior = null          // 室内にいる間 { def, door }
 let transitioning = false
@@ -460,10 +466,17 @@ function activeDoorMesh() {
   return nearDoor()?.mesh ?? null
 }
 
-// くぐれるドアだけ輪郭を光らせる
+// 屋外で近くにある「光るだけのもの」の光らせるメッシュ（なければ null）
+function nearGlowSpotMesh() {
+  if (transitioning || overviewMode || interior) return null
+  for (const g of _glowSpots) if (R_C * pDir.angleTo(g.dir) < g.reach) return g.mesh
+  return null
+}
+
+// くぐれるドアと、近くの光るだけのものの輪郭を光らせる
 let _glowingDoor = null
 function updateDoorGlow(now) {
-  const door = activeDoorMesh()
+  const door = activeDoorMesh() ?? nearGlowSpotMesh()
   if (_glowingDoor && _glowingDoor !== door) setDoorGlow(_glowingDoor, false)
   if (door) setDoorGlow(door, true, now / 1000)
   _glowingDoor = door
