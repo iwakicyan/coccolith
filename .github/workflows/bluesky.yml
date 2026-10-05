@@ -16,7 +16,7 @@ concurrency:
 
 jobs:
   post:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04   # ubuntu-latest は 2026-10-19 から Ubuntu 26 に移る。Playwright の依存が揃うまでは固定しておく
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
