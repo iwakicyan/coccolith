@@ -306,6 +306,29 @@ function getGroundHeight(dir) {
   return hits[0].point.length() + 1
 }
 
+// 段差（橋のステップなど）で地面の高さが急に変わったときは、その差を少しずつ埋めて滑らかに乗り上げる。
+// 移動距離に対して STEP_SLOPE 倍より大きく高さが跳ねたら段差とみなし、跳ねた分を groundOffset に入れて STEP_TAU 秒で 0 へ戻す。
+// 普通の坂では offset は 0 のままなので遅れは出ない。STEP_MAX より大きい跳び（ワープなど）はそのまま反映する
+const STEP_SLOPE = 1.5
+const STEP_MAX   = 5      // (m)
+const STEP_TAU   = 0.15   // (s)
+let groundRawPrev = null, groundOffset = 0
+const _groundPrevDir = new THREE.Vector3()
+
+function getSmoothGroundHeight(dir, dt) {
+  const rawH = getGroundHeight(dir)
+  if (groundRawPrev !== null) {
+    const jump  = rawH - groundRawPrev
+    const moved = _groundPrevDir.angleTo(dir) * rawH
+    if (Math.abs(jump) > STEP_MAX) groundOffset = 0
+    else if (Math.abs(jump) > Math.max(moved * STEP_SLOPE, 0.05)) groundOffset -= jump
+  }
+  groundOffset *= Math.exp(-dt / STEP_TAU)
+  groundRawPrev = rawH
+  _groundPrevDir.copy(dir)
+  return rawH + groundOffset
+}
+
 // --- 建物の当たり判定 ---------------------------------------
 // 建物ローカルの XZ 矩形（footprint）＋余白の内側に sabちゃんの中心が入ったら、
 // 一番浅い辺の外へ押し戻す。建物は静的なので逆行列は起動時に一度だけ計算する
@@ -844,7 +867,7 @@ function animate() {
       sabchan.group.quaternion.multiply(_spinQuat)
     }
 
-    const groundH = getGroundHeight(pDir)
+    const groundH = getSmoothGroundHeight(pDir, dt)
     const sabPos  = pDir.clone().multiplyScalar(groundH + SAB_FOOT_OFFSET)
     const floatOffset = Math.sin(now * 0.00035) * 0.2
     sabchan.group.position.copy(pDir.clone().multiplyScalar(groundH + SAB_FOOT_OFFSET + floatOffset))
