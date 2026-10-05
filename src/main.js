@@ -746,7 +746,8 @@ function animate() {
     updateInterior(dt, now, joyYaw, joyPitch)
   } else if (overviewMode) {
     // --- 俯瞰モード: A/D/Q/E で水平回転、↑↓ で仰俯角 ---
-    const ovTurnIn  = (keys['KeyA'] || keys['KeyQ'] ? 1 : 0) - (keys['KeyD'] || keys['KeyE'] ? 1 : 0) - joyYaw
+    // ハンドルの横方向は A/D キーと逆向きに回す（上下はキーと同じ向き）
+    const ovTurnIn  = (keys['KeyA'] || keys['KeyQ'] ? 1 : 0) - (keys['KeyD'] || keys['KeyE'] ? 1 : 0) + joyYaw
     const ovPitchIn = (keys['ArrowUp'] ? 1 : 0) - (keys['ArrowDown'] ? 1 : 0) - joyPitch
     if (Math.abs(ovTurnIn)  > 0.01) ovYaw   += OV_SPD * dt * Math.max(-1, Math.min(1, ovTurnIn))
     if (Math.abs(ovPitchIn) > 0.01) ovPitch  = Math.max(OV_PITCH_MIN, Math.min(OV_PITCH_MAX, ovPitch + OV_SPD * dt * Math.max(-1, Math.min(1, ovPitchIn))))
