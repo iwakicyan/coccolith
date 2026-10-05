@@ -14,6 +14,7 @@ let pageEl = null
 export const isPixelSceneOpen = () => !!pageEl
 
 const FIT_W = 0.6, FIT_H = 0.65   // 画面に対して、絵がはみ出さない幅・高さの割合（少し小さめに表示）
+const FIT_W_PORTRAIT = 0.94       // 縦長の画面（スマホの縦向き）では幅いっぱい近くまで使う
 const TEXT_W = 1.4   // テキストウィンドウの横幅（背景の表示幅に対する倍率）
 const BLINK_GAP    = [2000, 6000]   // 瞬きの間隔 (ms)。この範囲でランダム
 const BLINK_CLOSED = 130            // 目を閉じている長さ (ms)
@@ -88,9 +89,11 @@ export function openPixelScene(layers, { text = '' } = {}) {
   }
   if (blinkDots.length) blinkTimer = setTimeout(blink, rand(BLINK_GAP))
 
-  // ドットが潰れないよう整数倍で拡大する
+  // ドットが潰れないよう、画面の物理ピクセルの整数倍で拡大する（スマホは 1px = 2〜3 ピクセルなので細かく刻める）
   const fit = () => {
-    const s = Math.max(1, Math.floor(Math.min(innerWidth * FIT_W / W, innerHeight * FIT_H / H)))
+    const dpr = devicePixelRatio || 1
+    const fitW = innerWidth < innerHeight ? FIT_W_PORTRAIT : FIT_W
+    const s = Math.max(1, Math.floor(Math.min(innerWidth * fitW / W, innerHeight * FIT_H / H) * dpr)) / dpr   // 1 ドットの大きさ (px)
     cv.style.width = `${W * s}px`
     cv.style.height = `${H * s}px`
     // テキストウィンドウも絵と同じ倍率で伸び縮みさせる（枠の太さ = 1 ドット）
