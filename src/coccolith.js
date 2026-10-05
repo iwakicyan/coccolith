@@ -660,13 +660,13 @@ export function createCoccolith({ renderer = null } = {}) {
   colliders.push(easel)
 
   // --- ランドマーク: 橋 bridge01 (lat=0.0, lon=-134.0) ------------
-  // 4倍で地面から8m出る、全長約58m。歩く向き（ローカル +Z）を北（緯度+方向）へ向ける
+  // 3倍で地面から6m出る、全長約44m。歩く向き（ローカル +Z）を北（緯度+方向）へ向ける
   // 本体とステップは地表と同じレイキャスト対象にして、上を歩いて越えられるようにする（当たり判定の矩形は付けない）
-  // 川をまたぐので、地面の下として削る高さとステップの下端を水面より下にして、川の上で切り口や底が見えないようにする
+  // 川をまたぐので、ステップの下端を水面より下にする。円柱・円錐は軸（円錐の先端の高さ）より下の半分を削る（軸は水面より下）
   const bridgeWrapper = new THREE.Group()
-  const BRIDGE_SCALE = 4
+  const BRIDGE_SCALE = 3
   const waterDepth = (R_C + LAND_LIFT - R_OCEAN) / BRIDGE_SCALE   // 陸の高さから水面まで（橋のローカル単位）
-  const bridge = createBridge01({ cut: -waterDepth - 0.5, stepSink: waterDepth + 0.3 })
+  const bridge = createBridge01({ stepSink: waterDepth + 0.3 })
   bridgeWrapper.add(bridge)
   bridgeWrapper.scale.setScalar(BRIDGE_SCALE)
   placeOnSurface(group, bridgeWrapper, 0.0, -134.0, R_C + LAND_LIFT)
