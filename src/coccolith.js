@@ -632,8 +632,22 @@ export function createCoccolith({ renderer = null } = {}) {
       new THREE.MeshStandardMaterial({ map: tex, emissive: 0xffffff, emissiveMap: tex, emissiveIntensity: 0.3, roughness: 0.9, side: THREE.DoubleSide }),
       sakuFlowerStems.count,
     )
-    flowers.instanceMatrix.array.set(sakuFlowerStems.instanceMatrix.array)
-    flowers.instanceMatrix.needsUpdate = true
+    // 茎の先端を中心に、花ごとに向き（0〜180°）と前後の傾き（俯き 5°〜仰向き 10°）をランダムにする
+    {
+      const rng = Alea('flower-head')
+      const tip = new THREE.Vector3(...FLOWER_STEM_TIP)
+      const stemM = new THREE.Matrix4(), turn = new THREE.Matrix4(), m = new THREE.Matrix4()
+      const toTip = new THREE.Matrix4().makeTranslation(tip), fromTip = new THREE.Matrix4().makeTranslation(tip.clone().negate())
+      const euler = new THREE.Euler(0, 0, 0, 'YXZ')
+      for (let i = 0; i < flowers.count; i++) {
+        sakuFlowerStems.getMatrixAt(i, stemM)
+        euler.set(-THREE.MathUtils.degToRad(-5 + 15 * rng()), rng() * Math.PI, 0)   // x: 負で仰向き（面が上を向く）
+        turn.makeRotationFromEuler(euler)
+        m.multiplyMatrices(stemM, toTip).multiply(turn).multiply(fromTip)
+        flowers.setMatrixAt(i, m)
+      }
+      flowers.instanceMatrix.needsUpdate = true
+    }
     flowers.frustumCulled = false
     flowers.castShadow = true
     group.add(flowers)

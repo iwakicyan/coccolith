@@ -1,15 +1,15 @@
 import * as THREE from 'three'
 
 // ============================================================
-//  花の切り抜き — イーゼルのキャンバスの絵（64x64）を10頂点で切り抜いて、花壇の茎の先に咲かせる
+//  花の切り抜き — イーゼルのキャンバスの絵（64x64）を12頂点で切り抜いて、花壇の茎の先に咲かせる
 //  キャンバスをタップすると「画像切り抜きページ」（2D）を開き、頂点をドラッグで動かす。ok で花に反映
 //  頂点は画像の左上を (0,0)、右下を (1,1) とした座標。localStorage に残す
 // ============================================================
 
 const STORAGE_KEY = 'coccolith.flowerCut'
-const N = 10
+const N = 12
 
-// 初期の切り抜き：画像の中心を囲む正十角形
+// 初期の切り抜き：画像の中心を囲む正十二角形
 function defaultPoints() {
   return Array.from({ length: N }, (_, i) => {
     const a = -Math.PI / 2 + i * 2 * Math.PI / N
@@ -33,7 +33,7 @@ let points = load()
 // --- 花のジオメトリ -----------------------------------------
 // 茎のジオメトリ（createFlowerStemGeometry）と同じ単位で、茎の先端 tip に花を付ける
 // 絵の大きさは切り抜きによらず一定（IMAGE_SIZE）。切り抜いた範囲の中心を先端の少し上に置く
-const IMAGE_SIZE = 0.5   // 画像全体の一辺（茎の高さ 1 に対して）
+const IMAGE_SIZE = 1.0   // 画像全体の一辺（茎の高さ 1 に対して）
 
 export function createFlowerGeometry(tip) {
   // 画像の座標（下が v=0）で形を作ると、ShapeGeometry の UV がそのまま画像の UV になる
@@ -57,14 +57,13 @@ export const isFlowerCutOpen = () => !!editorEl
 // imageSrc: 切り抜く画像、onOk(points): ok を押したとき（頂点は保存済み）
 export function openFlowerCut(imageSrc, onOk) {
   if (editorEl) return
-  let work = points.map(p => [...p])
+  const work = points.map(p => [...p])
 
   const SVG = 'http://www.w3.org/2000/svg'
   const el = document.createElement('div')
   el.id = 'flower-cut'
   el.innerHTML = `
     <div class="fc-title">花の切り抜き</div>
-    <div class="fc-hint">点をドラッグして、花にする範囲を囲んでください</div>
     <div class="fc-stage">
       <img alt="" draggable="false">
       <svg viewBox="0 0 1 1" preserveAspectRatio="none">
@@ -72,11 +71,7 @@ export function openFlowerCut(imageSrc, onOk) {
         <polygon class="fc-poly"/>
       </svg>
     </div>
-    <div class="fc-buttons">
-      <button class="fc-reset">初期の形</button>
-      <button class="fc-cancel">やめる</button>
-      <button class="fc-ok">ok</button>
-    </div>`
+    <button class="fc-ok">ok</button>`
   el.querySelector('img').src = imageSrc
   const stage = el.querySelector('.fc-stage')
   const svg = el.querySelector('svg')
@@ -130,8 +125,6 @@ export function openFlowerCut(imageSrc, onOk) {
   stage.addEventListener('lostpointercapture', endDrag)
 
   const close = () => { el.remove(); editorEl = null }
-  el.querySelector('.fc-reset').addEventListener('click', () => { work = defaultPoints(); draw() })
-  el.querySelector('.fc-cancel').addEventListener('click', close)
   el.querySelector('.fc-ok').addEventListener('click', () => {
     points = work
     save(points)
