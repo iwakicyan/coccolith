@@ -170,7 +170,6 @@
       background: rgba(0,0,10,0.92); color: rgba(255,255,255,0.8); font: 12px monospace;
       touch-action: none; user-select: none; -webkit-user-select: none;
     }
-    #flower-cut .fc-title { font-size: 14px; letter-spacing: 0.2em; color: #fff; }
     #flower-cut .fc-stage { position: relative; width: min(82vw, 62vh); aspect-ratio: 1; }
     #flower-cut .fc-stage img, #flower-cut .fc-stage svg { position: absolute; inset: 0; width: 100%; height: 100%; }
     #flower-cut .fc-stage img { image-rendering: pixelated; }
@@ -183,8 +182,9 @@
     }
     #flower-cut .fc-handle::after { content: ''; position: absolute; inset: -14px; border-radius: 50%; }   /* 点は小さく、指で掴む当たりは広く */
     #flower-cut .fc-handle.active { cursor: grabbing; }
+    #flower-cut .fc-buttons { display: flex; gap: 12px; }
     #flower-cut button {
-      padding: 0 14px; background: rgba(0,0,0,0.25);
+      padding: 0 14px; letter-spacing: 0.15em; background: rgba(0,0,0,0.25);
       border: 1px solid rgba(255,255,255,0.35); border-radius: 12px;
       color: rgba(255,255,255,0.8); font: 12px monospace; line-height: 26px;
       cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent;

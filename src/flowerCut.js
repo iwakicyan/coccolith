@@ -2,7 +2,7 @@ import * as THREE from 'three'
 
 // ============================================================
 //  花の切り抜き — イーゼルのキャンバスの絵（64x64）を12頂点で切り抜いて、花壇の茎の先に咲かせる
-//  キャンバスをタップすると「画像切り抜きページ」（2D）を開き、頂点をドラッグで動かす。ok で花に反映
+//  キャンバスをタップすると「画像切り抜きページ」（2D）を開き、頂点をドラッグで動かす（RANDOM でランダムな形）。OK で花に反映
 //  頂点は画像の左上を (0,0)、右下を (1,1) とした座標。localStorage に残す
 // ============================================================
 
@@ -14,6 +14,18 @@ function defaultPoints() {
   return Array.from({ length: N }, (_, i) => {
     const a = -Math.PI / 2 + i * 2 * Math.PI / N
     return [0.5 + 0.3 * Math.cos(a), 0.5 + 0.3 * Math.sin(a)]
+  })
+}
+
+// RANDOM ボタン：中心と各頂点の距離をランダムにした形。角度の順に並べるので辺は交差しない
+function randomPoints() {
+  const cx = 0.3 + 0.4 * Math.random(), cy = 0.3 + 0.4 * Math.random()
+  const a0 = Math.random() * 2 * Math.PI
+  const clamp = v => Math.max(0, Math.min(1, v))
+  return Array.from({ length: N }, (_, i) => {
+    const a = a0 + (i + (Math.random() - 0.5) * 0.6) * 2 * Math.PI / N
+    const r = 0.12 + 0.3 * Math.random()
+    return [clamp(cx + r * Math.cos(a)), clamp(cy + r * Math.sin(a))]
   })
 }
 
@@ -54,16 +66,15 @@ export function createFlowerGeometry(tip) {
 let editorEl = null
 export const isFlowerCutOpen = () => !!editorEl
 
-// imageSrc: 切り抜く画像、onOk(points): ok を押したとき（頂点は保存済み）
+// imageSrc: 切り抜く画像、onOk(points): OK を押したとき（頂点は保存済み）
 export function openFlowerCut(imageSrc, onOk) {
   if (editorEl) return
-  const work = points.map(p => [...p])
+  let work = points.map(p => [...p])
 
   const SVG = 'http://www.w3.org/2000/svg'
   const el = document.createElement('div')
   el.id = 'flower-cut'
   el.innerHTML = `
-    <div class="fc-title">花の切り抜き</div>
     <div class="fc-stage">
       <img alt="" draggable="false">
       <svg viewBox="0 0 1 1" preserveAspectRatio="none">
@@ -71,7 +82,10 @@ export function openFlowerCut(imageSrc, onOk) {
         <polygon class="fc-poly"/>
       </svg>
     </div>
-    <button class="fc-ok">ok</button>`
+    <div class="fc-buttons">
+      <button class="fc-random">RANDOM</button>
+      <button class="fc-ok">OK</button>
+    </div>`
   el.querySelector('img').src = imageSrc
   const stage = el.querySelector('.fc-stage')
   const svg = el.querySelector('svg')
@@ -125,6 +139,7 @@ export function openFlowerCut(imageSrc, onOk) {
   stage.addEventListener('lostpointercapture', endDrag)
 
   const close = () => { el.remove(); editorEl = null }
+  el.querySelector('.fc-random').addEventListener('click', () => { work = randomPoints(); draw() })
   el.querySelector('.fc-ok').addEventListener('click', () => {
     points = work
     save(points)
