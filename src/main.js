@@ -609,9 +609,9 @@ const PITCH_SPD = 1.2     // ピッチ速度 (rad/s)
 const OV_SPD    = 1.2     // 俯瞰回転速度 (rad/s)
 const OV_PITCH_MIN = -Math.PI * 0.49  // 南半球まで回せるよう負値に
 const OV_PITCH_MAX =  Math.PI * 0.49
-// ハンドル入力の立ち上がり: 入力開始時は start 倍から、time 秒かけて等倍へ
-const JOY_RAMP_YAW   = { start: 0.3,  time: 0.4 }
-const JOY_RAMP_PITCH = { start: 0.15, time: 0.7 }  // 上下はよりゆっくり
+// ハンドル入力の立ち上がり: 入力開始時は start 倍から、time 秒かけて max 倍（トップスピード）へ
+const JOY_RAMP_YAW   = { start: 0.15, time: 0.7, max: 0.6 }
+const JOY_RAMP_PITCH = { start: 0.15, time: 0.7, max: 1 }
 const TARGET_FPS = 30
 const FRAME_MS   = 1000 / TARGET_FPS
 let prev = performance.now()
@@ -619,7 +619,7 @@ let joyYawHeld = 0, joyPitchHeld = 0  // ハンドル入力の継続時間 (s)
 
 function joyRamp(ramp, held) {
   const t = Math.min(held / ramp.time, 1)
-  return ramp.start + (1 - ramp.start) * t * t * (3 - 2 * t)  // smoothstep
+  return ramp.max * (ramp.start + (1 - ramp.start) * t * t * (3 - 2 * t))  // smoothstep
 }
 
 // 雲生き物アニメーション用一時変数（GC 抑制）
