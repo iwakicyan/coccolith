@@ -5,7 +5,7 @@
 //    npm run post -- shots/20261005-125526.json                      … 指定した 1 枚
 //    npm run post -- --dry-run                                       … 投稿せず中身だけ表示
 //
-//  本文はハッシュタグだけ（座標は画像の HUD に写っている。サイトへのリンクはプロフィールに置く）
+//  本文は座標とハッシュタグ（サイトへのリンクはプロフィールに置く）
 // ============================================================
 
 import { readFile, readdir } from 'node:fs/promises'
@@ -33,6 +33,7 @@ function append(s, feature) {
   if (feature) facets.push({ index: { byteStart: bytes(text), byteEnd: bytes(text) + bytes(s) }, features: [feature] })
   text += s
 }
+append(`${meta.area} | lat: ${fmt(meta.lat)}°  lon: ${fmt(meta.lon)}°\n\n`)
 HASHTAGS.forEach((tag, i) => {
   if (i > 0) append(' ')
   append(`#${tag}`, { $type: 'app.bsky.richtext.facet#tag', tag })
