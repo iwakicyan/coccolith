@@ -11,6 +11,7 @@ import { createSaku1, createSaku1Corner, SAKU1 } from '../my-3d-parts/landmark/s
 import { createKaidanPalace } from '../my-3d-parts/landmark/kaidan_palace.js'
 import { createEasel } from '../my-3d-parts/landmark/easel.js'
 import { addDoorGlow } from './doorGlow.js'
+import { createFlowerGeometry, openFlowerCut } from './flowerCut.js'
 import { addLedBoard } from './ledBoard.js'
 import { applyNightEnv } from './nightEnv.js'
 import { createForest1 } from '../my-3d-parts/parts/forest1.jsx'
@@ -553,6 +554,7 @@ export function createCoccolith({ renderer = null } = {}) {
   }
 
   // --- ランドマーク: 柵 saku_1 (lat=-5.6, lon=100.0) ----------------
+  let sakuFlowerStems   // 囲いの中の花の茎（InstancedMesh）。イーゼルのところで茎の先に花を咲かせる
   // 3.6倍で高さ約4m（地面に 0.7m めり込ませる）。上から見て左がコの字に凹んだ囲い（約42m × 31m）を、直線と角のピースで組む
   // 図の上（ローカル -Z）を北（緯度+方向）へ向ける。囲いの中には入れない（外側の凹みには入れる）
   {
@@ -582,7 +584,8 @@ export function createCoccolith({ renderer = null } = {}) {
     }
     colliders.push(...sakuField.children)
     group.add(createSakuGrass(sakuWrapper, sakuField, { ...GRASS_KIND_1, density: 2 / 3 * 0.5 }))   // 草地の半分の量
-    group.add(createSakuGrass(sakuWrapper, sakuField, FLOWER_STEM_KIND))
+    sakuFlowerStems = createSakuGrass(sakuWrapper, sakuField, FLOWER_STEM_KIND)
+    group.add(sakuFlowerStems)
   }
 
   // --- ランドマーク: 階段の館 kaidan_palace (lat=5.8, lon=-128.0) ------------
@@ -620,6 +623,24 @@ export function createCoccolith({ renderer = null } = {}) {
     const canvas = easel.userData.canvas
     addDoorGlow(canvas)
     easel.userData.glowSpot = { mesh: canvas, local: canvas.position.clone(), reach: 4.5 }   // local: easel のローカル座標
+
+    // 花壇の茎の先に、キャンバスの絵を切り抜いた花を咲かせる（茎と同じインスタンスの行列を使う）
+    // キャンバスをタップすると画像切り抜きページを開き、ok で花の形を作り直す（flowerCut.js）
+    const tex = canvas.material[4].map   // キャンバスの正面（+Z）の絵
+    const flowers = new THREE.InstancedMesh(
+      createFlowerGeometry(FLOWER_STEM_TIP),
+      new THREE.MeshStandardMaterial({ map: tex, emissive: 0xffffff, emissiveMap: tex, emissiveIntensity: 0.3, roughness: 0.9, side: THREE.DoubleSide }),
+      sakuFlowerStems.count,
+    )
+    flowers.instanceMatrix.array.set(sakuFlowerStems.instanceMatrix.array)
+    flowers.instanceMatrix.needsUpdate = true
+    flowers.frustumCulled = false
+    flowers.castShadow = true
+    group.add(flowers)
+    easel.userData.glowSpot.onTap = () => openFlowerCut(tex.image.src, () => {
+      flowers.geometry.dispose()
+      flowers.geometry = createFlowerGeometry(FLOWER_STEM_TIP)
+    })
   }
   colliders.push(easel)
 
@@ -1021,12 +1042,14 @@ const FLOWER_STEM_KIND = {   // 花の茎：途中で折れた茎（6頂点）�
   scale: 2.2, lift: 0.0, seed: 'flowerstem', emissive: 0.1, density: 0.2,
 }
 
+const FLOWER_STEM_TIP = [0.085, 1.0, 0]   // 花の茎の先端（ジオメトリの単位）。花はここに咲かせる
+
 // 花の茎のジオメトリ（手描きラフの形）。原点 = 根元・地面、高さ 1（茎の先端）
 // UV は全頂点を草のテクスチャの濃い緑（RGB 45,82,39）の塊の中の1点に向け、単色にする（NearestFilter なので混ざらない）
 function createFlowerStemGeometry() {
   const DARK_GREEN_UV = [47.5 / 64, 1 - 27.5 / 64]      // 64x64 の画像のピクセル (47, 27)
   const HW = 0.012                                       // 茎の半分の幅
-  const STEM = [[-0.005, -0.05], [0.115, 0.53], [0.085, 1.0]]   // 茎の中心線（根元・折れ目・先端）。根元は少し地面に埋める
+  const STEM = [[-0.005, -0.05], [0.115, 0.53], FLOWER_STEM_TIP.slice(0, 2)]   // 茎の中心線（根元・折れ目・先端）。根元は少し地面に埋める
   const LEAVES = [                                       // 葉（x, y, z）。最初の点が茎の付け根
     [[0.07, 0.34, 0], [0, 0.454, 0.06], [-0.216, 0.49, 0.12], [-0.08, 0.314, 0.06]],      // 左の葉
     [[0.09, 0.416, 0], [0.224, 0.554, -0.06], [0.406, 0.472, -0.15], [0.286, 0.34, -0.06]], // 右の葉

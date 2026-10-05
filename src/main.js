@@ -3,6 +3,7 @@ import { vJoy, initJoysticks } from './joystick.js'
 import { createCompass, createVethIndicator } from './hud.js'
 import { initFullscreenButton } from './fullscreen.js'
 import { initSettings, handleInvert, invSign } from './settings.js'
+import { isFlowerCutOpen } from './flowerCut.js'
 import { createCoccolith } from './coccolith.js'
 import { createVeth } from './veth.js'
 import { createCloud1, createFlatCloud } from './cloud1.js'
@@ -188,8 +189,18 @@ function hitDoor(e) {
   _iconRay.setFromCamera(_pointer, camera)
   return _iconRay.intersectObject(door, true).length > 0
 }
+// 光っている「光るだけのもの」のタップ（onTap を持つもの。イーゼルのキャンバス → 花の切り抜き）
+function hitGlowSpot(e) {
+  const g = nearGlowSpot()
+  if (!g?.onTap) return null
+  _pointer.set((e.clientX / window.innerWidth) * 2 - 1, -(e.clientY / window.innerHeight) * 2 + 1)
+  _iconRay.setFromCamera(_pointer, camera)
+  return _iconRay.intersectObject(g.mesh, false).length > 0 ? g : null
+}
 canvas.addEventListener('pointerdown', e => {
+  let g
   if (hitDoor(e)) useDoor()
+  else if ((g = hitGlowSpot(e))) { g.onTap(); for (const k in keys) keys[k] = false }   // 切り抜きページを開くので押しっぱなしのキーを離す
   else if (hitLightIcon(e)) toggleSabLight()
 })
 canvas.addEventListener('pointermove', e => {
@@ -347,9 +358,8 @@ const _doors = colliders.filter(o => o.userData.door).map(o => {
 })
 // 近づくとドアのように輪郭が光るだけのもの（入れない。colliders のうち userData.glowSpot = { mesh, local, reach } を持つもの）
 const _glowSpots = colliders.filter(o => o.userData.glowSpot).map(o => {
-  const { mesh, local, reach } = o.userData.glowSpot
   o.updateWorldMatrix(true, false)
-  return { mesh, reach, dir: local.clone().applyMatrix4(o.matrixWorld).normalize() }
+  return { ...o.userData.glowSpot, dir: o.userData.glowSpot.local.clone().applyMatrix4(o.matrixWorld).normalize() }
 })
 const _interiorCache = {}
 let interior = null          // 室内にいる間 { def, door }
@@ -466,12 +476,13 @@ function activeDoorMesh() {
   return nearDoor()?.mesh ?? null
 }
 
-// 屋外で近くにある「光るだけのもの」の光らせるメッシュ（なければ null）
-function nearGlowSpotMesh() {
+// 屋外で近くにある「光るだけのもの」（なければ null）。onTap があれば光っている間タップできる
+function nearGlowSpot() {
   if (transitioning || overviewMode || interior) return null
-  for (const g of _glowSpots) if (R_C * pDir.angleTo(g.dir) < g.reach) return g.mesh
+  for (const g of _glowSpots) if (R_C * pDir.angleTo(g.dir) < g.reach) return g
   return null
 }
+const nearGlowSpotMesh = () => nearGlowSpot()?.mesh ?? null
 
 // くぐれるドアと、近くの光るだけのものの輪郭を光らせる
 let _glowingDoor = null
@@ -505,6 +516,7 @@ let ovPitch = Math.PI * 0.25   // 初期は斜め上から
 const keys = {}
 
 window.addEventListener('keydown', e => {
+  if (isFlowerCutOpen()) return   // 花の切り抜きページを開いている間はゲームの操作をしない
   if (e.code === 'Enter' && !e.repeat) { useDoor(); e.preventDefault(); return }
   if (e.code === 'Tab' && (interior || transitioning)) {
     if (interior && !transitioning) setFirstPerson(!firstPerson)
