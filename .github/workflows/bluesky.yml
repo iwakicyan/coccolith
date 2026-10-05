@@ -1,10 +1,10 @@
 name: Post to Bluesky
 
 # 4 時間ごとに惑星内のランダムな地点を撮って @planet-coccolith.bsky.social に投稿する
-# （UTC の 0,4,8… 時 = JST の 9,13,17,21,1,5 時。混雑時は数十分遅れることがある）
+# （UTC の 3,7,11… 時 = JST の 0,4,8,12,16,20 時。混雑時は数十分遅れることがある）
 on:
   schedule:
-    - cron: '0 */4 * * *'
+    - cron: '0 3-23/4 * * *'
   workflow_dispatch:
 
 permissions:
