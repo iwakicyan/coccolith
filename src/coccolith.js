@@ -9,6 +9,7 @@ import { createTreehouse } from '../my-3d-parts/landmark/treehouse.js'
 import { createKanban } from '../my-3d-parts/landmark/kanban.js'
 import { createSaku1, createSaku1Corner, SAKU1 } from '../my-3d-parts/landmark/saku_1.js'
 import { createKaidanPalace } from '../my-3d-parts/landmark/kaidan_palace.js'
+import { createEasel } from '../my-3d-parts/landmark/easel.js'
 import { addDoorGlow } from './doorGlow.js'
 import { addLedBoard } from './ledBoard.js'
 import { applyNightEnv } from './nightEnv.js'
@@ -599,6 +600,22 @@ export function createCoccolith({ renderer = null } = {}) {
     kaidan.rotation.y = Math.atan2(north.x, north.z) - Math.PI / 4
   }
   colliders.push(kaidan)
+
+  // --- ランドマーク: イーゼル easel (lat=-6.6, lon=104.0) ------------
+  // 柵の囲い（花壇）の前に置く。柵と同じ 3.6倍で高さ約6m。正面（キャンバス・ローカル +Z）を花壇の中心と反対へ向ける
+  const easelWrapper = new THREE.Group()
+  const easel = createEasel()
+  easelWrapper.add(easel)
+  easelWrapper.scale.setScalar(3.6)
+  placeOnSurface(group, easelWrapper, -6.6, 104.0, R_C + LAND_LIFT - 0.1)
+  {
+    const bed = new THREE.Object3D()
+    placeOnSurface(new THREE.Group(), bed, -5.6, 100.0, easelWrapper.position.length())   // 花壇の中心
+    const away = easelWrapper.position.clone().sub(bed.position)
+      .applyQuaternion(easelWrapper.quaternion.clone().invert())
+    easel.rotation.y = Math.atan2(away.x, away.z)
+  }
+  colliders.push(easel)
 
   // --- EB_v87 (lat=-72, lon=90) --------------------------------
   // local -Z が南極（coccolith -Y 頂点）方向、local +Y = 球面法線
