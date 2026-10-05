@@ -2,9 +2,11 @@ name: Post to Bluesky
 
 # 4 時間ごとに惑星内のランダムな地点を撮って @planet-coccolith.bsky.social に投稿する
 # （UTC の 3,7,11… 時 = JST の 0,4,8,12,16,20 時。混雑時は数十分遅れることがある）
+# 1 時間後にもう一度起き、その回の投稿がまだなければ（ランナーが取れなかった・途中で失敗したなど）やり直す
 on:
   schedule:
-    - cron: '0 3-23/4 * * *'
+    - cron: '0 3-23/4 * * *'   # 本番
+    - cron: '0 */4 * * *'      # やり直し（JST の 1,5,9,13,17,21 時）
   workflow_dispatch:
 
 permissions:
@@ -15,7 +17,28 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # やり直しの回は、直近 RETRY_WINDOW 分以内に投稿があれば skip を立てて投稿しない
+  check:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      skip: ${{ steps.check.outputs.skip }}
+    steps:
+      - id: check
+        if: github.event.schedule == '0 */4 * * *'
+        env:
+          RETRY_WINDOW: 100
+        run: |
+          last=$(curl -fsS "https://public.api.bsky.app/xrpc/app.bsky.feed.getAuthorFeed?actor=planet-coccolith.bsky.social&limit=1&filter=posts_no_replies" | jq -r '.feed[0].post.record.createdAt // empty')
+          echo "最後の投稿: ${last:-なし}"
+          if [ -n "$last" ] && [ $(( $(date +%s) - $(date -d "$last" +%s) )) -lt $(( RETRY_WINDOW * 60 )) ]; then
+            echo "本番の回で投稿済みなのでやり直さない"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          fi
+
   post:
+    needs: check
+    if: needs.check.outputs.skip != 'true'
     runs-on: ubuntu-24.04   # ubuntu-latest は 2026-10-19 から Ubuntu 26 に移る。Playwright の依存が揃うまでは固定しておく
     timeout-minutes: 20
     steps:
