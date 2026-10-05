@@ -13,7 +13,7 @@ import { AtpAgent } from '@atproto/api'
 
 const SITE_URL  = process.env.SITE_URL ?? 'https://iwakicyan.github.io/coccolith/'
 const LINK_TEXT = 'この場所から歩く'
-const HASHTAGS  = ['coccolith']                    // 本文の最後に付けるハッシュタグ（# なし）
+const HASHTAGS  = ['planet', 'planet_coccolith', 'time_of_coccolith']   // 本文の最後に付けるハッシュタグ（# なし）
 const IMG_SIZE  = { width: 2400, height: 1350 }   // shot.mjs の書き出しサイズ
 
 const args = process.argv.slice(2)
