@@ -8,6 +8,7 @@ import { createTou } from '../my-3d-parts/landmark/tou.js'
 import { createTreehouse } from '../my-3d-parts/landmark/treehouse.js'
 import { createKanban } from '../my-3d-parts/landmark/kanban.js'
 import { createSaku1, createSaku1Corner, SAKU1 } from '../my-3d-parts/landmark/saku_1.js'
+import { createKaidanPalace } from '../my-3d-parts/landmark/kaidan_palace.js'
 import { addDoorGlow } from './doorGlow.js'
 import { addLedBoard } from './ledBoard.js'
 import { applyNightEnv } from './nightEnv.js'
@@ -582,6 +583,21 @@ export function createCoccolith({ renderer = null } = {}) {
     group.add(createSakuGrass(sakuWrapper, sakuField, { ...GRASS_KIND_1, density: 2 / 3 * 0.5 }))   // 草地の半分の量
     group.add(createSakuGrass(sakuWrapper, sakuField, FLOWER_STEM_KIND))
   }
+
+  // --- ランドマーク: 階段の館 kaidan_palace (lat=5.8, lon=-125.6) ------------
+  // 2倍で高さ6m × 幅7.2m × 奥行き9.4m。正面（低い段・扉のある側、ローカル +Z）を北（緯度+方向）へ向ける
+  const kaidanWrapper = new THREE.Group()
+  const kaidan = createKaidanPalace()
+  kaidanWrapper.add(kaidan)
+  kaidanWrapper.scale.setScalar(2)
+  placeOnSurface(group, kaidanWrapper, 5.8, -125.6, R_C + LAND_LIFT - 0.3)
+  {
+    const n = kaidanWrapper.position.clone().normalize()
+    const north = new THREE.Vector3(0, 1, 0).addScaledVector(n, -n.y)
+      .applyQuaternion(kaidanWrapper.quaternion.clone().invert())
+    kaidan.rotation.y = Math.atan2(north.x, north.z)
+  }
+  colliders.push(kaidan)
 
   // --- EB_v87 (lat=-72, lon=90) --------------------------------
   // local -Z が南極（coccolith -Y 頂点）方向、local +Y = 球面法線
