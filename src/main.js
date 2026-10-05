@@ -570,6 +570,7 @@ const latlonEl = document.getElementById('latlon')
 // 開いた直後、sabちゃんの周り半径5mにコインが散らばり、吸い寄せられて消える
 // 保有コイン数: HUD の lat/lon の右に表示し、拾うたびに数字が跳ねる
 const coinBoxEl = document.getElementById('coin-box')
+const _hudDir = new THREE.Vector3()
 const coinNumEl = document.getElementById('coin-num')
 let coinCount = 0
 function collectCoin() {
@@ -885,15 +886,14 @@ function animate() {
   drawCompass(pDir, pFwd)
   veth.getWorldPosition(_vethWorldPos)
   drawVethIndicator(hudCamPos, pDir, pFwd, _vethWorldPos)
-  if (overviewMode) {
-    areaEl.textContent   = ''
-    latlonEl.textContent = ''
-  } else {
-    const lat = Math.asin(Math.max(-1, Math.min(1, pDir.y))) * 180 / Math.PI
-    let theta = Math.atan2(pDir.z, pDir.x)
+  {
+    // 俯瞰中は画面の中心（カメラの真下 = 俯瞰を抜けたときに立つ地点）の座標を出す
+    const hudDir = overviewMode ? _hudDir.copy(camera.position).normalize() : pDir
+    const lat = Math.asin(Math.max(-1, Math.min(1, hudDir.y))) * 180 / Math.PI
+    let theta = Math.atan2(hudDir.z, hudDir.x)
     if (theta < 0) theta += Math.PI * 2
     const lon = theta * 180 / Math.PI - 180
-    areaEl.textContent   = getAreaCode(pDir)
+    areaEl.textContent   = getAreaCode(hudDir)
     latlonEl.textContent = `  |  lat: ${lat.toFixed(1)}°  lon: ${lon.toFixed(1)}°`
     coinBoxEl.classList.add('ready')
   }
