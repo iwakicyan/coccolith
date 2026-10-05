@@ -632,7 +632,7 @@ export function createCoccolith({ renderer = null } = {}) {
       new THREE.MeshStandardMaterial({ map: tex, emissive: 0xffffff, emissiveMap: tex, emissiveIntensity: 0.3, roughness: 0.9, side: THREE.DoubleSide }),
       sakuFlowerStems.count,
     )
-    // 茎の先端を中心に、花ごとに向き（0〜180°）と前後の傾き（俯き 5°〜仰向き 10°）をランダムにする
+    // 茎の先端を中心に、花ごとに向き（0〜180°）と前後の傾き（俯き 5°〜仰向き 20°）をランダムにする
     {
       const rng = Alea('flower-head')
       const tip = new THREE.Vector3(...FLOWER_STEM_TIP)
@@ -641,7 +641,7 @@ export function createCoccolith({ renderer = null } = {}) {
       const euler = new THREE.Euler(0, 0, 0, 'YXZ')
       for (let i = 0; i < flowers.count; i++) {
         sakuFlowerStems.getMatrixAt(i, stemM)
-        euler.set(-THREE.MathUtils.degToRad(-5 + 15 * rng()), rng() * Math.PI, 0)   // x: 負で仰向き（面が上を向く）
+        euler.set(-THREE.MathUtils.degToRad(-5 + 25 * rng()), rng() * Math.PI, 0)   // x: 負で仰向き（面が上を向く）
         turn.makeRotationFromEuler(euler)
         m.multiplyMatrices(stemM, toTip).multiply(turn).multiply(fromTip)
         flowers.setMatrixAt(i, m)
