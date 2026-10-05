@@ -661,7 +661,7 @@ export function createCoccolith({ renderer = null } = {}) {
 
   // --- ランドマーク: 橋 bridge01 ×2 ------------
   // 3倍で地面から6m出る、全長約44m。歩く向き（ローカル +Z）を北（緯度+方向）へ向ける
-  // 本体とステップは地表と同じレイキャスト対象にして、上を歩いて越えられるようにする（当たり判定の矩形は付けない）
+  // 本体とステップは地表と同じレイキャスト対象にして、上を歩いて越えられるようにする（本体の当たり判定の矩形は付けず、両側の柱の列だけ手すりとして当たり判定にする）
   // 川をまたぐので、ステップの下端を水面より下にする。円柱・円錐は軸（円錐の先端の高さ）より下の半分を削る（軸は水面より下）
   // tiltNorth: 北側の岸の方へ傾ける角度（上を北へ倒す = 北の端が下がる）、sink: 地面にめり込ませる量 (m)
   const placeBridge = (lat, lon, { tiltNorth = 0, sink = 0 } = {}) => {
@@ -679,6 +679,7 @@ export function createCoccolith({ renderer = null } = {}) {
     bridge.rotation.y = Math.atan2(north.x, north.z)
     bridge.rotation.x = THREE.MathUtils.degToRad(tiltNorth)
     terrainMeshes.push(...bridge.userData.walkable)
+    colliders.push(...bridge.userData.rails)   // 両側の柱の列を手すりにして、橋の横から落ちないようにする
   }
   placeBridge(0.0, -134.0, { tiltNorth: 5 })   // 北側の岸の方へ 5° 傾ける
   placeBridge(0.0, 124.0, { sink: 2 })          // 地面に 2m めり込ませる
