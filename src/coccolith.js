@@ -659,26 +659,29 @@ export function createCoccolith({ renderer = null } = {}) {
   }
   colliders.push(easel)
 
-  // --- ランドマーク: 橋 bridge01 (lat=0.0, lon=-134.0) ------------
-  // 3倍で地面から6m出る、全長約44m。歩く向き（ローカル +Z）を北（緯度+方向）へ向け、北側の岸の方へ 5° 傾ける
+  // --- ランドマーク: 橋 bridge01 ×2 ------------
+  // 3倍で地面から6m出る、全長約44m。歩く向き（ローカル +Z）を北（緯度+方向）へ向ける
   // 本体とステップは地表と同じレイキャスト対象にして、上を歩いて越えられるようにする（当たり判定の矩形は付けない）
   // 川をまたぐので、ステップの下端を水面より下にする。円柱・円錐は軸（円錐の先端の高さ）より下の半分を削る（軸は水面より下）
-  const bridgeWrapper = new THREE.Group()
-  const BRIDGE_SCALE = 3
-  const waterDepth = (R_C + LAND_LIFT - R_OCEAN) / BRIDGE_SCALE   // 陸の高さから水面まで（橋のローカル単位）
-  const bridge = createBridge01({ stepSink: waterDepth + 0.3 })
-  bridgeWrapper.add(bridge)
-  bridgeWrapper.scale.setScalar(BRIDGE_SCALE)
-  placeOnSurface(group, bridgeWrapper, 0.0, -134.0, R_C + LAND_LIFT)
-  {
-    const n = bridgeWrapper.position.clone().normalize()
+  // tiltNorth: 北側の岸の方へ傾ける角度（上を北へ倒す = 北の端が下がる）
+  const placeBridge = (lat, lon, tiltNorth = 0) => {
+    const BRIDGE_SCALE = 3
+    const waterDepth = (R_C + LAND_LIFT - R_OCEAN) / BRIDGE_SCALE   // 陸の高さから水面まで（橋のローカル単位）
+    const wrapper = new THREE.Group()
+    const bridge = createBridge01({ stepSink: waterDepth + 0.3 })
+    wrapper.add(bridge)
+    wrapper.scale.setScalar(BRIDGE_SCALE)
+    placeOnSurface(group, wrapper, lat, lon, R_C + LAND_LIFT)
+    const n = wrapper.position.clone().normalize()
     const north = new THREE.Vector3(0, 1, 0).addScaledVector(n, -n.y)
-      .applyQuaternion(bridgeWrapper.quaternion.clone().invert())
+      .applyQuaternion(wrapper.quaternion.clone().invert())
     bridge.rotation.order = 'YXZ'   // 橋のローカル X 軸まわりに傾けてから向きを回す
     bridge.rotation.y = Math.atan2(north.x, north.z)
-    bridge.rotation.x = THREE.MathUtils.degToRad(5)   // 上を北（+Z）へ倒す = 北の端が下がる
+    bridge.rotation.x = THREE.MathUtils.degToRad(tiltNorth)
+    terrainMeshes.push(...bridge.userData.walkable)
   }
-  terrainMeshes.push(...bridge.userData.walkable)
+  placeBridge(0.0, -134.0, 5)   // 北側の岸の方へ 5° 傾ける
+  placeBridge(0.0, 124.0)
 
   // --- EB_v87 (lat=-72, lon=90) --------------------------------
   // local -Z が南極（coccolith -Y 頂点）方向、local +Y = 球面法線
