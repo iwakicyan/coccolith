@@ -682,6 +682,7 @@ export function createCoccolith({ renderer = null } = {}) {
   }
   placeBridge(0.0, -134.0, { tiltNorth: 5 })   // 北側の岸の方へ 5° 傾ける
   placeBridge(0.0, 124.0, { sink: 2 })          // 地面に 2m めり込ませる
+  placeBridge(0.0, 16.7, { sink: 2 })           // lon 124 と同じく地面に 2m めり込ませる
 
   // --- EB_v87 (lat=-72, lon=90) --------------------------------
   // local -Z が南極（coccolith -Y 頂点）方向、local +Y = 球面法線
