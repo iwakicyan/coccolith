@@ -552,14 +552,14 @@ export function createCoccolith({ renderer = null } = {}) {
   }
 
   // --- ランドマーク: 柵 saku_1 (lat=-5.6, lon=100.0) ----------------
-  // 3倍で高さ約3.3m（地面に 0.7m めり込ませる）。上から見て左がコの字に凹んだ囲い（約35m × 26m）を、直線と角のピースで組む
+  // 3.6倍で高さ約4m（地面に 0.7m めり込ませる）。上から見て左がコの字に凹んだ囲い（約42m × 31m）を、直線と角のピースで組む
   // 図の上（ローカル -Z）を北（緯度+方向）へ向ける。囲いの中には入れない（外側の凹みには入れる）
   {
     const SAKU_RADIUS = R_C + LAND_LIFT - 0.7
     const sakuWrapper = new THREE.Group()
     const sakuField = createSakuField()
     sakuWrapper.add(sakuField)
-    sakuWrapper.scale.setScalar(3)
+    sakuWrapper.scale.setScalar(3.6)
     placeOnSurface(group, sakuWrapper, -5.6, 100.0, SAKU_RADIUS)
     const n0 = sakuWrapper.position.clone().normalize()
     const north = new THREE.Vector3(0, 1, 0).addScaledVector(n0, -n0.y)
@@ -824,7 +824,7 @@ function createSakuField() {
   box(X, A, W, 2 * A)
   box(0, 2 * A, W, H)
 
-  // 階段: 囲いの内側、凹みの奥の柵に背面を付けて置く。幅・奥行きとも杭1区間（3倍で3.6m）、6段で高さ約2.25m（3倍時）
+  // 階段: 囲いの内側、凹みの奥の柵に背面を付けて置く。幅・奥行きとも杭1区間（3.6倍で約4.3m）、6段で高さ約2.7m（3.6倍時）
   // 高い面を西（凹み側）に向け、東（囲いの奥）へ下る。色と輪郭線は柵と同じ
   {
     const SW = SPAN, SD = SPAN, SH = 0.75, STEPS = 6, X0 = X + RAIL_T / 2 + 0.01   // 幅（南北）・奥行き（東西）・高さ・段数・西の面（背面）の位置（凹みの柵の横板にほぼ接する）
@@ -856,7 +856,7 @@ function createSakuField() {
 // 位置は sakuWrapper・sakuField のローカル XZ から球面へ下ろす（間隔・高さは createGrassField と同じ）
 function createSakuGrass(sakuWrapper, sakuField, kind) {
   const STEP   = 1.6 / Math.sqrt(kind.density ?? 2 / 3) / sakuWrapper.scale.x   // 配置間隔（ローカル単位）
-  const MARGIN = 0.15                                                           // 柵の際の余白（ローカル単位、3倍で約0.45m）
+  const MARGIN = 0.15                                                           // 柵の際の余白（ローカル単位、3.6倍で約0.54m）
   const { areas, stairsArea: st } = sakuField.userData
   const inUnion = (x, z) => areas.some(([x0, z0, x1, z1]) => x >= x0 && x <= x1 && z >= z0 && z <= z1)
   // 柵の際の余白は外周からだけ取る（矩形どうしの境目には隙間を作らない）
