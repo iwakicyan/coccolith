@@ -13,7 +13,8 @@ import * as THREE from 'three'
 // ============================================================
 
 const SHOT_FRAMES = 90   // 起動演出（コイン）が終わるまで待つフレーム数（30fps で 3 秒）
-const SHOT_LIGHT_CHANCE = 0.5   // 撮影モードで夜側（太陽 +X の反対、pDir.x < 0）にいるとき、ライトを点けて撮る確率
+const SHOT_LIGHT_CHANCE = 0.5   // 撮影モードで夜側にいるとき、ライトを点けて撮る確率
+const SHOT_NIGHT_X      = -0.2  // pDir.x がこれより小さければ夜側（太陽は +X。昼夜の境目のまだ明るいところは除く）
 
 const params = new URLSearchParams(location.search)
 const isShot = params.has('shot')
@@ -79,7 +80,7 @@ export function applyStartPose(pDir, pFwd, pitchMin, pitchMax) {
 export function startWithLight(pDir) {
   const on = lightParam !== null
     ? lightParam > 0
-    : isShot && pDir.x < 0 && Math.random() < SHOT_LIGHT_CHANCE
+    : isShot && pDir.x < SHOT_NIGHT_X && Math.random() < SHOT_LIGHT_CHANCE
   if (isShot) window.__shot.light = on
   return on
 }
