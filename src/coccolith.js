@@ -585,12 +585,13 @@ export function createCoccolith({ renderer = null } = {}) {
   }
 
   // --- ランドマーク: 階段の館 kaidan_palace (lat=5.8, lon=-125.6) ------------
-  // 2倍で高さ6m × 幅7.2m × 奥行き9.4m。正面（低い段・扉のある側、ローカル +Z）を北（緯度+方向）へ向ける
+  // 5倍で高さ15m × 幅18m × 奥行き23.5m。地面に 0.6m めり込ませる（大きいので角が球面から浮かないように）
+  // 正面（低い段・扉のある側、ローカル +Z）を北（緯度+方向）へ向ける
   const kaidanWrapper = new THREE.Group()
   const kaidan = createKaidanPalace()
   kaidanWrapper.add(kaidan)
-  kaidanWrapper.scale.setScalar(2)
-  placeOnSurface(group, kaidanWrapper, 5.8, -125.6, R_C + LAND_LIFT - 0.3)
+  kaidanWrapper.scale.setScalar(5)
+  placeOnSurface(group, kaidanWrapper, 5.8, -125.6, R_C + LAND_LIFT - 0.6)
   {
     const n = kaidanWrapper.position.clone().normalize()
     const north = new THREE.Vector3(0, 1, 0).addScaledVector(n, -n.y)
