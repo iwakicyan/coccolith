@@ -537,6 +537,13 @@ export function createCoccolith({ renderer = null } = {}) {
   treehouseWrapper.scale.setScalar(2)
   placeOnSurface(group, treehouseWrapper, 53.0, -171.0, R_C + LAND_LIFT - 0.3)
   colliders.push(treehouse)
+  // 近づくと扉の輪郭が光る（入れない。main.js の _glowSpots）。扉は頭上なので、地面に落とした位置から測る
+  {
+    const door = treehouse.userData.doorPanel
+    addDoorGlow(door)
+    const local = door.getWorldPosition(new THREE.Vector3()).applyMatrix4(treehouse.matrixWorld.clone().invert())
+    treehouse.userData.glowSpot = { mesh: door, local, reach: 5 }   // local: treehouse のローカル座標
+  }
 
   // --- ランドマーク: 看板 kanban (lat=83.0, lon=-160.0) ------------
   // 16.7倍で高さ約20m、横幅だけさらに 1.5 倍（約15m）。地面に 2m めり込ませる。表（黒板・ローカル +Z）を北（緯度+方向）へ向ける
