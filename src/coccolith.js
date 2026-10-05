@@ -12,6 +12,8 @@ import { createKaidanPalace } from '../my-3d-parts/landmark/kaidan_palace.js'
 import { createEasel } from '../my-3d-parts/landmark/easel.js'
 import { createBridge01 } from '../my-3d-parts/landmark/bridge01.js'
 import { addDoorGlow } from './doorGlow.js'
+import { openPixelScene } from './pixelScene.js'
+import { TREEHOUSE_PIXEL_LAYERS, TREEHOUSE_PIXEL_TEXT } from './pixelArt/treehouse.js'
 import { createFlowerGeometry, openFlowerCut } from './flowerCut.js'
 import { addLedBoard } from './ledBoard.js'
 import { applyNightEnv } from './nightEnv.js'
@@ -537,12 +539,13 @@ export function createCoccolith({ renderer = null } = {}) {
   treehouseWrapper.scale.setScalar(2)
   placeOnSurface(group, treehouseWrapper, 53.0, -171.0, R_C + LAND_LIFT - 0.3)
   colliders.push(treehouse)
-  // 近づくと扉の輪郭が光る（入れない。main.js の _glowSpots）。扉は頭上なので、地面に落とした位置から測る
+  // 近づくと扉の輪郭が光り、タップでドット絵のページを開く（main.js の _glowSpots、pixelScene.js）。扉は頭上なので、地面に落とした位置から測る
   {
     const door = treehouse.userData.doorPanel
     addDoorGlow(door)
     const local = door.getWorldPosition(new THREE.Vector3()).applyMatrix4(treehouse.matrixWorld.clone().invert())
     treehouse.userData.glowSpot = { mesh: door, local, reach: 5 }   // local: treehouse のローカル座標
+    treehouse.userData.glowSpot.onTap = () => openPixelScene(TREEHOUSE_PIXEL_LAYERS, { text: TREEHOUSE_PIXEL_TEXT })
   }
 
   // --- ランドマーク: 看板 kanban (lat=83.0, lon=-160.0) ------------

@@ -191,6 +191,30 @@
     }
     #flower-cut button:hover { border-color: rgba(255,255,255,0.7); color: #fff; }
     #flower-cut .fc-ok { background: rgba(191,244,255,0.85); border-color: #BFF4FF; color: #00000a; padding: 0 22px; }
+    /* ドット絵の平面ページ（ツリーハウスの扉をタップで開く。pixelScene.js）。全画面にせず暗い背景の上に置く */
+    #pixel-scene {
+      position: fixed; inset: 0; z-index: 40;
+      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
+      background: rgba(0,0,10,0.92);
+      touch-action: none; user-select: none; -webkit-user-select: none;
+    }
+    #pixel-scene .ps-art { display: block; image-rendering: pixelated; }
+    #pixel-scene .ps-text {
+      --dot: 4px;   /* 絵の 1 ドットの大きさ（pixelScene.js で入れる） */
+      box-sizing: border-box; max-width: 96vw; min-height: calc(var(--dot) * 20);   /* 枠を含めて 20 ドット分 */
+      padding: calc(var(--dot) * 2) calc(var(--dot) * 3);
+      background: rgba(10,12,24,0.88); border: var(--dot) solid #5F638C;
+      color: #EFEDE6; font: 12px/1.7 monospace; white-space: pre-wrap; overflow-wrap: anywhere;
+      font-size: max(10px, calc(var(--dot) * 3));   /* 絵の 1 ドットの 3 倍。1 行がウィンドウの幅に収まる大きさ */
+    }
+    #pixel-scene .ps-text a { color: #8FD3E8; text-decoration: underline; text-underline-offset: 3px; }
+    #pixel-scene button {
+      padding: 0 14px; letter-spacing: 0.15em; background: rgba(0,0,0,0.25);
+      border: 1px solid rgba(255,255,255,0.35); border-radius: 12px;
+      color: rgba(255,255,255,0.8); font: 12px monospace; line-height: 26px;
+      cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent;
+    }
+    #pixel-scene button:hover { border-color: rgba(255,255,255,0.7); color: #fff; }
   </style>
 </head>
 <body>

@@ -4,6 +4,7 @@ import { createCompass, createVethIndicator } from './hud.js'
 import { initFullscreenButton } from './fullscreen.js'
 import { initSettings, handleInvert, invSign } from './settings.js'
 import { isFlowerCutOpen } from './flowerCut.js'
+import { isPixelSceneOpen } from './pixelScene.js'
 import { createCoccolith } from './coccolith.js'
 import { createVeth } from './veth.js'
 import { createCloud1, createFlatCloud } from './cloud1.js'
@@ -189,7 +190,7 @@ function hitDoor(e) {
   _iconRay.setFromCamera(_pointer, camera)
   return _iconRay.intersectObject(door, true).length > 0
 }
-// 光っている「光るだけのもの」のタップ（onTap を持つもの。イーゼルのキャンバス → 花の切り抜き）
+// 光っている「光るだけのもの」のタップ（onTap を持つもの。イーゼルのキャンバス → 花の切り抜き、ツリーハウスの扉 → ドット絵のページ）
 function hitGlowSpot(e) {
   const g = nearGlowSpot()
   if (!g?.onTap) return null
@@ -200,7 +201,7 @@ function hitGlowSpot(e) {
 canvas.addEventListener('pointerdown', e => {
   let g
   if (hitDoor(e)) useDoor()
-  else if ((g = hitGlowSpot(e))) { g.onTap(); for (const k in keys) keys[k] = false }   // 切り抜きページを開くので押しっぱなしのキーを離す
+  else if ((g = hitGlowSpot(e))) { g.onTap(); for (const k in keys) keys[k] = false }   // 別のページを開くので押しっぱなしのキーを離す
   else if (hitLightIcon(e)) toggleSabLight()
 })
 canvas.addEventListener('pointermove', e => {
@@ -539,7 +540,7 @@ let ovPitch = Math.PI * 0.25   // 初期は斜め上から
 const keys = {}
 
 window.addEventListener('keydown', e => {
-  if (isFlowerCutOpen()) return   // 花の切り抜きページを開いている間はゲームの操作をしない
+  if (isFlowerCutOpen() || isPixelSceneOpen()) return   // 花の切り抜き・ドット絵のページを開いている間はゲームの操作をしない
   if (e.code === 'Enter' && !e.repeat) { useDoor(); e.preventDefault(); return }
   if (e.code === 'Tab' && (interior || transitioning)) {
     if (interior && !transitioning) setFirstPerson(!firstPerson)
