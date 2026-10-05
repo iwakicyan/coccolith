@@ -529,6 +529,10 @@ export function createCoccolith({ renderer = null } = {}) {
   const treehouseWrapper = new THREE.Group()
   const treehouse = createTreehouse()
   treehouse.rotation.y = Math.PI   // 正面（扉・はしご側）の向きを 180° 回す
+  // 逆光で暗く見えるので、それぞれの面を自分の色で少しだけ自発光させる
+  treehouse.traverse(o => {
+    if (o.material?.emissive) { o.material.emissive.copy(o.material.color); o.material.emissiveIntensity = 0.1 }
+  })
   treehouseWrapper.add(treehouse)
   treehouseWrapper.scale.setScalar(2)
   placeOnSurface(group, treehouseWrapper, 53.0, -171.0, R_C + LAND_LIFT - 0.3)
