@@ -5,15 +5,13 @@
 //    npm run post -- shots/20261005-125526.json                      … 指定した 1 枚
 //    npm run post -- --dry-run                                       … 投稿せず中身だけ表示
 //
-//  本文には座標と、その場所・向きから歩き始められるリンク（src/shot.js の URL パラメータ）を入れる
+//  本文はハッシュタグだけ（座標は画像の HUD に写っている。サイトへのリンクはプロフィールに置く）
 // ============================================================
 
 import { readFile, readdir } from 'node:fs/promises'
 import { AtpAgent } from '@atproto/api'
 
-const SITE_URL  = process.env.SITE_URL ?? 'https://iwakicyan.github.io/coccolith/'
-const LINK_TEXT = 'この場所から歩く'
-const HASHTAGS  = ['planet', 'planet_coccolith', 'time_of_coccolith']   // 本文の最後に付けるハッシュタグ（# なし）
+const HASHTAGS  = ['planet', 'planet_coccolith', 'time_of_coccolith']   // 本文に並べるハッシュタグ（# なし）
 const IMG_SIZE  = { width: 2400, height: 1350 }   // shot.mjs の書き出しサイズ
 
 const args = process.argv.slice(2)
@@ -27,9 +25,7 @@ if (!metaPath) {
 const meta = JSON.parse(await readFile(metaPath, 'utf8'))
 
 const fmt = (v) => v.toFixed(1)
-const query = new URLSearchParams({ lat: meta.lat, lon: meta.lon, heading: meta.heading, pitch: meta.pitch })
-const link = `${SITE_URL}?${query}`
-// リンクやハッシュタグは、本文のどこからどこまでかを UTF-8 のバイト数で指定する
+// ハッシュタグは、本文のどこからどこまでかを UTF-8 のバイト数で指定する
 const bytes = (s) => new TextEncoder().encode(s).length
 let text = ''
 const facets = []
@@ -37,10 +33,8 @@ function append(s, feature) {
   if (feature) facets.push({ index: { byteStart: bytes(text), byteEnd: bytes(text) + bytes(s) }, features: [feature] })
   text += s
 }
-append(`${meta.area} | lat: ${fmt(meta.lat)}°  lon: ${fmt(meta.lon)}°\n\n`)
-append(LINK_TEXT, { $type: 'app.bsky.richtext.facet#link', uri: link })
 HASHTAGS.forEach((tag, i) => {
-  append(i === 0 ? '\n\n' : ' ')
+  if (i > 0) append(' ')
   append(`#${tag}`, { $type: 'app.bsky.richtext.facet#tag', tag })
 })
 const alt = `惑星 coccolith の lat ${fmt(meta.lat)}° lon ${fmt(meta.lon)}° から、方位 ${Math.round(meta.heading)}° を向いて撮った景色`
