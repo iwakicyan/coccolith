@@ -3,21 +3,12 @@ import * as THREE from 'three'
 // ============================================================
 //  花の切り抜き — イーゼルのキャンバスの絵（64x64）を12頂点で切り抜いて、花壇の茎の先に咲かせる
 //  キャンバスをタップすると「画像切り抜きページ」（2D）を開き、頂点をドラッグで動かす（RANDOM でランダムな形）。OK で花に反映
-//  頂点は画像の左上を (0,0)、右下を (1,1) とした座標。localStorage に残す
+//  頂点は画像の左上を (0,0)、右下を (1,1) とした座標。保存はせず、読み込むたびにランダムな形から始める
 // ============================================================
 
-const STORAGE_KEY = 'coccolith.flowerCut'
 const N = 12
 
-// 初期の切り抜き：画像の中心を囲む正十二角形
-function defaultPoints() {
-  return Array.from({ length: N }, (_, i) => {
-    const a = -Math.PI / 2 + i * 2 * Math.PI / N
-    return [0.5 + 0.3 * Math.cos(a), 0.5 + 0.3 * Math.sin(a)]
-  })
-}
-
-// RANDOM ボタン：中心と各頂点の距離をランダムにした形。角度の順に並べるので辺は交差しない
+// 初期の形と RANDOM ボタン：中心と各頂点の距離をランダムにした形。角度の順に並べるので辺は交差しない
 function randomPoints() {
   const cx = 0.3 + 0.4 * Math.random(), cy = 0.3 + 0.4 * Math.random()
   const a0 = Math.random() * 2 * Math.PI
@@ -29,18 +20,7 @@ function randomPoints() {
   })
 }
 
-function load() {
-  try {
-    const p = JSON.parse(localStorage.getItem(STORAGE_KEY))
-    if (Array.isArray(p) && p.length === N && p.every(q => q.length === 2 && q.every(Number.isFinite))) return p
-  } catch { /* 読めなければ初期の形 */ }
-  return defaultPoints()
-}
-function save(points) {
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(points)) } catch { /* 保存できなくても今回は効く */ }
-}
-
-let points = load()
+let points = randomPoints()   // 読み込むたびにランダムな形から始める（保存はしない）
 
 // --- 花のジオメトリ -----------------------------------------
 // 茎のジオメトリ（createFlowerStemGeometry）と同じ単位で、茎の先端 tip に花を付ける
@@ -66,7 +46,7 @@ export function createFlowerGeometry(tip) {
 let editorEl = null
 export const isFlowerCutOpen = () => !!editorEl
 
-// imageSrc: 切り抜く画像、onOk(points): OK を押したとき（頂点は保存済み）
+// imageSrc: 切り抜く画像、onOk(points): OK を押したとき
 export function openFlowerCut(imageSrc, onOk) {
   if (editorEl) return
   let work = points.map(p => [...p])
@@ -142,7 +122,6 @@ export function openFlowerCut(imageSrc, onOk) {
   el.querySelector('.fc-random').addEventListener('click', () => { work = randomPoints(); draw() })
   el.querySelector('.fc-ok').addEventListener('click', () => {
     points = work
-    save(points)
     close()
     onOk(points)
   })
