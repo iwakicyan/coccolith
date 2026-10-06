@@ -16,6 +16,7 @@ import { createSabchan } from '../my-3d-parts/parts/sabchan.jsx'
 import { setDoorGlow } from './doorGlow.js'
 import { updateLedBoards } from './ledBoard.js'
 import { createCoinIntro } from './coinIntro.js'
+import { createCoinDrop } from './coinDrop.js'
 
 // ============================================================
 //  LMF — Layout Master File
@@ -57,7 +58,7 @@ scene.add(new THREE.AmbientLight(0x334455, 1.0))
 
 
 // --- 天体 ---------------------------------------------------
-const { group: coccolith, terrainMeshes, oceanMesh, colliders } = createCoccolith({ renderer })
+const { group: coccolith, terrainMeshes, oceanMesh, colliders, coinSlot } = createCoccolith({ renderer })
 terrainMeshes.forEach(m => m.receiveShadow = true)
 oceanMesh.receiveShadow = true
 scene.add(coccolith)
@@ -598,12 +599,13 @@ const coinBoxEl = document.getElementById('coin-box')
 const _hudDir = new THREE.Vector3()
 const coinNumEl = document.getElementById('coin-num')
 let coinCount = 0
-function collectCoin() {
-  coinCount++
+function setCoinCount(n) {
+  coinCount = n
   coinNumEl.textContent = coinCount
   coinNumEl.classList.add('bump')
   setTimeout(() => coinNumEl.classList.remove('bump'), 120)
 }
+const collectCoin = () => setCoinCount(coinCount + 1)
 // URL で立ち位置の指定があればそこから始める（撮影モードではランダムな地点）
 {
   const p = applyStartPose(pDir, pFwd, PITCH_MIN, PITCH_MAX)
@@ -613,6 +615,13 @@ function collectCoin() {
 const coinIntro = createCoinIntro({ scene, renderer, getGround: dir => getGroundHeight(dir) - 1, onCollect: collectCoin })
 scene.updateMatrixWorld(true)   // 地表レイキャスト用に初回描画前のワールド行列を確定
 coinIntro.start(pDir, pFwd)
+// HUD のコイン数をつかんでコイン箱の投入口へドラッグすると、1 枚入れられる（coinDrop.js）
+const coinDrop = createCoinDrop({
+  boxEl: coinBoxEl, camera, renderer, slot: coinSlot,
+  getCount: () => coinCount,
+  onDrop: () => setCoinCount(coinCount - 1),
+  enabled: () => !transitioning && !overviewMode && !interior,
+})
 
 // pDir（正規化済み球面法線）からグリッドエリアコードを返す
 // 緯度帯 A〜J（南→北）、経度帯 1〜10（西→東）
@@ -930,6 +939,7 @@ function animate() {
   }
 
   coinIntro.update(dt, sabchan.group.position)
+  coinDrop.update(dt)
   updateDoorGlow(now)
   updateLedBoards(now / 1000)
   renderer.render(interior ? interior.def.scene : scene, camera)

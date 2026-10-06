@@ -75,6 +75,19 @@
     #coin-box img { width: 18px; height: 18px; }
     #coin-num { display: inline-block; min-width: 1ch; color: rgba(255,255,255,0.8); transition: transform 0.12s ease-out; }
     #coin-num.bump { transform: scale(1.4); }
+    /* コイン数は JUMP と同じく、カーソルを合わせると縁が明るくなる。つかんで投入口へドラッグできる（coinDrop.js） */
+    #coin-box { pointer-events: auto; touch-action: none; user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent; }
+    #coin-box:hover, #coin-box.grabbing { border-color: rgba(255,255,255,0.7); }
+    #coin-box:hover #coin-num, #coin-box.grabbing #coin-num { color: #fff; }
+    #coin-box.grabbable { cursor: grab; }
+    #coin-box.grabbing { cursor: grabbing; }
+    #coin-box img { pointer-events: none; -webkit-user-drag: none; }
+    #coin-ghost {
+      position: fixed; z-index: 30; width: 30px; height: 30px; margin: -15px 0 0 -15px;
+      pointer-events: none; transition: transform 0.12s ease-out;
+      filter: drop-shadow(0 2px 3px rgba(0,0,0,0.5));
+    }
+    #coin-ghost.over { transform: scale(1.4); }
     #compass {
       position: fixed; top: 10px; right: 10px;
       pointer-events: none;

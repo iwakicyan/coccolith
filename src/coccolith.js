@@ -753,7 +753,7 @@ export function createCoccolith({ renderer = null } = {}) {
   ebWrapper.setRotationFromMatrix(new THREE.Matrix4().makeBasis(ebRight, ebN, ebFwd))
   group.add(ebWrapper)
 
-  return { group, terrainMeshes, oceanMesh, colliders }
+  return { group, terrainMeshes, oceanMesh, colliders, coinSlot: coinbox.userData.slot }
 }
 
 // 島[GF] (lat 0-36°N, lon 72-108°E) に岩を InstancedMesh で散布
