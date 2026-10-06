@@ -1,12 +1,12 @@
 import * as THREE from 'three'
 import { createCoin } from './coin.js'
-import { COIN_RADIUS, POP_TIME, POP_HEIGHT, WAIT_TIME, SPIN_IDLE, SPIN_PULL } from './coinIntro.js'
+import { COIN_RADIUS, POP_TIME, POP_HEIGHT, SPIN_IDLE } from './coinIntro.js'
 
 // ============================================================
 //  コインを投入口へ入れる
 //  HUD のコイン数をつかんでドラッグし、コイン箱の投入口（円盤とスロット）の上で離すと
-//  コインが 1 枚減り、起動演出のコインと同じ大きさ・動き（ポンと飛び出してクルクル回る）で投入口の前に出て、
-//  回転を速めながら縮んで投入口の中へ消える
+//  コインが 1 枚減り、起動演出のコインと同じ大きさ・動き（ポンと飛び出す）で投入口の前に出て、
+//  その場で起動演出の倍の速さでクルクル回ってから消える
 //  投入口から外れたところで離すと、つかんだコインは HUD へ戻る
 //
 //  createCoinDrop({ boxEl, scene, camera, renderer, slot, getCount, onDrop, enabled })
@@ -21,7 +21,8 @@ import { COIN_RADIUS, POP_TIME, POP_HEIGHT, WAIT_TIME, SPIN_IDLE, SPIN_PULL } fr
 
 const REACH       = 14     // カメラからこの距離までの投入口に入れられる (m)。カメラは sabちゃんの 8m 後ろ
 const FRONT       = COIN_RADIUS + 0.15   // コインが現れる投入口の前の距離 (m)
-const VANISH_TIME = 0.4    // 回転を速めながら縮んで消えるまで (s)
+const SPIN_TIME   = 0.35   // 飛び出したあと、その場で回ってから消えるまで (s)
+const SPIN_SPEED  = SPIN_IDLE * 2   // 回転速度（起動演出の待機中の倍）(rad/s)
 const BACK_TIME   = 200    // 外したとき HUD へ戻るまで (ms)
 
 export function createCoinDrop({ boxEl, scene, camera, renderer, slot, getCount, onDrop, enabled = () => true }) {
@@ -101,7 +102,6 @@ export function createCoinDrop({ boxEl, scene, camera, renderer, slot, getCount,
     scene.add(mesh)
     inserting.push({
       mesh, age: 0, spin: 0,
-      center: _center.clone(),                                     // 投入口の中心（消えるときはここへ寄る）
       home: _center.clone().addScaledVector(_normal, FRONT),      // 投入口の前の、回っている位置
       ref: _normal.clone(),                                        // 向きの基準（接平面に投影して使う）
     })
@@ -113,30 +113,25 @@ export function createCoinDrop({ boxEl, scene, camera, renderer, slot, getCount,
     for (let i = inserting.length - 1; i >= 0; i--) {
       const c = inserting[i], { mesh } = c
       c.age += dt
-      let scale = 1, spinSpd = SPIN_IDLE
+      if (c.age >= POP_TIME + SPIN_TIME) {
+        // 回り終えたらその場で消える
+        scene.remove(mesh)
+        mesh.traverse(o => { o.geometry?.dispose(); o.material?.dispose() })
+        inserting.splice(i, 1)
+        continue
+      }
+      let scale = 1
       if (c.age < POP_TIME) {
         // 起動演出と同じく、ポンと飛び出しながら大きくなる
         const t = c.age / POP_TIME
         scale = 1 - Math.pow(1 - t, 3)
         _up.copy(c.home).normalize()
         mesh.position.copy(c.home).addScaledVector(_up, Math.sin(Math.PI * t) * POP_HEIGHT)
-      } else if (c.age < POP_TIME + WAIT_TIME) {
-        mesh.position.copy(c.home)
       } else {
-        // 回転を速めながら縮み、投入口の中へ消える
-        const t = (c.age - POP_TIME - WAIT_TIME) / VANISH_TIME
-        if (t >= 1) {
-          scene.remove(mesh)
-          mesh.traverse(o => { o.geometry?.dispose(); o.material?.dispose() })
-          inserting.splice(i, 1)
-          continue
-        }
-        mesh.position.lerpVectors(c.home, c.center, t * t)
-        scale = 1 - t
-        spinSpd = SPIN_IDLE + (SPIN_PULL - SPIN_IDLE) * t
+        mesh.position.copy(c.home)
       }
       // 惑星の法線を上にして立て、その軸でクルクル回す（coinIntro.js と同じ）
-      c.spin += spinSpd * dt
+      c.spin += SPIN_SPEED * dt
       _up.copy(mesh.position).normalize()
       _fwd.copy(c.ref).addScaledVector(_up, -c.ref.dot(_up)).normalize()
       _right.crossVectors(_up, _fwd)
