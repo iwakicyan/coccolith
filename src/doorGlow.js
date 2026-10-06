@@ -49,13 +49,13 @@ export function addGroundGlow(mesh, { y, pad, band }) {
   mesh.userData.glow = { group: glow, halo, edges }
 }
 
-// on: 点灯するか、t: 経過秒（ゆっくり明滅）
+// on: 点灯するか、t: 経過秒（明滅。弱いときはほとんど消える）
 export function setDoorGlow(door, on, t) {
   const g = door.userData.glow
   if (!g) return
   g.group.visible = on
   if (!on) return
-  const k = 0.5 + 0.5 * Math.sin(t * 3.0)
-  g.halo.material.opacity  = 0.35 + 0.4 * k
-  g.edges.material.opacity = 0.6 + 0.4 * k
+  const k = 0.5 + 0.5 * Math.sin(t * 5.0)
+  g.halo.material.opacity  = 0.05 + 0.7 * k
+  g.edges.material.opacity = 0.15 + 0.85 * k
 }
