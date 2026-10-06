@@ -7,15 +7,15 @@ import { createCoin } from './coin.js'
 // ============================================================
 
 const COIN_COUNT  = 9
-const COIN_RADIUS = 0.3    // コインの半径 (m)
+export const COIN_RADIUS = 0.3    // コインの半径 (m)
 const SCATTER_MIN = 2      // sabちゃんからの散らばり距離 (m)
 const SCATTER_MAX = 5
-const POP_TIME    = 0.35   // 地面から飛び出して着地するまで (s)
-const POP_HEIGHT  = 0.8    // 飛び出しの高さ (m)
-const WAIT_TIME   = 0.5    // 吸い寄せ開始までの待ち (s)
+export const POP_TIME    = 0.35   // 地面から飛び出して着地するまで (s)
+export const POP_HEIGHT  = 0.8    // 飛び出しの高さ (m)
+export const WAIT_TIME   = 0.5    // 吸い寄せ開始までの待ち (s)
 const STAGGER     = 0.1    // コインごとの吸い寄せ開始のずれ (s)
-const SPIN_IDLE   = 5      // 待機中の回転速度 (rad/s)
-const SPIN_PULL   = 22     // 吸い寄せ中の最大回転速度 (rad/s)
+export const SPIN_IDLE   = 5      // 待機中の回転速度 (rad/s)
+export const SPIN_PULL   = 22     // 吸い寄せ中の最大回転速度 (rad/s)
 const PULL_SPEED0 = 1.5    // 吸い寄せの初速 (m/s)
 const PULL_ACCEL  = 28     // 吸い寄せの加速度 (m/s²)
 const SHRINK_DIST = 1.2    // この距離から縮み始める (m)

@@ -617,7 +617,7 @@ scene.updateMatrixWorld(true)   // 地表レイキャスト用に初回描画前
 coinIntro.start(pDir, pFwd)
 // HUD のコイン数をつかんでコイン箱の投入口へドラッグすると、1 枚入れられる（coinDrop.js）
 const coinDrop = createCoinDrop({
-  boxEl: coinBoxEl, camera, renderer, slot: coinSlot,
+  boxEl: coinBoxEl, scene, camera, renderer, slot: coinSlot,
   getCount: () => coinCount,
   onDrop: () => setCoinCount(coinCount - 1),
   enabled: () => !transitioning && !overviewMode && !interior,

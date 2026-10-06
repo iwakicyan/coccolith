@@ -1,13 +1,15 @@
 import * as THREE from 'three'
 import { createCoin } from './coin.js'
+import { COIN_RADIUS, POP_TIME, POP_HEIGHT, WAIT_TIME, SPIN_IDLE, SPIN_PULL } from './coinIntro.js'
 
 // ============================================================
 //  コインを投入口へ入れる
 //  HUD のコイン数をつかんでドラッグし、コイン箱の投入口（円盤とスロット）の上で離すと
-//  コインが 1 枚減り、投入口の前に出たコインが縦のスロットへ吸い込まれて消える
+//  コインが 1 枚減り、起動演出のコインと同じ大きさ・動き（ポンと飛び出してクルクル回る）で投入口の前に出て、
+//  回転を速めながら縮んで投入口の中へ消える
 //  投入口から外れたところで離すと、つかんだコインは HUD へ戻る
 //
-//  createCoinDrop({ boxEl, camera, renderer, slot, getCount, onDrop, enabled })
+//  createCoinDrop({ boxEl, scene, camera, renderer, slot, getCount, onDrop, enabled })
 //    boxEl:    HUD のコイン数（ここをつかむ。中のコインのアイコンをつかんだコインの絵に使う）
 //    slot:     コイン箱の投入口のグループ（my-3d-parts の coinbox の userData.slot）
 //              ローカル +z が面の法線、+y がスロットの向き、原点が投入口の中心
@@ -18,17 +20,15 @@ import { createCoin } from './coin.js'
 // ============================================================
 
 const REACH       = 14     // カメラからこの距離までの投入口に入れられる (m)。カメラは sabちゃんの 8m 後ろ
-const COIN_R      = 0.085  // 入れるコインの半径（投入口のローカル単位。コイン箱を 2.35 倍で置くと約 0.2m）
-const START_Z     = 0.3    // コインが現れる投入口の前の距離（ローカル単位）
-const END_Z       = -0.15  // ここまで沈むと消える（箱の中）
-const INSERT_TIME = 0.55   // 現れてから消えるまで (s)
+const FRONT       = COIN_RADIUS + 0.15   // コインが現れる投入口の前の距離 (m)
+const VANISH_TIME = 0.4    // 回転を速めながら縮んで消えるまで (s)
 const BACK_TIME   = 200    // 外したとき HUD へ戻るまで (ms)
 
-export function createCoinDrop({ boxEl, camera, renderer, slot, getCount, onDrop, enabled = () => true }) {
+export function createCoinDrop({ boxEl, scene, camera, renderer, slot, getCount, onDrop, enabled = () => true }) {
   const ray = new THREE.Raycaster()
   ray.far = REACH
   const ndc = new THREE.Vector2()
-  const inserting = []   // スロットへ入っていく途中のコイン { mesh, t }
+  const inserting = []   // 投入口の前で回っているコイン { mesh, home, ref, spin, age }
 
   let ghost = null       // つかんでいる間、指の下に出すコインのアイコン
   let pointerId = null
@@ -90,26 +90,59 @@ export function createCoinDrop({ boxEl, camera, renderer, slot, getCount, onDrop
   boxEl.addEventListener('pointerup', release)
   boxEl.addEventListener('pointercancel', release)
 
-  // 投入口の前にコインを出し、縦のスロットへ縁から差し込む（コインの面をスロットの向き・面の法線と同じ面に立てる）
+  // 投入口の前にコインを出す（表を投入口の外へ向ける）
+  const _center = new THREE.Vector3(), _normal = new THREE.Vector3()
   function insertCoin() {
-    const mesh = createCoin({ renderer, radius: COIN_R })
-    mesh.rotation.y = Math.PI / 2   // コインの表（+Z）を投入口の +x へ向ける
-    mesh.position.z = START_Z
-    slot.add(mesh)
-    inserting.push({ mesh, t: 0 })
+    slot.updateWorldMatrix(true, false)
+    _center.setFromMatrixPosition(slot.matrixWorld)
+    _normal.set(0, 0, 1).transformDirection(slot.matrixWorld)
+    const mesh = createCoin({ renderer, radius: COIN_RADIUS })
+    mesh.scale.setScalar(0)
+    scene.add(mesh)
+    inserting.push({
+      mesh, age: 0, spin: 0,
+      center: _center.clone(),                                     // 投入口の中心（消えるときはここへ寄る）
+      home: _center.clone().addScaledVector(_normal, FRONT),      // 投入口の前の、回っている位置
+      ref: _normal.clone(),                                        // 向きの基準（接平面に投影して使う）
+    })
   }
 
+  const _up = new THREE.Vector3(), _fwd = new THREE.Vector3(), _right = new THREE.Vector3()
+  const _mat = new THREE.Matrix4(), _spinQ = new THREE.Quaternion(), _yAxis = new THREE.Vector3(0, 1, 0)
   function update(dt) {
     for (let i = inserting.length - 1; i >= 0; i--) {
-      const c = inserting[i]
-      c.t += dt / INSERT_TIME
-      const k = Math.min(1, c.t)
-      c.mesh.position.z = THREE.MathUtils.lerp(START_Z, END_Z, k * k)   // だんだん速く吸い込まれる
-      if (k >= 1) {
-        slot.remove(c.mesh)
-        c.mesh.traverse(o => { o.geometry?.dispose(); o.material?.dispose() })
-        inserting.splice(i, 1)
+      const c = inserting[i], { mesh } = c
+      c.age += dt
+      let scale = 1, spinSpd = SPIN_IDLE
+      if (c.age < POP_TIME) {
+        // 起動演出と同じく、ポンと飛び出しながら大きくなる
+        const t = c.age / POP_TIME
+        scale = 1 - Math.pow(1 - t, 3)
+        _up.copy(c.home).normalize()
+        mesh.position.copy(c.home).addScaledVector(_up, Math.sin(Math.PI * t) * POP_HEIGHT)
+      } else if (c.age < POP_TIME + WAIT_TIME) {
+        mesh.position.copy(c.home)
+      } else {
+        // 回転を速めながら縮み、投入口の中へ消える
+        const t = (c.age - POP_TIME - WAIT_TIME) / VANISH_TIME
+        if (t >= 1) {
+          scene.remove(mesh)
+          mesh.traverse(o => { o.geometry?.dispose(); o.material?.dispose() })
+          inserting.splice(i, 1)
+          continue
+        }
+        mesh.position.lerpVectors(c.home, c.center, t * t)
+        scale = 1 - t
+        spinSpd = SPIN_IDLE + (SPIN_PULL - SPIN_IDLE) * t
       }
+      // 惑星の法線を上にして立て、その軸でクルクル回す（coinIntro.js と同じ）
+      c.spin += spinSpd * dt
+      _up.copy(mesh.position).normalize()
+      _fwd.copy(c.ref).addScaledVector(_up, -c.ref.dot(_up)).normalize()
+      _right.crossVectors(_up, _fwd)
+      _mat.makeBasis(_right, _up, _fwd)
+      mesh.quaternion.setFromRotationMatrix(_mat).multiply(_spinQ.setFromAxisAngle(_yAxis, c.spin))
+      mesh.scale.setScalar(Math.max(scale, 0.001))
     }
   }
 

@@ -12,7 +12,7 @@ import { createKaidanPalace } from '../my-3d-parts/landmark/kaidan_palace.js'
 import { createEasel } from '../my-3d-parts/landmark/easel.js'
 import { createBridge01 } from '../my-3d-parts/landmark/bridge01.js'
 import { createCoinbox } from '../my-3d-parts/landmark/coinbox.js'
-import { addDoorGlow } from './doorGlow.js'
+import { addDoorGlow, addGroundGlow } from './doorGlow.js'
 import { openPixelScene } from './pixelScene.js'
 import { TREEHOUSE_PIXEL_LAYERS, TREEHOUSE_PIXEL_TEXT } from './pixelArt/treehouse.js'
 import { createFlowerGeometry, openFlowerCut } from './flowerCut.js'
@@ -691,8 +691,9 @@ export function createCoccolith({ renderer = null } = {}) {
   const coinbox = createCoinbox()
   coinboxWrapper.add(coinbox)
   coinboxWrapper.scale.setScalar(2.35)
+  const COINBOX_SINK = 0.1   // 地面にめり込ませる量 (m)
   const COINBOX_LON = 100.0 + THREE.MathUtils.radToDeg(2 / ((R_C + LAND_LIFT) * Math.cos(THREE.MathUtils.degToRad(6.0))))   // 東へ 2m
-  placeOnSurface(group, coinboxWrapper, -6.0, COINBOX_LON, R_C + LAND_LIFT - 0.1)
+  placeOnSurface(group, coinboxWrapper, -6.0, COINBOX_LON, R_C + LAND_LIFT - COINBOX_SINK)
   {
     const east = new THREE.Object3D()
     placeOnSurface(new THREE.Group(), east, -6.0, COINBOX_LON + 1, coinboxWrapper.position.length())
@@ -706,6 +707,13 @@ export function createCoccolith({ renderer = null } = {}) {
     const metalMat = new THREE.MeshStandardMaterial({ color: goldMat.color, metalness: 0.9, roughness: 0.06, envMapIntensity: 2.0 })
     coinbox.traverse(o => { if (o.isMesh && o.material === goldMat) o.material = metalMat })
     applyNightEnv(renderer, metalMat)
+  }
+  {
+    // 近づくと、台が地面に入るところ（接地ライン）がドアのように光る（入れない。main.js の _glowSpots）
+    const base = coinbox.children[0]   // children[0] = 茶色の台（BoxGeometry、中心が台の真ん中）
+    const s = coinboxWrapper.scale.x
+    addGroundGlow(base, { y: -base.geometry.parameters.height / 2 + COINBOX_SINK / s, pad: 0.1 / s, band: 0.12 / s })
+    coinbox.userData.glowSpot = { mesh: base, local: new THREE.Vector3(), reach: 4.5 }   // local: coinbox のローカル座標
   }
   colliders.push(coinbox)
 
