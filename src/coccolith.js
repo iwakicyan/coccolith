@@ -703,7 +703,7 @@ export function createCoccolith({ renderer = null } = {}) {
   {
     // 金色の部分（箱と投入口の円盤）をメタリックにする。映り込みはコイン・看板と同じ夜景（nightEnv.js）
     const goldMat = coinbox.children[1].material   // children[1] = 金の箱（円盤も同じマテリアルを使う）
-    const metalMat = new THREE.MeshStandardMaterial({ color: goldMat.color, metalness: 1, roughness: 0.2, envMapIntensity: 1.2 })
+    const metalMat = new THREE.MeshStandardMaterial({ color: goldMat.color, metalness: 1, roughness: 0.06, envMapIntensity: 2.0 })
     coinbox.traverse(o => { if (o.isMesh && o.material === goldMat) o.material = metalMat })
     applyNightEnv(renderer, metalMat)
   }
