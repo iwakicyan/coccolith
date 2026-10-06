@@ -684,18 +684,21 @@ export function createCoccolith({ renderer = null } = {}) {
   }
   colliders.push(easel)
 
-  // --- ランドマーク: コイン箱 coinbox (lat=-6.0, lon=100.0) ------------
-  // 柵の囲い（花壇）の中に置く。2.35倍で高さ約2.5m。正面（投入口のある側・ローカル +Z）を北（緯度+方向）へ向ける
+  // --- ランドマーク: コイン箱 coinbox (lat=-6.0, lon=100.314) ------------
+  // 柵の囲い（花壇）の凹みに置く（柵にめり込まないよう lon=100.0 から東へ 2m ずらす）。2.35倍で高さ約2.5m
+  // 正面（投入口のある側・ローカル +Z）を東（経度+方向）へ向ける
   const coinboxWrapper = new THREE.Group()
   const coinbox = createCoinbox()
   coinboxWrapper.add(coinbox)
   coinboxWrapper.scale.setScalar(2.35)
-  placeOnSurface(group, coinboxWrapper, -6.0, 100.0, R_C + LAND_LIFT - 0.1)
+  const COINBOX_LON = 100.0 + THREE.MathUtils.radToDeg(2 / ((R_C + LAND_LIFT) * Math.cos(THREE.MathUtils.degToRad(6.0))))   // 東へ 2m
+  placeOnSurface(group, coinboxWrapper, -6.0, COINBOX_LON, R_C + LAND_LIFT - 0.1)
   {
-    const n = coinboxWrapper.position.clone().normalize()
-    const north = new THREE.Vector3(0, 1, 0).addScaledVector(n, -n.y)
+    const east = new THREE.Object3D()
+    placeOnSurface(new THREE.Group(), east, -6.0, COINBOX_LON + 1, coinboxWrapper.position.length())
+    const toEast = east.position.sub(coinboxWrapper.position)
       .applyQuaternion(coinboxWrapper.quaternion.clone().invert())
-    coinbox.rotation.y = Math.atan2(north.x, north.z)
+    coinbox.rotation.y = Math.atan2(toEast.x, toEast.z)
   }
   colliders.push(coinbox)
 
