@@ -11,6 +11,7 @@ import { createSaku1, createSaku1Corner, SAKU1 } from '../my-3d-parts/landmark/s
 import { createKaidanPalace } from '../my-3d-parts/landmark/kaidan_palace.js'
 import { createEasel } from '../my-3d-parts/landmark/easel.js'
 import { createBridge01 } from '../my-3d-parts/landmark/bridge01.js'
+import { createCoinbox } from '../my-3d-parts/landmark/coinbox.js'
 import { addDoorGlow } from './doorGlow.js'
 import { openPixelScene } from './pixelScene.js'
 import { TREEHOUSE_PIXEL_LAYERS, TREEHOUSE_PIXEL_TEXT } from './pixelArt/treehouse.js'
@@ -682,6 +683,21 @@ export function createCoccolith({ renderer = null } = {}) {
     })
   }
   colliders.push(easel)
+
+  // --- ランドマーク: コイン箱 coinbox (lat=-6.0, lon=100.0) ------------
+  // 柵の囲い（花壇）の中に置く。2.35倍で高さ約2.5m。正面（投入口のある側・ローカル +Z）を北（緯度+方向）へ向ける
+  const coinboxWrapper = new THREE.Group()
+  const coinbox = createCoinbox()
+  coinboxWrapper.add(coinbox)
+  coinboxWrapper.scale.setScalar(2.35)
+  placeOnSurface(group, coinboxWrapper, -6.0, 100.0, R_C + LAND_LIFT - 0.1)
+  {
+    const n = coinboxWrapper.position.clone().normalize()
+    const north = new THREE.Vector3(0, 1, 0).addScaledVector(n, -n.y)
+      .applyQuaternion(coinboxWrapper.quaternion.clone().invert())
+    coinbox.rotation.y = Math.atan2(north.x, north.z)
+  }
+  colliders.push(coinbox)
 
   // --- ランドマーク: 橋 bridge01 ×2 ------------
   // 3倍で地面から6m出る、全長約44m。歩く向き（ローカル +Z）を北（緯度+方向）へ向ける
