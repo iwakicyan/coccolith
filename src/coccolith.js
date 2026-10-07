@@ -130,6 +130,59 @@ function arcDistToSeg(px, py, pz, { ax, ay, az, bx, by, bz, gnx, gny, gnz }) {
   return Math.min(dA, dB)
 }
 
+// 緯度経度（度）→ 球面上の単位ベクトル
+function dirOf(lat, lon) {
+  const phi   = (90 - lat)  * Math.PI / 180
+  const theta = (lon + 180) * Math.PI / 180
+  return new THREE.Vector3(Math.sin(phi) * Math.cos(theta), Math.cos(phi), Math.sin(phi) * Math.sin(theta))
+}
+
+// 陸地判定のノイズ（LAND_THRESHOLD 以上が陸）。地形・岩・草地で同じ式を使う
+// オクターブ重ね: 低周波で大陸形状、高周波で細かい起伏
+function landNoise(noise3D, nx, ny, nz) {
+  return noise3D(nx * 1.8, ny * 1.8, nz * 1.8) * 0.7
+       + noise3D(nx * 4.2, ny * 4.2, nz * 4.2) * 0.2
+       + noise3D(nx * 9.0, ny * 9.0, nz * 9.0) * 0.1
+}
+
+// --- 山: 中心から 1段=HILL_STEP m 幅の同心円ごとに steps[i] m 持ち上げる ---
+const HILL_STEP = 35
+const HILLS = [
+  { lat: -13.4, lon: -137.4, steps: [20, 6] },       // 山A
+  { lat: -10.5, lon: -171.0, steps: [9, 6] },        // 山B
+  { lat: -53.0, lon:  -44.8, steps: [20, 20, 10] },  // 山C
+  { lat:  67.9, lon: -123.2, steps: [12, 6] },       // 山D
+  { lat:  62.0, lon: -101.4, steps: [16, 8, 6] },    // 山E
+  { lat: -12.2, lon:  -32.7, steps: [16, 8] },       // 山F
+  { lat: -28.2, lon:  -40.6, steps: [10] },          // 山G
+].map(h => ({ ...h, dir: dirOf(h.lat, h.lon) }))
+
+// 単位ベクトル (nx,ny,nz) の地点の山の持ち上げ量 (m)。山が重なるところは高い方
+function hillLiftAt(nx, ny, nz) {
+  let lift = 0
+  for (const { dir, steps } of HILLS) {
+    const arc = R_C * Math.acos(Math.max(-1, Math.min(1, nx * dir.x + ny * dir.y + nz * dir.z)))
+    lift = Math.max(lift, steps[Math.floor(arc / HILL_STEP)] ?? 0)
+  }
+  return lift
+}
+
+// placeOnSurface で置いた wrapper の中で、ローカル +Z を北（緯度+方向）へ向ける Y 回転の角度
+function northAngle(wrapper) {
+  const n = wrapper.position.clone().normalize()
+  const north = new THREE.Vector3(0, 1, 0).addScaledVector(n, -n.y)
+    .applyQuaternion(wrapper.quaternion.clone().invert())
+  return Math.atan2(north.x, north.z)
+}
+
+// placeOnSurface で置いた wrapper の中で、ローカル +Z を (lat, lon) の地点へ向ける Y 回転の角度
+function headingTo(wrapper, lat, lon) {
+  const p = new THREE.Object3D()
+  placeOnSurface(new THREE.Group(), p, lat, lon, wrapper.position.length())
+  const to = p.position.sub(wrapper.position).applyQuaternion(wrapper.quaternion.clone().invert())
+  return Math.atan2(to.x, to.z)
+}
+
 // { group, terrainMeshes } を返す
 // terrainMeshes: レイキャスト対象メッシュ（山などを追加する時はここに push する）
 // renderer: 金属の映り込み用 envMap を作るのに使う（省略時は映り込みなし）
@@ -139,54 +192,6 @@ export function createCoccolith({ renderer = null } = {}) {
   const colliders = []   // sabちゃんが侵入できない建物（userData.footprint を持つ Object3D）
 
   const noise3D = createNoise3D(Alea('coccolith'))
-
-  // --- 山定義: 1段=35m幅 ---
-  const HILL_STEP = 35
-
-  // 山A: lat:-13.4° lon:-137.4° / 頂点20・中段6
-  const hillADir = new THREE.Vector3(
-    Math.sin((90 - (-13.4)) * Math.PI / 180) * Math.cos((-137.4 + 180) * Math.PI / 180),
-    Math.cos((90 - (-13.4)) * Math.PI / 180),
-    Math.sin((90 - (-13.4)) * Math.PI / 180) * Math.sin((-137.4 + 180) * Math.PI / 180),
-  )
-
-  // 山B: lat:-10.5° lon:-171.0° / 頂点9・中段6
-  const hillBDir = new THREE.Vector3(
-    Math.sin((90 - (-10.5)) * Math.PI / 180) * Math.cos((-171.0 + 180) * Math.PI / 180),
-    Math.cos((90 - (-10.5)) * Math.PI / 180),
-    Math.sin((90 - (-10.5)) * Math.PI / 180) * Math.sin((-171.0 + 180) * Math.PI / 180),
-  )
-
-  // 山C: lat:-53.0° lon:-44.8° / 3段・頂点20・中断1 20・中断3 10
-  // 山D: lat:67.9° lon:-123.2° / 2段・頂点12・中断6
-  // 山E: lat:62.0° lon:-101.4° / 3段・頂点16・中断1 8・中断2 6
-  const hillCDir = new THREE.Vector3(
-    Math.sin((90 - (-53.0)) * Math.PI / 180) * Math.cos((-44.8 + 180) * Math.PI / 180),
-    Math.cos((90 - (-53.0)) * Math.PI / 180),
-    Math.sin((90 - (-53.0)) * Math.PI / 180) * Math.sin((-44.8 + 180) * Math.PI / 180),
-  )
-  const hillDDir = new THREE.Vector3(
-    Math.sin((90 - 67.9)    * Math.PI / 180) * Math.cos((-123.2 + 180) * Math.PI / 180),
-    Math.cos((90 - 67.9)    * Math.PI / 180),
-    Math.sin((90 - 67.9)    * Math.PI / 180) * Math.sin((-123.2 + 180) * Math.PI / 180),
-  )
-  const hillEDir = new THREE.Vector3(
-    Math.sin((90 - 62.0)    * Math.PI / 180) * Math.cos((-101.4 + 180) * Math.PI / 180),
-    Math.cos((90 - 62.0)    * Math.PI / 180),
-    Math.sin((90 - 62.0)    * Math.PI / 180) * Math.sin((-101.4 + 180) * Math.PI / 180),
-  )
-  // 山F: lat:-12.2° lon:-32.7° / 2段・頂上16・中段8
-  const hillFDir = new THREE.Vector3(
-    Math.sin((90 - (-12.2)) * Math.PI / 180) * Math.cos((-32.7 + 180) * Math.PI / 180),
-    Math.cos((90 - (-12.2)) * Math.PI / 180),
-    Math.sin((90 - (-12.2)) * Math.PI / 180) * Math.sin((-32.7 + 180) * Math.PI / 180),
-  )
-  // 山G: lat:-28.2° lon:-40.6° / 1段・10m
-  const hillGDir = new THREE.Vector3(
-    Math.sin((90 - (-28.2)) * Math.PI / 180) * Math.cos((-40.6 + 180) * Math.PI / 180),
-    Math.cos((90 - (-28.2)) * Math.PI / 180),
-    Math.sin((90 - (-28.2)) * Math.PI / 180) * Math.sin((-40.6 + 180) * Math.PI / 180),
-  )
 
   // --- 地表メッシュ -------------------------------------------
   const geo = new THREE.SphereGeometry(R_C, 64, 64)
@@ -222,10 +227,7 @@ export function createCoccolith({ renderer = null } = {}) {
     const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i)
     const nx = x / R_C, ny = y / R_C, nz = z / R_C
 
-    // オクターブ重ね: 低周波で大陸形状、高周波で細かい起伏
-    const n = noise3D(nx * 1.8, ny * 1.8, nz * 1.8) * 0.7
-            + noise3D(nx * 4.2, ny * 4.2, nz * 4.2) * 0.2
-            + noise3D(nx * 9.0, ny * 9.0, nz * 9.0) * 0.1
+    const n = landNoise(noise3D, nx, ny, nz)
 
     // 赤道面(y=0)から±5m 以内は川として強制的に海扱い
     const isRiver = Math.abs(y) < 6
@@ -233,43 +235,7 @@ export function createCoccolith({ renderer = null } = {}) {
     const dNorth = Math.sqrt(x*x + (y-R_C)*(y-R_C) + z*z)
     const dSouth = Math.sqrt(x*x + (y+R_C)*(y+R_C) + z*z)
     const isPole = dNorth < 50 || dSouth < 50
-    const arcDistA = R_C * Math.acos(Math.max(-1, Math.min(1, nx * hillADir.x + ny * hillADir.y + nz * hillADir.z)))
-    const liftA    = arcDistA < HILL_STEP     ? 20
-                   : arcDistA < HILL_STEP * 2 ? 6
-                   : 0
-
-    const arcDistB = R_C * Math.acos(Math.max(-1, Math.min(1, nx * hillBDir.x + ny * hillBDir.y + nz * hillBDir.z)))
-    const liftB    = arcDistB < HILL_STEP     ? 9
-                   : arcDistB < HILL_STEP * 2 ? 6
-                   : 0
-
-    const arcDistC = R_C * Math.acos(Math.max(-1, Math.min(1, nx * hillCDir.x + ny * hillCDir.y + nz * hillCDir.z)))
-    const liftC    = arcDistC < HILL_STEP     ? 20
-                   : arcDistC < HILL_STEP * 2 ? 20
-                   : arcDistC < HILL_STEP * 3 ? 10
-                   : 0
-
-    const arcDistD = R_C * Math.acos(Math.max(-1, Math.min(1, nx * hillDDir.x + ny * hillDDir.y + nz * hillDDir.z)))
-    const liftD    = arcDistD < HILL_STEP     ? 12
-                   : arcDistD < HILL_STEP * 2 ? 6
-                   : 0
-
-    const arcDistE = R_C * Math.acos(Math.max(-1, Math.min(1, nx * hillEDir.x + ny * hillEDir.y + nz * hillEDir.z)))
-    const liftE    = arcDistE < HILL_STEP     ? 16
-                   : arcDistE < HILL_STEP * 2 ? 8
-                   : arcDistE < HILL_STEP * 3 ? 6
-                   : 0
-
-    const arcDistF = R_C * Math.acos(Math.max(-1, Math.min(1, nx * hillFDir.x + ny * hillFDir.y + nz * hillFDir.z)))
-    const liftF    = arcDistF < HILL_STEP     ? 16
-                   : arcDistF < HILL_STEP * 2 ? 8
-                   : 0
-
-    const arcDistG = R_C * Math.acos(Math.max(-1, Math.min(1, nx * hillGDir.x + ny * hillGDir.y + nz * hillGDir.z)))
-    const liftG    = arcDistG < HILL_STEP     ? 10
-                   : 0
-
-    const hillLift = Math.max(liftA, liftB, liftC, liftD, liftE, liftF, liftG)
+    const hillLift = hillLiftAt(nx, ny, nz)
 
     const isLand = (n >= LAND_THRESHOLD && !isRiver) || isPole || hillLift > 0
     const lift   = isLand ? LAND_LIFT : 0
@@ -441,34 +407,11 @@ export function createCoccolith({ renderer = null } = {}) {
   const tofu = createTofuHouse()
   tofuWrapper.add(tofu)
   placeOnSurface(group, tofuWrapper, -45.0, 150.0, R_C + LAND_LIFT - 0.3)
-  {
-    const n = tofuWrapper.position.clone().normalize()
-    const north = new THREE.Vector3(0, 1, 0).addScaledVector(n, -n.y)
-      .applyQuaternion(tofuWrapper.quaternion.clone().invert())
-    tofu.rotation.y = Math.atan2(north.x, north.z)
-  }
+  tofu.rotation.y = northAngle(tofuWrapper)
   colliders.push(tofu)
 
   // --- ランドマーク: Materis 1〜5 × 各2 ---------------------
   // Route1/2 ウェイポイント（陸地確定）をアンカーに、シード文字列で ±1° ジッター
-
-  // 地形メッシュと同じ山の計算式で hillLift を返す
-  const _hillLiftAt = (lat, lon) => {
-    const phi = (90 - lat) * Math.PI / 180
-    const theta = (lon + 180) * Math.PI / 180
-    const nx = Math.sin(phi) * Math.cos(theta)
-    const ny = Math.cos(phi)
-    const nz = Math.sin(phi) * Math.sin(theta)
-    const arc = (dir) => R_C * Math.acos(Math.max(-1, Math.min(1, nx * dir.x + ny * dir.y + nz * dir.z)))
-    const arcA = arc(hillADir); const liftA = arcA < HILL_STEP ? 20 : arcA < HILL_STEP * 2 ? 6  : 0
-    const arcB = arc(hillBDir); const liftB = arcB < HILL_STEP ? 9  : arcB < HILL_STEP * 2 ? 6  : 0
-    const arcC = arc(hillCDir); const liftC = arcC < HILL_STEP ? 20 : arcC < HILL_STEP * 2 ? 20 : arcC < HILL_STEP * 3 ? 10 : 0
-    const arcD = arc(hillDDir); const liftD = arcD < HILL_STEP ? 12 : arcD < HILL_STEP * 2 ? 6  : 0
-    const arcE = arc(hillEDir); const liftE = arcE < HILL_STEP ? 16 : arcE < HILL_STEP * 2 ? 8  : arcE < HILL_STEP * 3 ? 6  : 0
-    const arcF = arc(hillFDir); const liftF = arcF < HILL_STEP ? 16 : arcF < HILL_STEP * 2 ? 8  : 0
-    const arcG = arc(hillGDir); const liftG = arcG < HILL_STEP ? 10 : 0
-    return Math.max(liftA, liftB, liftC, liftD, liftE, liftF, liftG)
-  }
 
   const materisDefs = [
     { n: 1, seeds: ['materis-1a', 'materis-1b'], anchors: [{ lat:  4.0, lon:  18.0 }, { lat: 33.5, lon:  -1.0 }] },
@@ -485,7 +428,8 @@ export function createCoccolith({ renderer = null } = {}) {
       const lon = anchors[i].lon + (rng() - 0.5) * 2
       const w = new THREE.Group()
       w.add(_materisCreators[n]())
-      placeOnSurface(group, w, lat, lon, R_C + LAND_LIFT + _hillLiftAt(lat, lon) + 5.0)
+      const d = dirOf(lat, lon)
+      placeOnSurface(group, w, lat, lon, R_C + LAND_LIFT + hillLiftAt(d.x, d.y, d.z) + 5.0)
     }
   }
 
@@ -521,12 +465,7 @@ export function createCoccolith({ renderer = null } = {}) {
   touWrapper.add(tou)
   touWrapper.scale.setScalar(2)
   placeOnSurface(group, touWrapper, -8.4, 113.8, R_C + LAND_LIFT - 0.8)
-  {
-    const n = touWrapper.position.clone().normalize()
-    const north = new THREE.Vector3(0, 1, 0).addScaledVector(n, -n.y)
-      .applyQuaternion(touWrapper.quaternion.clone().invert())
-    tou.rotation.y = Math.atan2(north.x, north.z) - Math.PI / 4 + Math.PI / 2
-  }
+  tou.rotation.y = northAngle(touWrapper) - Math.PI / 4 + Math.PI / 2
   colliders.push(tou)
 
   // --- ランドマーク: ツリーハウス (lat=53.0, lon=-171.0) -----------
@@ -559,12 +498,7 @@ export function createCoccolith({ renderer = null } = {}) {
   kanbanWrapper.add(kanban)
   kanbanWrapper.scale.setScalar(16.7)
   placeOnSurface(group, kanbanWrapper, 83.0, -160.0, R_C + LAND_LIFT - 2.0)
-  {
-    const n = kanbanWrapper.position.clone().normalize()
-    const north = new THREE.Vector3(0, 1, 0).addScaledVector(n, -n.y)
-      .applyQuaternion(kanbanWrapper.quaternion.clone().invert())
-    kanban.rotation.y = Math.atan2(north.x, north.z)
-  }
+  kanban.rotation.y = northAngle(kanbanWrapper)
   colliders.push(kanban)
   {
     // フレーム（黒板以外の板）をメタリックにする。映り込みは看板まわりの夜景（nightEnv.js）
@@ -593,9 +527,7 @@ export function createCoccolith({ renderer = null } = {}) {
     sakuWrapper.scale.setScalar(3.6)
     placeOnSurface(group, sakuWrapper, -5.6, 100.0, SAKU_RADIUS)
     const n0 = sakuWrapper.position.clone().normalize()
-    const north = new THREE.Vector3(0, 1, 0).addScaledVector(n0, -n0.y)
-      .applyQuaternion(sakuWrapper.quaternion.clone().invert())
-    sakuField.rotation.y = Math.atan2(north.x, north.z) + Math.PI
+    sakuField.rotation.y = northAngle(sakuWrapper) + Math.PI
 
     // 囲いが広く、平らなままだと端が球面から浮く（端で約0.6m）ので、ピースごとに根元を球面へ下ろして法線に合わせて傾ける
     sakuWrapper.updateMatrix()
@@ -624,12 +556,7 @@ export function createCoccolith({ renderer = null } = {}) {
   kaidanWrapper.add(kaidan)
   kaidanWrapper.scale.setScalar(6)
   placeOnSurface(group, kaidanWrapper, 5.8, -128.0, R_C + LAND_LIFT - 1.0)
-  {
-    const n = kaidanWrapper.position.clone().normalize()
-    const north = new THREE.Vector3(0, 1, 0).addScaledVector(n, -n.y)
-      .applyQuaternion(kaidanWrapper.quaternion.clone().invert())
-    kaidan.rotation.y = Math.atan2(north.x, north.z) - Math.PI / 4
-  }
+  kaidan.rotation.y = northAngle(kaidanWrapper) - Math.PI / 4
   colliders.push(kaidan)
 
   // --- ランドマーク: イーゼル easel (lat=-6.6, lon=104.0) ------------
@@ -640,13 +567,7 @@ export function createCoccolith({ renderer = null } = {}) {
   easelWrapper.add(easel)
   easelWrapper.scale.setScalar(2.35)
   placeOnSurface(group, easelWrapper, -6.6, 104.0, R_C + LAND_LIFT - 0.5)
-  {
-    const bed = new THREE.Object3D()
-    placeOnSurface(new THREE.Group(), bed, -5.6, 100.0, easelWrapper.position.length())   // 花壇の中心
-    const away = easelWrapper.position.clone().sub(bed.position)
-      .applyQuaternion(easelWrapper.quaternion.clone().invert())
-    easel.rotation.y = Math.atan2(away.x, away.z)
-  }
+  easel.rotation.y = headingTo(easelWrapper, -5.6, 100.0) + Math.PI   // 花壇の中心の反対
   {
     const canvas = easel.userData.canvas
     addDoorGlow(canvas)
@@ -696,13 +617,7 @@ export function createCoccolith({ renderer = null } = {}) {
   const COINBOX_SINK = 0.1   // 地面にめり込ませる量 (m)
   const COINBOX_LON = 100.0 + THREE.MathUtils.radToDeg(2 / ((R_C + LAND_LIFT) * Math.cos(THREE.MathUtils.degToRad(6.0))))   // 東へ 2m
   placeOnSurface(group, coinboxWrapper, -6.0, COINBOX_LON, R_C + LAND_LIFT - COINBOX_SINK)
-  {
-    const east = new THREE.Object3D()
-    placeOnSurface(new THREE.Group(), east, -6.0, COINBOX_LON + 1, coinboxWrapper.position.length())
-    const toEast = east.position.sub(coinboxWrapper.position)
-      .applyQuaternion(coinboxWrapper.quaternion.clone().invert())
-    coinbox.rotation.y = Math.atan2(toEast.x, toEast.z)
-  }
+  coinbox.rotation.y = headingTo(coinboxWrapper, -6.0, COINBOX_LON + 1)
   {
     // 金色の部分（箱と投入口の円盤）をメタリックにする。映り込みはコイン・看板と同じ夜景（nightEnv.js）
     const goldMat = coinbox.children[1].material   // children[1] = 金の箱（円盤も同じマテリアルを使う）
@@ -729,13 +644,7 @@ export function createCoccolith({ renderer = null } = {}) {
   sshallWrapper.scale.setScalar(2)
   const SSHALL_SINK = 1.0   // 地面にめり込ませる量 (m)
   placeOnSurface(group, sshallWrapper, 27.0, 161.0, R_C + LAND_LIFT - SSHALL_SINK)
-  {
-    const west = new THREE.Object3D()
-    placeOnSurface(new THREE.Group(), west, 27.0, 160.0, sshallWrapper.position.length())
-    const toWest = west.position.sub(sshallWrapper.position)
-      .applyQuaternion(sshallWrapper.quaternion.clone().invert())
-    sshall.rotation.y = Math.atan2(toWest.x, toWest.z)
-  }
+  sshall.rotation.y = headingTo(sshallWrapper, 27.0, 160.0)
   colliders.push(...sshall.userData.colliders)
   // 扉: 近づくと輪郭が光り、タップで室内へ（main.js の _doors、室内は src/interiors/sshall.js）。正面の棟の当たり判定に付ける
   {
@@ -761,11 +670,8 @@ export function createCoccolith({ renderer = null } = {}) {
     wrapper.add(bridge)
     wrapper.scale.setScalar(BRIDGE_SCALE)
     placeOnSurface(group, wrapper, lat, lon, R_C + LAND_LIFT - sink)
-    const n = wrapper.position.clone().normalize()
-    const north = new THREE.Vector3(0, 1, 0).addScaledVector(n, -n.y)
-      .applyQuaternion(wrapper.quaternion.clone().invert())
     bridge.rotation.order = 'YXZ'   // 橋のローカル X 軸まわりに傾けてから向きを回す
-    bridge.rotation.y = Math.atan2(north.x, north.z)
+    bridge.rotation.y = northAngle(wrapper)
     bridge.rotation.x = THREE.MathUtils.degToRad(tiltNorth)
     terrainMeshes.push(...bridge.userData.walkable)
     colliders.push(...bridge.userData.rails)   // 両側の柱の列を手すりにして、橋の横から落ちないようにする
@@ -785,10 +691,7 @@ export function createCoccolith({ renderer = null } = {}) {
       const lat = lat0 + THREE.MathUtils.radToDeg(north / R_G)
       const lon = lon0 + THREE.MathUtils.radToDeg(east / (R_G * Math.cos(THREE.MathUtils.degToRad(lat))))
       placeOnSurface(group, dote, lat, lon, R_G)
-      const n = dote.position.clone().normalize()
-      const northDir = new THREE.Vector3(0, 1, 0).addScaledVector(n, -n.y)
-        .applyQuaternion(dote.quaternion.clone().invert())
-      dote.rotateY(Math.atan2(northDir.x, northDir.z))
+      dote.rotateY(northAngle(dote))
       terrainMeshes.push(dote.children[0])   // children[0] = 土手のメッシュ
     }
     const [c0, s1, s2, e1] = [0, 0, 0, 0].map(() => createDote({ tsubo: 40 }))
@@ -916,17 +819,10 @@ function createIslandGFRocks(noise3D) {
       const lat = 3  + rng() * 22   // 3°〜25°N
       const lon = 90 + rng() * 6    // 90°〜96°E 均一
 
-      const phi   = (90 - lat) * Math.PI / 180
-      const theta = (lon + 180) * Math.PI / 180
-      const nx = Math.sin(phi) * Math.cos(theta)
-      const ny = Math.cos(phi)
-      const nz = Math.sin(phi) * Math.sin(theta)
+      const { x: nx, y: ny, z: nz } = dirOf(lat, lon)
 
       // 地形と同じノイズ式で陸地判定
-      const n = noise3D(nx * 1.8, ny * 1.8, nz * 1.8) * 0.7
-              + noise3D(nx * 4.2, ny * 4.2, nz * 4.2) * 0.2
-              + noise3D(nx * 9.0, ny * 9.0, nz * 9.0) * 0.1
-      if (n < LAND_THRESHOLD || Math.abs(ny) < 5 / R_C) continue
+      if (landNoise(noise3D, nx, ny, nz) < LAND_THRESHOLD || Math.abs(ny) < 5 / R_C) continue
 
       // 低周波ノイズで分布を偏らせる（棄却サンプリング）
       // 周波数を上げるとクラスターが細かくなる
@@ -1284,9 +1180,8 @@ function createGrassField(poly, noise3D, kind) {
   // 20m = (20/R_C)*(180/π) ≈ 3.2° のアーク角
   const COAST_DEG = (20 / R_C) * (180 / Math.PI)
   const landN = (plat, plon) => {
-    const pp = (90 - plat) * DEG, pt = (plon + 180) * DEG
-    const x = Math.sin(pp) * Math.cos(pt), y = Math.cos(pp), z = Math.sin(pp) * Math.sin(pt)
-    return noise3D(x*1.8,y*1.8,z*1.8)*0.7 + noise3D(x*4.2,y*4.2,z*4.2)*0.2 + noise3D(x*9.0,y*9.0,z*9.0)*0.1
+    const d = dirOf(plat, plon)
+    return landNoise(noise3D, d.x, d.y, d.z)
   }
 
   // グリッド位置を収集（境界外EDGE_WIDTH分まで走査）
@@ -1316,10 +1211,7 @@ function createGrassField(poly, noise3D, kind) {
       const nz    = Math.sin(phi) * Math.sin(theta)
 
       // 地形と同じノイズ式で陸地判定 — 海の点はスキップ
-      const n = noise3D(nx * 1.8, ny * 1.8, nz * 1.8) * 0.7
-              + noise3D(nx * 4.2, ny * 4.2, nz * 4.2) * 0.2
-              + noise3D(nx * 9.0, ny * 9.0, nz * 9.0) * 0.1
-      if (n < LAND_THRESHOLD) continue
+      if (landNoise(noise3D, nx, ny, nz) < LAND_THRESHOLD) continue
 
       // 4近傍20m以内に海があれば海岸バッファとしてスキップ
       if (landN(lat + COAST_DEG, lon        ) < LAND_THRESHOLD ||
