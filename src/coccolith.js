@@ -964,7 +964,7 @@ function createSakuField() {
     const geo = new THREE.ExtrudeGeometry(shape, { depth: SW, bevelEnabled: false })
     geo.translate(0, 0, -SW / 2)
     const fenceMesh = field.children[0].getObjectByProperty('isMesh', true)
-    const line = fenceMesh.children[0]
+    const line = field.children[0].getObjectByProperty('isLineSegments', true)   // 柵の輪郭線（ピースの中でまとめてある）
     const stairs = new THREE.Mesh(geo, fenceMesh.material)
     stairs.name = '階段'
     stairs.castShadow = true
