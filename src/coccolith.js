@@ -41,7 +41,8 @@ const LAND_COLOR_N    = 0x337367 // y軸+側（北半球）陸地色
 const ISLAND_GF_COLOR = 0x90876D // 島[GF] (lat 0-36°N, lon 72-108°E)
 const SEA_COLOR       = 0x1a4a52 // 海底色
 const MOUNTAIN_COLOR  = 0x9D9899 // 山頂（hillLift最大値）
-const R_OCEAN      = 364      // 海面球の半径 (m)
+export const R_OCEAN = 364      // 海面球の半径 (m)
+const SEA_FLOOR_DROP = 2        // 海底を R_C からさらに下げる量 (m)  → 海底半径 356m、海の深さ 8m
 const OCEAN_COLOR_A = 0x629ec1
 const OCEAN_COLOR_B = 0x5782B8
 
@@ -238,7 +239,7 @@ export function createCoccolith({ renderer = null } = {}) {
     const hillLift = hillLiftAt(nx, ny, nz)
 
     const isLand = (n >= LAND_THRESHOLD && !isRiver) || isPole || hillLift > 0
-    const lift   = isLand ? LAND_LIFT : 0
+    const lift   = isLand ? LAND_LIFT : -SEA_FLOOR_DROP
     const len    = Math.sqrt(x * x + y * y + z * z)
     const scale  = (R_C + lift + hillLift) / len
 
@@ -630,7 +631,7 @@ export function createCoccolith({ renderer = null } = {}) {
     const base = coinbox.children[0]   // children[0] = 茶色の台（BoxGeometry、中心が台の真ん中）
     const s = coinboxWrapper.scale.x
     addGroundGlow(base, { y: -base.geometry.parameters.height / 2 + COINBOX_SINK / s, pad: 0.1 / s, band: 0.12 / s })
-    coinbox.userData.glowSpot = { mesh: base, local: new THREE.Vector3(), reach: 4.5 }   // local: coinbox のローカル座標
+    coinbox.userData.glowSpot = { mesh: base, local: new THREE.Vector3(), reach: 4.5, coinbox: true }   // local: coinbox のローカル座標。coinbox: Enter でコインを 1 枚入れる（main.js）
   }
   colliders.push(coinbox)
 

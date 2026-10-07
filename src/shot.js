@@ -6,7 +6,7 @@ import * as THREE from 'three'
 //  ?lat=33.5&lon=-1&heading=120&pitch=10&light=1
 //    その地点・向きから始める（heading: 北=0 東=90 の度、pitch: カメラの見上げ角の度、light: sabちゃんのライト 1=ON 0=OFF）
 //  ?shot=1
-//    下のコントローラーを隠し、指定がない値はランダムにして（夜側ではライトも SHOT_LIGHT_CHANCE の確率で点ける）、
+//    下のコントローラーを隠し、指定がない値はランダムにして（地点は海中を避け、夜側ではライトも SHOT_LIGHT_CHANCE の確率で点ける）、
 //    画像の読み込みと起動演出が済んだら window.__shot.ready を true にする（scripts/shot.mjs が待って撮る）
 //
 //  画像の読み込み待ちのため、ほかのモジュールより先に import する
@@ -15,6 +15,7 @@ import * as THREE from 'three'
 const SHOT_FRAMES = 90   // 起動演出（コイン）が終わるまで待つフレーム数（30fps で 3 秒）
 const SHOT_LIGHT_CHANCE = 0.5   // 撮影モードで夜側にいるとき、ライトを点けて撮る確率
 const SHOT_NIGHT_X      = -0.2  // pDir.x がこれより小さければ夜側（太陽は +X。昼夜の境目のまだ明るいところは除く）
+const SHOT_SPOT_TRIES   = 200   // 海中を避けて地点を引き直す回数の上限
 
 const params = new URLSearchParams(location.search)
 const isShot = params.has('shot')
@@ -28,9 +29,14 @@ const round2 = (v) => Math.round(v * 100) / 100
 // 撮った場所をそのままリンクにできるよう、小数 2 桁に丸めた値で立たせる
 let lat = num('lat'), lon = num('lon'), heading = num('heading'), pitchDeg = num('pitch')
 const lightParam = num('light')
+const randomLat = () => round2(Math.asin(Math.random() * 2 - 1) * 180 / Math.PI)
+const randomLon = () => round2(Math.random() * 360 - 180)
+const randomSpot = isShot && (lat === null || lon === null)   // 地点をランダムに選んだか（海中なら applyStartPose で引き直す）
+const fixedLat = lat, fixedLon = lon
+let spotTriesLeft = SHOT_SPOT_TRIES
 if (isShot) {
-  lat      ??= round2(Math.asin(Math.random() * 2 - 1) * 180 / Math.PI)
-  lon      ??= round2(Math.random() * 360 - 180)
+  lat      ??= randomLat()
+  lon      ??= randomLon()
   heading  ??= round2(Math.random() * 360)
   pitchDeg ??= 'random'
 }
@@ -53,11 +59,18 @@ window.addEventListener('load', () => { pageLoaded = true })
 
 // 立ち位置を pDir・pFwd に入れ、カメラの見上げ角 (rad) を返す（指定がなければ null）
 // pitchMin / pitchMax: main.js のピッチの可動範囲 (rad)
-export function applyStartPose(pDir, pFwd, pitchMin, pitchMax) {
+// randomPitchMax: 撮影モードでランダムに選ぶピッチの上限 (rad)。視線が水平になる値を渡し、地面ばかり写るのを避ける
+// isUnderwater(dir): その地点が海中か。撮影モードでランダムに選んだ地点が海中なら引き直す
+export function applyStartPose(pDir, pFwd, pitchMin, pitchMax, randomPitchMax = pitchMax, isUnderwater = () => false) {
   if (lat !== null && lon !== null) {
     const la = THREE.MathUtils.degToRad(lat)
     const th = THREE.MathUtils.degToRad(lon + 180)   // HUD の lon と同じ向き
     pDir.set(Math.cos(la) * Math.cos(th), Math.sin(la), Math.cos(la) * Math.sin(th))
+    if (randomSpot && isUnderwater(pDir) && --spotTriesLeft > 0) {
+      lat = fixedLat ?? randomLat()
+      lon = fixedLon ?? randomLon()
+      return applyStartPose(pDir, pFwd, pitchMin, pitchMax, randomPitchMax, isUnderwater)
+    }
     if (heading !== null) {
       // 北 = lat が増える向き、東 = lon が増える向き
       const north = new THREE.Vector3(-Math.sin(la) * Math.cos(th), Math.cos(la), -Math.sin(la) * Math.sin(th))
@@ -70,7 +83,7 @@ export function applyStartPose(pDir, pFwd, pitchMin, pitchMax) {
     }
     pFwd.normalize()
   }
-  if (pitchDeg === 'random') pitchDeg = round2(THREE.MathUtils.radToDeg(pitchMin + Math.random() * (pitchMax - pitchMin)))
+  if (pitchDeg === 'random') pitchDeg = round2(THREE.MathUtils.radToDeg(pitchMin + Math.random() * (randomPitchMax - pitchMin)))
   if (isShot) Object.assign(window.__shot, { lat, lon, heading, pitch: pitchDeg })
   if (pitchDeg === null) return null
   return THREE.MathUtils.clamp(THREE.MathUtils.degToRad(pitchDeg), pitchMin, pitchMax)

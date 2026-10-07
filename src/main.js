@@ -6,7 +6,7 @@ import { initFullscreenButton } from './fullscreen.js'
 import { initSettings, handleInvert, invSign } from './settings.js'
 import { isFlowerCutOpen } from './flowerCut.js'
 import { isPixelSceneOpen } from './pixelScene.js'
-import { createCoccolith } from './coccolith.js'
+import { createCoccolith, R_OCEAN } from './coccolith.js'
 import { createVeth } from './veth.js'
 import { createCloud1, createFlatCloud } from './cloud1.js'
 import { R_C, LAND_LIFT, ORBIT } from './constants.js'
@@ -81,6 +81,7 @@ oceanMesh.receiveShadow = true
 scene.add(coccolith)
 
 const VETH_ORBIT_PERIOD = 2 * 3600            // 2時間（秒）
+const TIDE_SHIFT = 1.5                        // 潮汐: 海面球を veth の方向へずらす量 (m)。veth 側が満潮、反対側が干潮
 const vethOrbitAxis = new THREE.Vector3(0.2, 1, 0).normalize()
 
 const vethOrbitGroup = new THREE.Group()
@@ -217,10 +218,15 @@ function hitGlowSpot(e) {
   _iconRay.setFromCamera(_pointer, camera)
   return _iconRay.intersectObject(g.mesh, false).length > 0 ? g : null
 }
+// 光っているものを使う（タップでも Enter でも同じ）
+function openGlowSpot(g) {
+  g.onTap()
+  for (const k in keys) keys[k] = false   // 別のページを開くので押しっぱなしのキーを離す
+}
 canvas.addEventListener('pointerdown', e => {
   let g
   if (hitDoor(e)) useDoor()
-  else if ((g = hitGlowSpot(e))) { g.onTap(); for (const k in keys) keys[k] = false }   // 別のページを開くので押しっぱなしのキーを離す
+  else if ((g = hitGlowSpot(e))) openGlowSpot(g)
   else if (hitLightIcon(e)) toggleSabLight()
 })
 canvas.addEventListener('pointermove', e => {
@@ -553,6 +559,9 @@ let pitch = 0                          // 視点ピッチ (rad)
 // → デッドゾーン（押しても画面が動かない区間）をなくす
 const PITCH_MAX =  Math.PI * 0.45 - CAM_BASE_ANGLE   //  ≈ +1.064 rad
 const PITCH_MIN = 0.05            - CAM_BASE_ANGLE   //  ≈ -0.300 rad
+// 視線がちょうど水平になる pitch（≈ -0.059 rad）。撮影モードのランダムなピッチはこれより見上げ側から選ぶ
+// 注視点（sabちゃんの胴体）を見る俯角 = CAM_LIFT になる camAngle を解く。PITCH_MIN では視線は約 14° 上を向く
+const PITCH_LEVEL = CAM_LIFT - Math.asin(SAB_FOOT_OFFSET * 0.4 * Math.cos(CAM_LIFT) / CAM_DIST) - CAM_BASE_ANGLE
 
 // --- 俯瞰モード ---------------------------------------------
 let overviewMode = false
@@ -567,7 +576,15 @@ const keys = {}
 
 window.addEventListener('keydown', e => {
   if (isFlowerCutOpen() || isPixelSceneOpen()) return   // 花の切り抜き・ドット絵のページを開いている間はゲームの操作をしない
-  if (e.code === 'Enter' && !e.repeat) { useDoor(); e.preventDefault(); return }
+  if (e.code === 'Enter' && !e.repeat) {
+    // くぐれるドアがあれば出入り、なければ近くで光っているものを使う（キャンバス・ツリーハウスの扉は開く、コイン箱は 1 枚入れる）
+    const g = activeDoorMesh() ? null : nearGlowSpot()
+    if (g?.onTap) openGlowSpot(g)
+    else if (g?.coinbox) coinDrop.dropOne()
+    else useDoor()
+    e.preventDefault()
+    return
+  }
   if (e.code === 'Tab' && (interior || transitioning)) {
     if (interior && !transitioning) setFirstPerson(!firstPerson)
     e.preventDefault()
@@ -631,13 +648,15 @@ function setCoinCount(n) {
 }
 const collectCoin = () => setCoinCount(coinCount + 1)
 // URL で立ち位置の指定があればそこから始める（撮影モードではランダムな地点）
+scene.updateMatrixWorld(true)   // 地表レイキャスト用に初回描画前のワールド行列を確定
+// 地面が満潮の海面より低ければ海中。撮影モードではそういう地点を避ける
+const isUnderwater = dir => getGroundHeight(dir) - 1 < R_OCEAN + TIDE_SHIFT
 {
-  const p = applyStartPose(pDir, pFwd, PITCH_MIN, PITCH_MAX)
+  const p = applyStartPose(pDir, pFwd, PITCH_MIN, PITCH_MAX, PITCH_LEVEL, isUnderwater)
   if (p !== null) pitch = p
   if (startWithLight(pDir)) toggleSabLight()
 }
 const coinIntro = createCoinIntro({ scene, renderer, getGround: dir => getGroundHeight(dir) - 1, onCollect: collectCoin })
-scene.updateMatrixWorld(true)   // 地表レイキャスト用に初回描画前のワールド行列を確定
 coinIntro.start(pDir, pFwd)
 // HUD のコイン数をつかんでコイン箱の投入口へドラッグすると、1 枚入れられる（coinDrop.js）
 const coinDrop = createCoinDrop({
@@ -822,9 +841,9 @@ function animate() {
   veth.rotation.y += 0.003 * k30
   vethOrbitGroup.rotateOnWorldAxis(vethOrbitAxis, (Math.PI * 2 / VETH_ORBIT_PERIOD) * dt)
 
-  // 海面球: veth方向へ1mオフセット（潮汐効果）
+  // 海面球: veth方向へ TIDE_SHIFT ずらす（潮汐効果）
   veth.getWorldPosition(_vethWorldPos)
-  oceanMesh.position.copy(_vethWorldPos).normalize().multiplyScalar(1)
+  oceanMesh.position.copy(_vethWorldPos).normalize().multiplyScalar(TIDE_SHIFT)
 
   // 雲: 地表上を周回（veth 自転と同速）
   cloudGroup.rotateOnWorldAxis(cloudOrbitAxis, 0.00075 * k30)

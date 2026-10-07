@@ -16,7 +16,7 @@ import { COIN_RADIUS, POP_TIME, POP_HEIGHT, SPIN_IDLE } from './coinIntro.js'
 //    getCount: 今の所持数を返す。0 のときはつかめない
 //    onDrop:   投入口に入れたときに呼ばれる（所持数を 1 減らす）
 //    enabled:  入れられる状態か（室内・俯瞰・暗転中は false）
-//  update(dt) を毎フレーム呼ぶ
+//  update(dt) を毎フレーム呼ぶ。dropOne() はドラッグせずに 1 枚入れる（コイン箱の前で Enter を押したとき）
 // ============================================================
 
 const REACH       = 14     // カメラからこの距離までの投入口に入れられる (m)。カメラは sabちゃんの 8m 後ろ
@@ -141,5 +141,14 @@ export function createCoinDrop({ boxEl, scene, camera, renderer, slot, getCount,
     }
   }
 
-  return { update }
+  // ドラッグせずに 1 枚入れる。入れられたら true
+  function dropOne() {
+    if (!canGrab()) return false
+    onDrop()
+    insertCoin()
+    boxEl.classList.toggle('grabbable', canGrab())
+    return true
+  }
+
+  return { update, dropOne }
 }
