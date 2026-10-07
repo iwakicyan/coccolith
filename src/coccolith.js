@@ -12,6 +12,7 @@ import { createKaidanPalace } from '../my-3d-parts/landmark/kaidan_palace.js'
 import { createEasel } from '../my-3d-parts/landmark/easel.js'
 import { createBridge01 } from '../my-3d-parts/landmark/bridge01.js'
 import { createCoinbox } from '../my-3d-parts/landmark/coinbox.js'
+import { createSShall } from '../my-3d-parts/landmark/sshall.js'
 import { addDoorGlow, addGroundGlow } from './doorGlow.js'
 import { openPixelScene } from './pixelScene.js'
 import { TREEHOUSE_PIXEL_LAYERS, TREEHOUSE_PIXEL_TEXT } from './pixelArt/treehouse.js'
@@ -716,6 +717,23 @@ export function createCoccolith({ renderer = null } = {}) {
     coinbox.userData.glowSpot = { mesh: base, local: new THREE.Vector3(), reach: 4.5 }   // local: coinbox のローカル座標
   }
   colliders.push(coinbox)
+
+  // --- ランドマーク: SShall (lat=27.0, lon=161.0) ------------
+  // 2倍で高さ約15m（塔の円錐屋根の先）。原点は塔の中心。正面（扉のある側・ローカル +Z）を西（経度-方向）へ向ける
+  // 当たり判定は棟2つと塔の矩形3つ（userData.colliders）
+  const sshallWrapper = new THREE.Group()
+  const sshall = createSShall()
+  sshallWrapper.add(sshall)
+  sshallWrapper.scale.setScalar(2)
+  placeOnSurface(group, sshallWrapper, 27.0, 161.0, R_C + LAND_LIFT)
+  {
+    const west = new THREE.Object3D()
+    placeOnSurface(new THREE.Group(), west, 27.0, 160.0, sshallWrapper.position.length())
+    const toWest = west.position.sub(sshallWrapper.position)
+      .applyQuaternion(sshallWrapper.quaternion.clone().invert())
+    sshall.rotation.y = Math.atan2(toWest.x, toWest.z)
+  }
+  colliders.push(...sshall.userData.colliders)
 
   // --- ランドマーク: 橋 bridge01 ×2 ------------
   // 3倍で地面から6m出る、全長約44m。歩く向き（ローカル +Z）を北（緯度+方向）へ向ける
