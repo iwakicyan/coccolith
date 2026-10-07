@@ -41,19 +41,36 @@ const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerH
 
 // --- 光源 ---------------------------------------------------
 // 太陽: 真横 (+X方向) 固定
+// 影は sabちゃんのまわり（太陽から見て ±SHADOW_HALF の範囲）だけ描く。惑星全体を覆うと、裏側の草や柵まで毎フレーム影の描画に回って重い
+// 太陽の向きに沿った奥行きは惑星全体のままなので、遠くの塔の長い影も範囲に落ちる分は出る。俯瞰中は惑星全体に広げる
+const SHADOW_MAP  = 1024
+const SHADOW_HALF = 120   // (m)
+const SHADOW_HALF_OVERVIEW = 420
 const sun = new THREE.DirectionalLight(0xfff5e0, 3.0)
 sun.position.set(20000, 0, 0)
 sun.castShadow = true
-sun.shadow.mapSize.width  = 2048
-sun.shadow.mapSize.height = 2048
+sun.shadow.mapSize.width  = SHADOW_MAP
+sun.shadow.mapSize.height = SHADOW_MAP
 sun.shadow.camera.near   = 19600
 sun.shadow.camera.far    = 20400
-sun.shadow.camera.left   = -420
-sun.shadow.camera.right  =  420
-sun.shadow.camera.top    =  420
-sun.shadow.camera.bottom = -420
 sun.shadow.intensity     = 0.2
-scene.add(sun)
+scene.add(sun, sun.target)
+
+// 影の範囲を中心 (y, z)（太陽は +X なので、太陽から見た横・縦は y と z）に合わせる
+// 動くたびに影の縁がちらつかないよう、中心をシャドウマップの 1 ドット単位にそろえる
+function updateSunShadow(cy, cz, half) {
+  const cam = sun.shadow.camera
+  if (cam.right !== half) {
+    cam.left = cam.bottom = -half
+    cam.right = cam.top = half
+    cam.updateProjectionMatrix()
+  }
+  const texel = 2 * half / SHADOW_MAP
+  cy = Math.round(cy / texel) * texel
+  cz = Math.round(cz / texel) * texel
+  sun.position.set(20000, cy, cz)
+  sun.target.position.set(0, cy, cz)
+}
 scene.add(new THREE.AmbientLight(0x334455, 1.0))
 
 
@@ -301,12 +318,16 @@ const raycaster = new THREE.Raycaster()
 // 地表追従: 惑星外側から中心方向にレイを飛ばし、
 // 最初のヒット点（= 最も外側の地表面）の惑星中心からの距離 +1m にカメラを置く。
 // 中心→外向きだと FrontSide マテリアルのバックフェイスカリングに当たるため外→内方向で飛ばす。
+const _groundOrigin = new THREE.Vector3()
+const _groundRayDir = new THREE.Vector3()
+const _groundHits   = []
 function getGroundHeight(dir) {
-  const origin = dir.clone().multiplyScalar((R_C + LAND_LIFT) * 1.5)
-  raycaster.set(origin, dir.clone().negate())
-  const hits = raycaster.intersectObjects(terrainMeshes, false)
-  if (hits.length === 0) return R_C + 1
-  return hits[0].point.length() + 1
+  _groundOrigin.copy(dir).multiplyScalar((R_C + LAND_LIFT) * 1.5)
+  raycaster.set(_groundOrigin, _groundRayDir.copy(dir).negate())
+  _groundHits.length = 0
+  raycaster.intersectObjects(terrainMeshes, false, _groundHits)
+  if (_groundHits.length === 0) return R_C + 1
+  return _groundHits[0].point.length() + 1
 }
 
 // 段差（橋のステップなど）で地面の高さが急に変わったときは、その差を少しずつ埋めて滑らかに乗り上げる。
@@ -626,13 +647,17 @@ const coinDrop = createCoinDrop({
   enabled: () => !transitioning && !overviewMode && !interior,
 })
 
-// pDir（正規化済み球面法線）からグリッドエリアコードを返す
-// 緯度帯 A〜J（南→北）、経度帯 1〜10（西→東）
-function getAreaCode(dir) {
+// 正規化済み球面法線から緯度経度（度）を返す。lon は -180〜180
+function latLonOf(dir) {
   const lat = Math.asin(Math.max(-1, Math.min(1, dir.y))) * 180 / Math.PI
   let theta = Math.atan2(dir.z, dir.x)
   if (theta < 0) theta += Math.PI * 2
-  const lon = theta * 180 / Math.PI - 180  // -180〜180
+  return { lat, lon: theta * 180 / Math.PI - 180 }
+}
+
+// 緯度経度からグリッドエリアコードを返す
+// 緯度帯 A〜J（南→北）、経度帯 1〜10（西→東）
+function getAreaCode(lat, lon) {
   const latIdx = Math.min(9, Math.floor((lat + 90) / 18))
   const lonIdx = Math.min(9, Math.floor((lon + 180) / 36))
   return String.fromCharCode(0x41 + latIdx) + (lonIdx + 1)
@@ -685,6 +710,17 @@ const _crUp   = new THREE.Vector3()
 const _crFwd  = new THREE.Vector3()
 const _crZ    = new THREE.Vector3()
 const _crMat  = new THREE.Matrix4()
+// 毎フレームの計算用（new すると GC でスマホがときどき止まる）
+const _rotM       = new THREE.Matrix4()
+const _sabRight   = new THREE.Vector3()
+const _sabPos     = new THREE.Vector3()
+const _lookTarget = new THREE.Vector3()
+const _ovRayDir   = new THREE.Vector3()
+const _ovN        = new THREE.Vector3()
+const _ovF        = new THREE.Vector3()
+const _ovR        = new THREE.Vector3()
+const _hudCamPos  = new THREE.Vector3()
+let hudReady = false
 
 // sabちゃんの頭の揺れ・鼻とセンサーの明滅（屋外・室内共通）
 function animateSabParts(now) {
@@ -776,12 +812,14 @@ function updateInterior(dt, now, joyYaw, joyPitch) {
 function animate() {
   requestAnimationFrame(animate)
   const now = performance.now()
-  if (now - prev < FRAME_MS) return
+  // rAF の間隔は少しゆらぐので、ぴったり FRAME_MS で比べると 60Hz の画面で 1 フレーム余計に待つことがあり（33ms と 50ms が混ざる）カクつく。少し手前で通す
+  if (now - prev < FRAME_MS - 4) return
   const dt  = Math.min((now - prev) / 1000, 0.05)
   prev = now
+  const k30 = dt * TARGET_FPS   // 30fps のときの 1 フレームぶんを 1 とした進み（下の速さは 30fps で 1 フレームあたりの値）
 
   // veth 自転 + 公転（2時間で1周）
-  veth.rotation.y += 0.003
+  veth.rotation.y += 0.003 * k30
   vethOrbitGroup.rotateOnWorldAxis(vethOrbitAxis, (Math.PI * 2 / VETH_ORBIT_PERIOD) * dt)
 
   // 海面球: veth方向へ1mオフセット（潮汐効果）
@@ -789,14 +827,14 @@ function animate() {
   oceanMesh.position.copy(_vethWorldPos).normalize().multiplyScalar(1)
 
   // 雲: 地表上を周回（veth 自転と同速）
-  cloudGroup.rotateOnWorldAxis(cloudOrbitAxis, 0.00075)
+  cloudGroup.rotateOnWorldAxis(cloudOrbitAxis, 0.00075 * k30)
   for (const { grp, axis, speed } of flatCloudGroups) {
-    grp.rotateOnWorldAxis(axis, speed)
+    grp.rotateOnWorldAxis(axis, speed * k30)
   }
 
   // 雲生き物: 軌道更新 + 向き更新（local +X → 進行方向）
   for (const c of creatures) {
-    c.angle += c.speed
+    c.angle += c.speed * k30
     _crQuat.setFromAxisAngle(c.axis, c.angle)
     _crPos.set(0, CREATURE_H, 0).applyQuaternion(_crQuat)
     c.mesh.position.copy(_crPos)
@@ -834,22 +872,17 @@ function animate() {
     camera.lookAt(0, 0, 0)
 
     // カメラ→惑星中心レイの地表ヒット点に sabちゃんを配置
-    const ovRayDir = new THREE.Vector3(-cx, -cy, -cz).normalize()
-    raycaster.set(new THREE.Vector3(cx, cy, cz), ovRayDir)
-    const ovHits = raycaster.intersectObjects(terrainMeshes, false)
-    if (ovHits.length > 0) {
-      const hp = ovHits[0].point
-      const hn = hp.clone().normalize()
-      let sf = pFwd.clone()
-      sf.addScaledVector(hn, -sf.dot(hn))
-      if (sf.lengthSq() < 1e-6) {
-        sf = new THREE.Vector3(1, 0, 0)
-        sf.addScaledVector(hn, -sf.dot(hn))
-      }
+    raycaster.set(camera.position, _ovRayDir.copy(camera.position).negate().normalize())
+    _groundHits.length = 0
+    raycaster.intersectObjects(terrainMeshes, false, _groundHits)
+    if (_groundHits.length > 0) {
+      const hp = _groundHits[0].point
+      const hn = _ovN.copy(hp).normalize()
+      const sf = _ovF.copy(pFwd).addScaledVector(hn, -pFwd.dot(hn))
+      if (sf.lengthSq() < 1e-6) sf.set(1, 0, 0).addScaledVector(hn, -hn.x)
       sf.normalize()
-      const sr = new THREE.Vector3().crossVectors(hn, sf)
-      sabchan.group.setRotationFromMatrix(new THREE.Matrix4().makeBasis(sr, hn, sf))
-      sabchan.group.position.copy(hn.multiplyScalar(hp.length() + SAB_FOOT_OFFSET))
+      sabchan.group.setRotationFromMatrix(_rotM.makeBasis(_ovR.crossVectors(hn, sf), hn, sf))
+      sabchan.group.position.copy(hn).multiplyScalar(hp.length() + SAB_FOOT_OFFSET)
     }
   } else {
     // --- 通常モード: sabちゃん追従3人称 ---
@@ -859,7 +892,7 @@ function animate() {
     const turnIn = (keys['KeyQ'] ? 1 : 0) - (keys['KeyE'] ? 1 : 0) - joyYaw * invSign(backInv.x)
     if (Math.abs(turnIn) > 0.01) { pFwd.applyAxisAngle(pDir, TURN_SPD * dt * Math.max(-1, Math.min(1, turnIn))); pFwd.normalize() }
 
-    const axisWS = new THREE.Vector3().crossVectors(pDir, pFwd)
+    const axisWS = _sabRight.crossVectors(pDir, pFwd)
     const fbIn = (keys['KeyW'] ? 1 : 0) - (keys['KeyS'] ? 1 : 0) - vJoy.ly
     if (Math.abs(fbIn) > 0.01) { pDir.applyAxisAngle(axisWS, da * Math.max(-1, Math.min(1, fbIn))); pDir.normalize() }
     const lrIn = (keys['KeyD'] ? 1 : 0) - (keys['KeyA'] ? 1 : 0) + vJoy.lx
@@ -877,9 +910,7 @@ function animate() {
 
     // --- sabちゃん配置 ---
     // local Y → pDir (惑星法線=上)、local Z → pFwd (進行方向=前)
-    const sabRight = new THREE.Vector3().crossVectors(pDir, pFwd)
-    const rotM = new THREE.Matrix4().makeBasis(sabRight, pDir, pFwd)
-    sabchan.group.setRotationFromMatrix(rotM)
+    sabchan.group.setRotationFromMatrix(_rotM.makeBasis(_sabRight.crossVectors(pDir, pFwd), pDir, pFwd))
     // 2分に1回、1秒かけてy軸360°スピン
     const spinPhase = (now / 1000) % 120
     if (spinPhase < 1.0) {
@@ -888,24 +919,27 @@ function animate() {
     }
 
     const groundH = getSmoothGroundHeight(pDir, dt)
-    const sabPos  = pDir.clone().multiplyScalar(groundH + SAB_FOOT_OFFSET)
+    const sabPos  = _sabPos.copy(pDir).multiplyScalar(groundH + SAB_FOOT_OFFSET)
     const floatOffset = Math.sin(now * 0.00035) * 0.2
-    sabchan.group.position.copy(pDir.clone().multiplyScalar(groundH + SAB_FOOT_OFFSET + floatOffset))
+    sabchan.group.position.copy(pDir).multiplyScalar(groundH + SAB_FOOT_OFFSET + floatOffset)
 
     animateSabParts(now)
 
     // --- 3人称カメラ ---
     // pitch を仰角オフセットとして使用（上限・下限クランプ）
     const camAngle = Math.max(0.05, Math.min(Math.PI * 0.45, CAM_BASE_ANGLE + pitch))
-    const camOffset = pFwd.clone().multiplyScalar(-CAM_DIST * Math.cos(camAngle))
+    camera.position.copy(sabPos)
+      .addScaledVector(pFwd, -CAM_DIST * Math.cos(camAngle))
       .addScaledVector(pDir, CAM_DIST * Math.sin(camAngle))
-    camera.position.copy(sabPos.clone().add(camOffset))
     camera.up.copy(pDir)
     // 胴体あたり（頭部中心から足方向へ少し）を注視
-    const lookTarget = sabPos.clone().addScaledVector(pDir, -SAB_FOOT_OFFSET * 0.4)
-    camera.lookAt(lookTarget)
+    camera.lookAt(_lookTarget.copy(sabPos).addScaledVector(pDir, -SAB_FOOT_OFFSET * 0.4))
     camera.rotateX(CAM_LIFT)   // 見上げて sabちゃんを画面下寄りに
   }
+
+  // 影の範囲を sabちゃんのまわりへ（俯瞰中は惑星全体、室内は太陽がないので動かさない）
+  if (overviewMode) updateSunShadow(0, 0, SHADOW_HALF_OVERVIEW)
+  else if (!interior) updateSunShadow(sabchan.group.position.y, sabchan.group.position.z, SHADOW_HALF)
 
   // --- 北極霧（y軸頂点から20m以内で発生、35mまでフェード）---
   const polarT = overviewMode ? 0 : Math.max(0, pDir.x)
@@ -924,27 +958,28 @@ function animate() {
 
   // --- HUD ---
   const hudCamPos = overviewMode
-    ? camera.position.clone()
-    : pDir.clone().multiplyScalar(R_C + 1)
+    ? _hudCamPos.copy(camera.position)
+    : _hudCamPos.copy(pDir).multiplyScalar(R_C + 1)
   drawCompass(pDir, pFwd)
-  veth.getWorldPosition(_vethWorldPos)
   drawVethIndicator(hudCamPos, pDir, pFwd, _vethWorldPos)
   {
     // 俯瞰中は画面の中心（カメラの真下 = 俯瞰を抜けたときに立つ地点）の座標を出す
-    const hudDir = overviewMode ? _hudDir.copy(camera.position).normalize() : pDir
-    const lat = Math.asin(Math.max(-1, Math.min(1, hudDir.y))) * 180 / Math.PI
-    let theta = Math.atan2(hudDir.z, hudDir.x)
-    if (theta < 0) theta += Math.PI * 2
-    const lon = theta * 180 / Math.PI - 180
-    areaEl.textContent   = getAreaCode(hudDir)
-    latlonEl.textContent = `  |  lat: ${lat.toFixed(1)}°  lon: ${lon.toFixed(1)}°`
-    coinBoxEl.classList.add('ready')
+    // 文字は変わったときだけ書き換える（毎フレーム書くとページのレイアウトをやり直す）
+    const { lat, lon } = latLonOf(overviewMode ? _hudDir.copy(camera.position).normalize() : pDir)
+    const area   = getAreaCode(lat, lon)
+    const latlon = `  |  lat: ${lat.toFixed(1)}°  lon: ${lon.toFixed(1)}°`
+    if (areaEl.textContent !== area) areaEl.textContent = area
+    if (latlonEl.textContent !== latlon) latlonEl.textContent = latlon
+    if (!hudReady) { coinBoxEl.classList.add('ready'); hudReady = true }
   }
 
   coinIntro.update(dt, sabchan.group.position)
   coinDrop.update(dt)
   updateDoorGlow(now)
-  updateLedBoards(now / 1000)
+  if (!interior) {
+    camera.updateMatrixWorld()
+    updateLedBoards(now / 1000, camera)
+  }
   renderer.render(interior ? interior.def.scene : scene, camera)
   shotFrameRendered()
 }

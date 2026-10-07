@@ -20,6 +20,9 @@ const COLOR_OFF    = [40, 18, 6]      // 消えているドット（ほんのり
 const FONT = `bold ${FONT_PX}px "Hiragino Sans", "Noto Sans JP", "Yu Gothic", sans-serif`
 
 const boards = []
+const _frustum = new THREE.Frustum()
+const _viewProj = new THREE.Matrix4()
+const _sphere = new THREE.Sphere()
 
 // mesh: UV が黒板の正面に 0〜1 で張られたメッシュ、aspect: 黒板の幅/高さ
 // entries: [{ date: 'YYYY-MM-DD', subject }]（新しい順）
@@ -70,7 +73,7 @@ export function addLedBoard(mesh, aspect, entries) {
   mat.emissiveIntensity = 1.4
   mesh.material = mat
 
-  const board = { lines, cols, rows, lctx, ctx, low, mask, tex, key: '' }
+  const board = { mesh, lines, cols, rows, lctx, ctx, low, mask, tex, key: '' }
   boards.push(board)
   draw(board, 0)
 }
@@ -132,7 +135,14 @@ function draw(board, t) {
   tex.needsUpdate = true
 }
 
-// 毎フレーム呼ぶ（t: 経過秒）
-export function updateLedBoards(t) {
-  for (const b of boards) draw(b, t)
+// 毎フレーム呼ぶ（t: 経過秒、camera: 描くカメラ）
+// 描き直すたびに大きなテクスチャを GPU へ送り直すので、画面に映っている看板だけ動かす
+export function updateLedBoards(t, camera) {
+  _viewProj.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse)
+  _frustum.setFromProjectionMatrix(_viewProj)
+  for (const b of boards) {
+    const g = b.mesh.geometry
+    if (!g.boundingSphere) g.computeBoundingSphere()
+    if (_frustum.intersectsSphere(_sphere.copy(g.boundingSphere).applyMatrix4(b.mesh.matrixWorld))) draw(b, t)
+  }
 }
