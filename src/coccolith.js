@@ -13,6 +13,7 @@ import { createEasel } from '../my-3d-parts/landmark/easel.js'
 import { createBridge01 } from '../my-3d-parts/landmark/bridge01.js'
 import { createCoinbox } from '../my-3d-parts/landmark/coinbox.js'
 import { createSShall } from '../my-3d-parts/landmark/sshall.js'
+import { createDote } from '../my-3d-parts/landmark/dote.js'
 import { addDoorGlow, addGroundGlow, addArchDoorGlow } from './doorGlow.js'
 import { openPixelScene } from './pixelScene.js'
 import { TREEHOUSE_PIXEL_LAYERS, TREEHOUSE_PIXEL_TEXT } from './pixelArt/treehouse.js'
@@ -772,6 +773,61 @@ export function createCoccolith({ renderer = null } = {}) {
   placeBridge(0.0, -134.0, { tiltNorth: 5 })   // 北側の岸の方へ 5° 傾ける
   placeBridge(0.0, 124.0, { sink: 2 })          // 地面に 2m めり込ませる
   placeBridge(0.0, 16.7, { sink: 2 })           // lon 124 と同じく地面に 2m めり込ませる
+
+  // --- ランドマーク: 土手 dote 40坪（lat=-4.5, lon=-15.0 から南へ縦に3つといちばん北の東に1つ、lat=13.5, lon=-8.6 から北へ縦に8つ、lat=-25.0, lon=113.0 から北へ縦に4つ、lat=-24.0, lon=118.0 から北へ縦に3つ）、20坪（lat=21.0, lon=-5.0 から北へ縦に8つ、lat=-12.0, lon=0.0 から北へ2列 × 東へ4列）、一辺20m（lat=33.0, lon=-166.0）、一辺30m（lat=5.0, lon=-167.0）、一辺20m（lat=-5.0, lon=-104.0 と lat=-11.0, lon=-98.0、lat=6.0, lon=150.0 から北へ縦に5つ） ------------
+  // 実寸（天面の真ん中を結ぶ四角形の一辺約11.5m・高さ1.2m）。辺を南北・東西にそろえ、裾（y=0）どうしの間隔は DOTE_GAP
+  // 上を歩いて越えられるよう地表と同じレイキャスト対象にする（当たり判定の矩形は付けない）
+  {
+    const DOTE_GAP = 2   // 隣の土手との裾どうしの間隔 (m)（指定があった列は別）
+    const R_G = R_C + LAND_LIFT
+    // 基準の土手の中心から east, north (m) ずらした所に置く
+    const placeDote = (dote, lat0, lon0, east = 0, north = 0) => {
+      const lat = lat0 + THREE.MathUtils.radToDeg(north / R_G)
+      const lon = lon0 + THREE.MathUtils.radToDeg(east / (R_G * Math.cos(THREE.MathUtils.degToRad(lat))))
+      placeOnSurface(group, dote, lat, lon, R_G)
+      const n = dote.position.clone().normalize()
+      const northDir = new THREE.Vector3(0, 1, 0).addScaledVector(n, -n.y)
+        .applyQuaternion(dote.quaternion.clone().invert())
+      dote.rotateY(Math.atan2(northDir.x, northDir.z))
+      terrainMeshes.push(dote.children[0])   // children[0] = 土手のメッシュ
+    }
+    const [c0, s1, s2, e1] = [0, 0, 0, 0].map(() => createDote({ tsubo: 40 }))
+    const step = 2 * c0.userData.footprint.halfW + DOTE_GAP   // 隣どうしの中心の間隔（halfW = 裾 y=0 の半分）
+    placeDote(c0, -4.5, -15.0)
+    placeDote(s1, -4.5, -15.0, 0, -step)
+    placeDote(s2, -4.5, -15.0, 0, -2 * step)
+    placeDote(e1, -4.5, -15.0, step, 0)
+    // lat=13.5, lon=-8.6 から北へ縦に8つ
+    for (let k = 0; k < 8; k++) placeDote(createDote({ tsubo: 40 }), 13.5, -8.6, 0, k * step)
+    // lat=-25.0, lon=113.0 から北へ縦に4つ。西がすぐ海なので、東（内陸側）へ 4m ずらす
+    for (let k = 0; k < 4; k++) placeDote(createDote({ tsubo: 40 }), -25.0, 113.0, 4, k * step)
+    // lat=-24.0, lon=118.0 から北へ縦に3つ
+    for (let k = 0; k < 3; k++) placeDote(createDote({ tsubo: 40 }), -24.0, 118.0, 0, k * step)
+    // 一辺20m（天面の真ん中を結ぶ四角形）を lat=33.0, lon=-166.0 に1つ
+    placeDote(createDote({ size: 20 }), 33.0, -166.0)
+    // 一辺30m を lat=5.0, lon=-167.0 に1つ
+    placeDote(createDote({ size: 30 }), 5.0, -167.0)
+    // 一辺20m を lat=-5.0, lon=-104.0 に1つ
+    placeDote(createDote({ size: 20 }), -5.0, -104.0)
+    // 一辺20m を lat=-11.0, lon=-98.0 に1つ
+    placeDote(createDote({ size: 20 }), -11.0, -98.0)
+    // 一辺20m を lat=6.0, lon=150.0 から北へ縦に5つ（この列だけ間隔 5m）
+    {
+      const d = [...Array(5)].map(() => createDote({ size: 20 }))
+      const step20m = 2 * d[0].userData.footprint.halfW + 5
+      d.forEach((x, k) => placeDote(x, 6.0, 150.0, 0, k * step20m))
+    }
+    // 20坪を lat=21.0, lon=-5.0 から北へ縦に8つ
+    {
+      const d20 = [...Array(8)].map(() => createDote({ tsubo: 20 }))
+      const step20 = 2 * d20[0].userData.footprint.halfW + DOTE_GAP
+      d20.forEach((d, k) => placeDote(d, 21.0, -5.0, 0, k * step20))
+      // 20坪を lat=-12.0, lon=0.0 を南西の角にして、北へ2列 × 東へ4列
+      for (let row = 0; row < 2; row++) {
+        for (let col = 0; col < 4; col++) placeDote(createDote({ tsubo: 20 }), -12.0, 0.0, col * step20, row * step20)
+      }
+    }
+  }
 
   // --- EB_v87 (lat=-72, lon=90) --------------------------------
   // local -Z が南極（coccolith -Y 頂点）方向、local +Y = 球面法線
