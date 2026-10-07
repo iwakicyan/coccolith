@@ -679,7 +679,7 @@ const OV_PITCH_MIN = -Math.PI * 0.49  // 南半球まで回せるよう負値に
 const OV_PITCH_MAX =  Math.PI * 0.49
 // ハンドル入力の立ち上がり: 入力開始時は start 倍から、time 秒かけて max 倍（トップスピード）へ
 const JOY_RAMP_YAW   = { start: 0.15, time: 0.7, max: 0.6 }
-const JOY_RAMP_PITCH = { start: 0.15, time: 0.7, max: 1 }
+const JOY_RAMP_PITCH = { start: 0.1,  time: 1.0, max: 0.4 }   // 上下は横より重く: 動き出しをゆっくり、最高速は横の約半分（0.48 rad/s。横は 0.9 rad/s）
 const TARGET_FPS = 30
 const FRAME_MS   = 1000 / TARGET_FPS
 let prev = performance.now()
