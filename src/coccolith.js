@@ -13,7 +13,7 @@ import { createEasel } from '../my-3d-parts/landmark/easel.js'
 import { createBridge01 } from '../my-3d-parts/landmark/bridge01.js'
 import { createCoinbox } from '../my-3d-parts/landmark/coinbox.js'
 import { createSShall } from '../my-3d-parts/landmark/sshall.js'
-import { addDoorGlow, addGroundGlow } from './doorGlow.js'
+import { addDoorGlow, addGroundGlow, addArchDoorGlow } from './doorGlow.js'
 import { openPixelScene } from './pixelScene.js'
 import { TREEHOUSE_PIXEL_LAYERS, TREEHOUSE_PIXEL_TEXT } from './pixelArt/treehouse.js'
 import { createFlowerGeometry, openFlowerCut } from './flowerCut.js'
@@ -720,12 +720,14 @@ export function createCoccolith({ renderer = null } = {}) {
 
   // --- ランドマーク: SShall (lat=27.0, lon=161.0) ------------
   // 2倍で高さ約15m（塔の円錐屋根の先）。原点は塔の中心。正面（扉のある側・ローカル +Z）を西（経度-方向）へ向ける
+  // 倍率を変えるときは室内（src/interiors/sshall.js の SCALE）も合わせる
   // 当たり判定は棟2つと塔の矩形3つ（userData.colliders）
   const sshallWrapper = new THREE.Group()
   const sshall = createSShall()
   sshallWrapper.add(sshall)
   sshallWrapper.scale.setScalar(2)
-  placeOnSurface(group, sshallWrapper, 27.0, 161.0, R_C + LAND_LIFT)
+  const SSHALL_SINK = 1.0   // 地面にめり込ませる量 (m)
+  placeOnSurface(group, sshallWrapper, 27.0, 161.0, R_C + LAND_LIFT - SSHALL_SINK)
   {
     const west = new THREE.Object3D()
     placeOnSurface(new THREE.Group(), west, 27.0, 160.0, sshallWrapper.position.length())
@@ -734,6 +736,16 @@ export function createCoccolith({ renderer = null } = {}) {
     sshall.rotation.y = Math.atan2(toWest.x, toWest.z)
   }
   colliders.push(...sshall.userData.colliders)
+  // 扉: 近づくと輪郭が光り、タップで室内へ（main.js の _doors、室内は src/interiors/sshall.js）。正面の棟の当たり判定に付ける
+  {
+    const door = sshall.userData.doorPanel
+    const { w, h, t, curveSegments } = sshall.userData.doorSize
+    addArchDoorGlow(door, { width: w, height: h, depth: t, curveSegments })
+    const front = sshall.userData.colliders[0]   // [0] = 正面の棟
+    sshallWrapper.updateMatrixWorld(true)
+    const local = door.getWorldPosition(new THREE.Vector3()).applyMatrix4(front.matrixWorld.clone().invert())
+    front.userData.door = { id: 'sshall', mesh: door, local, outward: new THREE.Vector3(0, 0, 1) }   // local / outward: 正面の棟の当たり判定のローカル座標
+  }
 
   // --- ランドマーク: 橋 bridge01 ×2 ------------
   // 3倍で地面から6m出る、全長約44m。歩く向き（ローカル +Z）を北（緯度+方向）へ向ける

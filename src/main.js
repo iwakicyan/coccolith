@@ -364,12 +364,14 @@ function resolveColliders() {
 // 室内は建物ごとのモジュールを初回だけ読み込む
 const INTERIORS = {
   tofu: () => import('./interiors/tofu.js').then(m => m.createTofuInterior()),
+  sshall: () => import('./interiors/sshall.js').then(m => m.createSShallInterior()),
 }
 const DOOR_REACH       = 3.5   // ドアからこの距離 (m) 以内で輪郭が光り、出入りできる
 const DOOR_EXIT_DIST   = 8.5   // 外に出たときのドアからの距離 (m)
 const INTERIOR_SPEED   = 2     // 室内の移動速度 (m/s)
 const INTERIOR_CAM_DIST = 6    // 室内のカメラ距離 (m)
 const INTERIOR_BODY_R  = 0.6   // 室内の当たり判定半径 (m)（狭い扉を通れるよう耳より少し小さめ）
+const INTERIOR_LIFT    = 0.5   // 室内で sabちゃんを床から浮かせる高さ (m)（床にめり込んで見えないように）
 const SAB_HEIGHT       = 8.35 * SAB_SCALE
 const FP_EYE_H         = 1.5   // 室内の主観モードの目の高さ (m)
 const FP_PITCH_MAX     = 1.2   // 主観モードの見上げ・見下ろし上限 (rad)
@@ -473,6 +475,7 @@ function useDoor() {
 // 行き先は外のドアの id。施設が増えたらここに足す
 const JUMP_SPOTS = [
   { id: 'tofu', label: 'TOFU-HOUSE' },
+  { id: 'sshall', label: 'SS-HALL' },
 ]
 const jumpEl     = document.getElementById('jump')
 const jumpBtn    = document.getElementById('jump-btn')
@@ -734,7 +737,7 @@ function updateInterior(dt, now, joyYaw, joyPitch) {
   // sabちゃん配置（屋外と同じく local Y=上、local Z=前）
   _iMat.makeBasis(_iRight.crossVectors(_iUp, iFwd), _iUp, iFwd)
   sabchan.group.setRotationFromMatrix(_iMat)
-  _iSab.copy(iPos).setY(iPos.y + SAB_FOOT_OFFSET)
+  _iSab.copy(iPos).setY(iPos.y + SAB_FOOT_OFFSET + INTERIOR_LIFT)
   sabchan.group.position.copy(_iSab).setY(_iSab.y + Math.sin(now * 0.00035) * 0.1)
   animateSabParts(now)
 

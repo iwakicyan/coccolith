@@ -27,6 +27,36 @@ export function addDoorGlow(door) {
   door.userData.glow = { group: glow, halo, edges }
 }
 
+// アーチ形の扉（下が四角で上が半円）の輪郭を光らせる。addDoorGlow と同じく setDoorGlow で点灯する
+// door: 原点 = 扉の下端の真ん中（厚みの真ん中）、+y が上、+z が外の Object3D
+// width: 幅、height: 下端からアーチの頂点まで、depth: 厚み、pad: 外にはみ出す光の幅（どれも door のローカル単位）
+export function addArchDoorGlow(door, { width, height, depth, pad = PAD, curveSegments = 2 }) {
+  // アーチは扉の板と同じく 1/4 円を2つつなぐ（分割の位置を板に合わせる）
+  const arch = (hw) => {
+    const s = new THREE.Shape()
+    s.moveTo(-hw, 0); s.lineTo(hw, 0); s.lineTo(hw, height - width / 2)
+    s.absarc(0, height - width / 2, hw, 0, Math.PI / 2, false)
+    s.absarc(0, height - width / 2, hw, Math.PI / 2, Math.PI, false)
+    s.lineTo(-hw, 0)
+    return s
+  }
+  // 扉よりひと回り大きく、厚みは扉の半分にして扉の中に隠す → 縁だけ光って見える
+  const haloGeo = new THREE.ExtrudeGeometry(arch(width / 2 + pad), { depth: depth * 0.5, bevelEnabled: false, curveSegments })
+  haloGeo.translate(0, 0, -depth * 0.25)
+  const halo = new THREE.Mesh(
+    haloGeo,
+    new THREE.MeshBasicMaterial({ color: GLOW_COLOR, transparent: true, opacity: 0.6, blending: THREE.AdditiveBlending, depthWrite: false }),
+  )
+  // 扉の表の面の輪郭線
+  const pts = arch(width / 2).getPoints(curveSegments).map(p => new THREE.Vector3(p.x, p.y, depth / 2 + 0.005))
+  const edges = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color: GLOW_COLOR, transparent: true }))
+  const glow = new THREE.Group()
+  glow.add(halo, edges)
+  glow.visible = false
+  door.add(glow)
+  door.userData.glow = { group: glow, halo, edges }
+}
+
 // 置き物の地面との接地ライン（BoxGeometry の台の、地面に入るところ）を光らせる
 // ドアと同じく setDoorGlow で点灯する。y: 接地ラインの高さ、pad: 外にはみ出す光の幅、band: 光の帯の高さ（どれも mesh のローカル単位）
 export function addGroundGlow(mesh, { y, pad, band }) {
