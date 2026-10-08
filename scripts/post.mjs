@@ -11,7 +11,7 @@
 import { readFile, readdir } from 'node:fs/promises'
 import { AtpAgent } from '@atproto/api'
 
-const HASHTAGS  = ['planet', 'planet_coccolith', 'time_of_coccolith']   // 本文に並べるハッシュタグ（# なし）
+const HASHTAGS  = ['planet', 'planet_coccolith', 'time_of_coccolith', 'claude']   // 本文に並べるハッシュタグ（# なし）
 const IMG_SIZE  = { width: 2400, height: 1350 }   // shot.mjs の書き出しサイズ
 
 const args = process.argv.slice(2)

@@ -302,6 +302,7 @@ const computer = {
 
 // テキストウィンドウの文章（改行はそのまま、[表示する文字](URL) はリンクになる）
 export const TREEHOUSE_PIXEL_TEXT = `MADE BY 岩木しあん -Iwaki Cyan-
+feat. Claude
 [［作者Instagram］](https://www.instagram.com/sugiharakani/)`
 
 export const TREEHOUSE_PIXEL_LAYERS = [background, person, computer, eyesClosed]
