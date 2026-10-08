@@ -75,7 +75,7 @@ scene.add(new THREE.AmbientLight(0x334455, 1.0))
 
 
 // --- 天体 ---------------------------------------------------
-const { group: coccolith, terrainMeshes, oceanMesh, colliders, coinSlot } = createCoccolith({ renderer })
+const { group: coccolith, terrainMeshes, oceanMesh, colliders, lamps, coinSlot } = createCoccolith({ renderer })
 terrainMeshes.forEach(m => m.receiveShadow = true)
 oceanMesh.receiveShadow = true
 scene.add(coccolith)
@@ -146,6 +146,22 @@ const lightIcon = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 2.6), lightIconMat
 lightIcon.position.set(0, 0.25, -2.45)   // 後頭部表面（head 半径 z ≈ 2.31）のすぐ外
 lightIcon.rotation.y = Math.PI          // 後ろ向き
 _sabHeadGroup?.add(lightIcon)
+
+// --- ライト light01 の光 -----------------------------------------
+// 周りを照らすのは sabちゃんにいちばん近い 1 本だけ。光源を 1 つだけ置き、近いライトの頭へ毎フレーム付け替える
+// （7本それぞれに光源を置くと、すべての面で毎回7つぶん計算して重い）
+// 強さ・減衰は sabちゃんのライトと同じ。光源の数は変えないのでシェーダの再コンパイルは起きない
+const LAMP_DIST = 50   // 光の届く距離 (m)
+const lampLight = new THREE.PointLight(SAB_LIGHT_COLOR, lamps.length ? SAB_LIGHT_INT : 0, LAMP_DIST, 1.2)
+coccolith.add(lampLight)
+function updateLampLight(sabPos) {
+  let best = null, bestD = Infinity
+  for (const p of lamps) {
+    const d = p.distanceToSquared(sabPos)
+    if (d < bestD) { bestD = d; best = p }
+  }
+  if (best) lampLight.position.copy(best)
+}
 
 // センサー位置から前方へ照らす。シェーダ再コンパイルを避けるため常に存在させ intensity で切替
 const sabLight = new THREE.SpotLight(SAB_LIGHT_COLOR, 0, 100, SAB_LIGHT_ANGLE, 0.6, 1.2)
@@ -941,6 +957,7 @@ function animate() {
     const sabPos  = _sabPos.copy(pDir).multiplyScalar(groundH + SAB_FOOT_OFFSET)
     const floatOffset = Math.sin(now * 0.00035) * 0.2
     sabchan.group.position.copy(pDir).multiplyScalar(groundH + SAB_FOOT_OFFSET + floatOffset)
+    updateLampLight(sabPos)
 
     animateSabParts(now)
 

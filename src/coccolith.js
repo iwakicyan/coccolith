@@ -14,6 +14,7 @@ import { createBridge01 } from '../my-3d-parts/landmark/bridge01.js'
 import { createCoinbox } from '../my-3d-parts/landmark/coinbox.js'
 import { createSShall } from '../my-3d-parts/landmark/sshall.js'
 import { createDote } from '../my-3d-parts/landmark/dote.js'
+import { createLight01 } from '../my-3d-parts/landmark/light01.js'
 import { addDoorGlow, addGroundGlow, addArchDoorGlow } from './doorGlow.js'
 import { openPixelScene } from './pixelScene.js'
 import { TREEHOUSE_PIXEL_LAYERS, TREEHOUSE_PIXEL_TEXT } from './pixelArt/treehouse.js'
@@ -191,6 +192,7 @@ export function createCoccolith({ renderer = null } = {}) {
   const group = new THREE.Group()
   const terrainMeshes = []
   const colliders = []   // sabちゃんが侵入できない建物（userData.footprint を持つ Object3D）
+  const lamps = []       // ライトの光の位置（group のローカル座標）。main.js が近いものに光源を付ける
 
   const noise3D = createNoise3D(Alea('coccolith'))
 
@@ -733,6 +735,39 @@ export function createCoccolith({ renderer = null } = {}) {
     }
   }
 
+  // --- ランドマーク: ライト light01 × 7（lat=-5, lon=-50 → lat=-5, lon=-65 → lat=-19, lon=-86 を結ぶラインに等間隔） ---
+  // 1.5倍で高さ約6.3m（棒4.65m）。頭は光る。間隔は約41m。始点（lat=-5, lon=-50）だけは満潮で水に入る
+  // （地面が海面+潮+1m の 366.5m より低い）ので、ラインに沿って 4m 先の陸へずらしてある
+  // 地面の高さは地表メッシュへのレイキャストで求める（海岸の斜面にも足元を合わせる）。頭の正面を北へ向ける
+  // 頭の中心の位置を lamps に入れる（周りを照らす光源は main.js が sabちゃんの近くのものにだけ付ける）
+  {
+    const LIGHT01_SPOTS = [
+      { lat:  -5.007, lon: -50.643 },
+      { lat:  -5.042, lon: -56.650 },
+      { lat:  -5.017, lon: -63.301 },
+      { lat:  -7.894, lon: -69.019 },
+      { lat: -11.717, lon: -74.511 },
+      { lat: -15.432, lon: -80.155 },
+      { lat: -19.000, lon: -86.000 },
+    ]
+    const LIGHT01_SCALE = 1.5
+    const LIGHT01_SINK = 0.1   // 斜面でも足元が浮かないよう地面にめり込ませる量 (m)
+    const ray = new THREE.Raycaster()
+    surface.updateMatrixWorld()
+    for (const { lat, lon } of LIGHT01_SPOTS) {
+      const d = dirOf(lat, lon)
+      ray.set(d.clone().multiplyScalar(R_C * 2), d.clone().negate())
+      const ground = ray.intersectObject(surface)[0]?.point.length() ?? R_C + LAND_LIFT
+      const light = createLight01()
+      light.scale.setScalar(LIGHT01_SCALE)
+      placeOnSurface(group, light, lat, lon, ground - LIGHT01_SINK)
+      light.rotateY(northAngle(light))
+      colliders.push(light)
+      light.updateMatrix()
+      lamps.push(light.userData.lamp.clone().applyMatrix4(light.matrix))
+    }
+  }
+
   // --- EB_v87 (lat=-72, lon=90) --------------------------------
   // local -Z が南極（coccolith -Y 頂点）方向、local +Y = 球面法線
   const _ebLat = -72 * Math.PI / 180
@@ -751,7 +786,7 @@ export function createCoccolith({ renderer = null } = {}) {
   ebWrapper.setRotationFromMatrix(new THREE.Matrix4().makeBasis(ebRight, ebN, ebFwd))
   group.add(ebWrapper)
 
-  return { group, terrainMeshes, oceanMesh, colliders, coinSlot: coinbox.userData.slot }
+  return { group, terrainMeshes, oceanMesh, colliders, lamps, coinSlot: coinbox.userData.slot }
 }
 
 // 島[GF] (lat 0-36°N, lon 72-108°E) に岩を InstancedMesh で散布
