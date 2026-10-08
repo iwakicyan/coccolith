@@ -192,7 +192,7 @@ export function createCoccolith({ renderer = null } = {}) {
   const group = new THREE.Group()
   const terrainMeshes = []
   const colliders = []   // sabちゃんが侵入できない建物（userData.footprint を持つ Object3D）
-  const lamps = []       // ライトの光の位置（group のローカル座標）。main.js が近いものに光源を付ける
+  const lamps = []       // ライト { pos: 光の位置（group のローカル座標）, glow: 頭の発光マテリアル }。main.js が近いものだけ点ける
 
   const noise3D = createNoise3D(Alea('coccolith'))
 
@@ -735,13 +735,15 @@ export function createCoccolith({ renderer = null } = {}) {
     }
   }
 
-  // --- ランドマーク: ライト light01 × 7（lat=-5, lon=-50 → lat=-5, lon=-65 → lat=-19, lon=-86 を結ぶラインに等間隔） ---
-  // 1.5倍で高さ約6.3m（棒4.65m）。頭は光る。間隔は約41m。始点（lat=-5, lon=-50）だけは満潮で水に入る
-  // （地面が海面+潮+1m の 366.5m より低い）ので、ラインに沿って 4m 先の陸へずらしてある
+  // --- ランドマーク: ライト light01 ---------------------------------
+  // 1.5倍で高さ約6.3m（棒4.65m）。ラインに沿って等間隔に並べる
+  // 満潮で水に入る所（地面が海面+潮+1m の 366.5m より低い所）は、ラインに沿って近くの陸へずらしてある
   // 地面の高さは地表メッシュへのレイキャストで求める（海岸の斜面にも足元を合わせる）。頭の正面を北へ向ける
-  // 頭の中心の位置を lamps に入れる（周りを照らす光源は main.js が sabちゃんの近くのものにだけ付ける）
+  // 頭の中心の位置と発光マテリアルを lamps に入れる（main.js が sabちゃんから 50m 以内でいちばん近い 1 本だけ点ける）
+  // 頭の発光マテリアルは全ライトで共有なので、1 本ずつ点け消しできるようライトごとに複製する
   {
     const LIGHT01_SPOTS = [
+      // lat=-5, lon=-50 → lat=-5, lon=-65 → lat=-19, lon=-86 に 7 本・約41m 間隔（始点だけ 4m 先の陸へずらす）
       { lat:  -5.007, lon: -50.643 },
       { lat:  -5.042, lon: -56.650 },
       { lat:  -5.017, lon: -63.301 },
@@ -749,6 +751,15 @@ export function createCoccolith({ renderer = null } = {}) {
       { lat: -11.717, lon: -74.511 },
       { lat: -15.432, lon: -80.155 },
       { lat: -19.000, lon: -86.000 },
+      // lat=-40, lon=91 → lat=-35, lon=54 → lat=-21, lon=54 に 8 本・約39m 間隔（全長 272m を 7 等分して両端にも置く）
+      { lat: -40.000, lon:  91.000 },
+      { lat: -39.954, lon:  82.877 },
+      { lat: -39.346, lon:  74.831 },
+      { lat: -38.196, lon:  66.984 },
+      { lat: -36.542, lon:  59.432 },
+      { lat: -33.446, lon:  54.000 },
+      { lat: -27.223, lon:  54.000 },
+      { lat: -21.000, lon:  54.000 },
     ]
     const LIGHT01_SCALE = 1.5
     const LIGHT01_SINK = 0.1   // 斜面でも足元が浮かないよう地面にめり込ませる量 (m)
@@ -763,8 +774,12 @@ export function createCoccolith({ renderer = null } = {}) {
       placeOnSurface(group, light, lat, lon, ground - LIGHT01_SINK)
       light.rotateY(northAngle(light))
       colliders.push(light)
+      let glow = null
+      light.traverse(o => {
+        if (o.material?.emissive?.getHex()) { glow = o.material = o.material.clone(); glow.emissiveIntensity = 0 }
+      })
       light.updateMatrix()
-      lamps.push(light.userData.lamp.clone().applyMatrix4(light.matrix))
+      lamps.push({ pos: light.userData.lamp.clone().applyMatrix4(light.matrix), glow })
     }
   }
 

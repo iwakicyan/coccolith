@@ -148,19 +148,27 @@ lightIcon.rotation.y = Math.PI          // 後ろ向き
 _sabHeadGroup?.add(lightIcon)
 
 // --- ライト light01 の光 -----------------------------------------
-// 周りを照らすのは sabちゃんにいちばん近い 1 本だけ。光源を 1 つだけ置き、近いライトの頭へ毎フレーム付け替える
-// （7本それぞれに光源を置くと、すべての面で毎回7つぶん計算して重い）
-// 強さ・減衰は sabちゃんのライトと同じ。光源の数は変えないのでシェーダの再コンパイルは起きない
-const LAMP_DIST = 50   // 光の届く距離 (m)
-const lampLight = new THREE.PointLight(SAB_LIGHT_COLOR, lamps.length ? SAB_LIGHT_INT : 0, LAMP_DIST, 1.2)
+// sabちゃんから LAMP_REACH 以内でいちばん近い 1 本だけ点ける（頭が光り、周りを照らす）。どれも遠ければ全部消灯
+// 光源は 1 つだけ置き、点けるライトの頭へ付け替える（ライトそれぞれに光源を置くと、すべての面で毎回その数だけ計算して重い）
+// 強さ・減衰は sabちゃんのライトと同じ。光源は常に置いたまま intensity で点け消しする（シェーダの再コンパイルを避ける）
+const LAMP_REACH = 50   // これより近いライトだけ点ける (m)
+const LAMP_DIST  = 50   // 光の届く距離 (m)
+const LAMP_GLOW  = 1.0  // 点いているライトの頭の発光の強さ
+const lampLight = new THREE.PointLight(SAB_LIGHT_COLOR, 0, LAMP_DIST, 1.2)
 coccolith.add(lampLight)
+let litLamp = null
 function updateLampLight(sabPos) {
-  let best = null, bestD = Infinity
-  for (const p of lamps) {
-    const d = p.distanceToSquared(sabPos)
-    if (d < bestD) { bestD = d; best = p }
+  let best = null, bestD = LAMP_REACH * LAMP_REACH
+  for (const lamp of lamps) {
+    const d = lamp.pos.distanceToSquared(sabPos)
+    if (d < bestD) { bestD = d; best = lamp }
   }
-  if (best) lampLight.position.copy(best)
+  if (best === litLamp) return
+  if (litLamp?.glow) litLamp.glow.emissiveIntensity = 0
+  if (best?.glow) best.glow.emissiveIntensity = LAMP_GLOW
+  if (best) lampLight.position.copy(best.pos)
+  lampLight.intensity = best ? SAB_LIGHT_INT : 0
+  litLamp = best
 }
 
 // センサー位置から前方へ照らす。シェーダ再コンパイルを避けるため常に存在させ intensity で切替
