@@ -15,6 +15,8 @@ import { createCoinbox } from '../my-3d-parts/landmark/coinbox.js'
 import { createSShall } from '../my-3d-parts/landmark/sshall.js'
 import { createDote } from '../my-3d-parts/landmark/dote.js'
 import { createLight01 } from '../my-3d-parts/landmark/light01.js'
+import { createHoisun, createHoason } from '../my-3d-parts/landmark/hoisun.js'
+import { mergeStatic } from '../my-3d-parts/parts/mergeStatic.js'
 import { addDoorGlow, addGroundGlow, addArchDoorGlow } from './doorGlow.js'
 import { openPixelScene } from './pixelScene.js'
 import { TREEHOUSE_PIXEL_LAYERS, TREEHOUSE_PIXEL_TEXT } from './pixelArt/treehouse.js'
@@ -178,6 +180,13 @@ function northAngle(wrapper) {
 }
 
 // placeOnSurface で置いた wrapper の中で、ローカル +Z を (lat, lon) の地点へ向ける Y 回転の角度
+// 新しく置くランドマークの影の設定。placeOnSurface の後に呼ぶ
+// 影を受けない（太陽の影が平らな面にギザギザに出るので）。影を落とすのは、太陽（+X）の当たる側（wrapper が x > 0）に置いたときだけ
+function landmarkShadow(object, wrapper) {
+  const cast = wrapper.position.x > 0
+  object.traverse(o => { if (o.isMesh) { o.castShadow = cast; o.receiveShadow = false } })
+}
+
 function headingTo(wrapper, lat, lon) {
   const p = new THREE.Object3D()
   placeOnSurface(new THREE.Group(), p, lat, lon, wrapper.position.length())
@@ -470,6 +479,7 @@ export function createCoccolith({ renderer = null } = {}) {
   placeOnSurface(group, touWrapper, -8.4, 113.8, R_C + LAND_LIFT - 0.8)
   tou.rotation.y = northAngle(touWrapper) - Math.PI / 4 + Math.PI / 2
   colliders.push(tou)
+  mergeStatic(tou)   // 動かない部品をマテリアルごとにまとめて描画の回数を減らす
 
   // --- ランドマーク: ツリーハウス (lat=53.0, lon=-171.0) -----------
   // 2倍で高さ約22m。当たり判定は幹のまわりだけ（部屋は頭上なので下をくぐれる）
@@ -491,6 +501,7 @@ export function createCoccolith({ renderer = null } = {}) {
     const local = door.getWorldPosition(new THREE.Vector3()).applyMatrix4(treehouse.matrixWorld.clone().invert())
     treehouse.userData.glowSpot = { mesh: door, local, reach: 5 }   // local: treehouse のローカル座標
     treehouse.userData.glowSpot.onTap = () => openPixelScene(TREEHOUSE_PIXEL_LAYERS, { text: TREEHOUSE_PIXEL_TEXT })
+    mergeStatic(treehouse, { keep: o => o === door })   // 扉（光る輪郭付き）以外をマテリアルごとにまとめる
   }
 
   // --- ランドマーク: 看板 kanban (lat=83.0, lon=-160.0) ------------
@@ -536,6 +547,8 @@ export function createCoccolith({ renderer = null } = {}) {
     sakuWrapper.updateMatrix()
     sakuField.updateMatrix()
     const _m = new THREE.Matrix4(), _p = new THREE.Vector3(), _q = new THREE.Quaternion(), _s = new THREE.Vector3()
+    const sakuPieces = new THREE.Group()   // ピースはまとめて 1 つのメッシュ・線にする
+    group.add(sakuPieces)
     for (const piece of sakuField.children.filter(o => !o.userData.footprint)) {
       piece.updateMatrix()
       _m.multiplyMatrices(sakuWrapper.matrix, sakuField.matrix).multiply(piece.matrix).decompose(_p, _q, _s)
@@ -543,8 +556,9 @@ export function createCoccolith({ renderer = null } = {}) {
       piece.position.copy(n).multiplyScalar(piece.userData.onGround ? R_C + LAND_LIFT - 0.05 : SAKU_RADIUS)
       piece.quaternion.setFromUnitVectors(n0, n).multiply(_q)
       piece.scale.copy(_s)
-      group.add(piece)   // 球面に直接置く（sakuField には当たり判定の矩形だけ残る）
+      sakuPieces.add(piece)   // 球面に直接置く（sakuField には当たり判定の矩形だけ残る）
     }
+    mergeStatic(sakuPieces)
     colliders.push(...sakuField.children)
     group.add(createSakuGrass(sakuWrapper, sakuField, { ...GRASS_KIND_1, density: 2 / 3 * 0.5 }))   // 草地の半分の量
     sakuFlowerStems = createSakuGrass(sakuWrapper, sakuField, FLOWER_STEM_KIND)
@@ -561,6 +575,7 @@ export function createCoccolith({ renderer = null } = {}) {
   placeOnSurface(group, kaidanWrapper, 5.8, -128.0, R_C + LAND_LIFT - 1.0)
   kaidan.rotation.y = northAngle(kaidanWrapper) - Math.PI / 4
   colliders.push(kaidan)
+  mergeStatic(kaidan)
 
   // --- ランドマーク: イーゼル easel (lat=-6.6, lon=104.0) ------------
   // 柵の囲い（花壇）の前に置く。2.35倍で高さ約4m、地面に 0.5m めり込ませる。正面（キャンバス・ローカル +Z）を花壇の中心と反対へ向ける
@@ -609,6 +624,7 @@ export function createCoccolith({ renderer = null } = {}) {
     })
   }
   colliders.push(easel)
+  mergeStatic(easel, { keep: o => o === easel.userData.canvas })   // キャンバス（光る輪郭・花の絵）以外をまとめる
 
   // --- ランドマーク: コイン箱 coinbox (lat=-6.0, lon=100.314) ------------
   // 柵の囲い（花壇）の凹みに置く（柵にめり込まないよう lon=100.0 から東へ 2m ずらす）。2.35倍で高さ約2.5m
@@ -636,6 +652,8 @@ export function createCoccolith({ renderer = null } = {}) {
     coinbox.userData.glowSpot = { mesh: base, local: new THREE.Vector3(), reach: 4.5, coinbox: true }   // local: coinbox のローカル座標。coinbox: Enter でコインを 1 枚入れる（main.js）
   }
   colliders.push(coinbox)
+  // 台（光る接地ライン）と投入口（コインの演出で使う）以外をまとめる
+  mergeStatic(coinbox, { keep: o => o === coinbox.userData.glowSpot.mesh || o === coinbox.userData.slot })
 
   // --- ランドマーク: SShall (lat=27.0, lon=161.0) ------------
   // 2倍で高さ約15m（塔の円錐屋根の先）。原点は塔の中心。正面（扉のある側・ローカル +Z）を西（経度-方向）へ向ける
@@ -658,7 +676,34 @@ export function createCoccolith({ renderer = null } = {}) {
     sshallWrapper.updateMatrixWorld(true)
     const local = door.getWorldPosition(new THREE.Vector3()).applyMatrix4(front.matrixWorld.clone().invert())
     front.userData.door = { id: 'sshall', mesh: door, local, outward: new THREE.Vector3(0, 0, 1) }   // local / outward: 正面の棟の当たり判定のローカル座標
+    mergeStatic(sshall, { keep: o => o === door })   // 扉（光る輪郭付き）以外をマテリアルごとにまとめる
   }
+
+  // --- ランドマーク: hoason (lat=24.0, lon=-86.0) ------------
+  // 2.5倍で高さ約8.6m（台形の屋根の上面）・幅約9.5m（すべり台を含めて約16.8m）。原点は左右の中央・正面から 4.5m 奥の地面
+  // 正面（顔のある側・ローカル +Z）を西（経度-方向）へ向ける。当たり判定は建物と左右のすべり台の矩形3つ（userData.colliders）
+  // 影は受けない。夜の側（x < 0）なので影も落とさない（landmarkShadow）
+  const hoasonWrapper = new THREE.Group()
+  const hoason = createHoason()
+  hoasonWrapper.add(hoason)
+  hoasonWrapper.scale.setScalar(2.5)
+  const HOASON_SINK = 0.3   // 地面にめり込ませる量 (m)
+  placeOnSurface(group, hoasonWrapper, 24.0, -86.0, R_C + LAND_LIFT - HOASON_SINK)
+  hoason.rotation.y = headingTo(hoasonWrapper, 24.0, -87.0)
+  landmarkShadow(hoason, hoasonWrapper)
+  colliders.push(...hoason.userData.colliders)
+
+  // --- ランドマーク: hoisun (lat=66.0, lon=120.0) ------------
+  // hoason と同じ形の白い色違い。2.5倍（寸法は hoason と同じ）。正面（顔のある側・ローカル +Z）を西（経度-方向）へ向ける
+  const hoisunWrapper = new THREE.Group()
+  const hoisun = createHoisun()
+  hoisunWrapper.add(hoisun)
+  hoisunWrapper.scale.setScalar(2.5)
+  const HOISUN_SINK = 0.3   // 地面にめり込ませる量 (m)
+  placeOnSurface(group, hoisunWrapper, 66.0, 120.0, R_C + LAND_LIFT - HOISUN_SINK)
+  hoisun.rotation.y = headingTo(hoisunWrapper, 66.0, 119.0)
+  landmarkShadow(hoisun, hoisunWrapper)   // 影は受けない。昼の側（x > 0）なので影は落とす
+  colliders.push(...hoisun.userData.colliders)
 
   // --- ランドマーク: 橋 bridge01 ×2 ------------
   // 3倍で地面から6m出る、全長約44m。歩く向き（ローカル +Z）を北（緯度+方向）へ向ける
@@ -689,13 +734,21 @@ export function createCoccolith({ renderer = null } = {}) {
   {
     const DOTE_GAP = 2   // 隣の土手との裾どうしの間隔 (m)（指定があった列は別）
     const R_G = R_C + LAND_LIFT
+    // 土手は全部 doteGroup に置き、最後に色ごとに 1 つのメッシュ（と輪郭線 1 つ）へまとめる
+    // マテリアルは土手ごとに作られるので、同じ色どうしで共有させてからまとめる
+    const doteGroup = new THREE.Group()
+    group.add(doteGroup)
+    const doteMats = new Map()
     // 基準の土手の中心から east, north (m) ずらした所に置く
     const placeDote = (dote, lat0, lon0, east = 0, north = 0) => {
       const lat = lat0 + THREE.MathUtils.radToDeg(north / R_G)
       const lon = lon0 + THREE.MathUtils.radToDeg(east / (R_G * Math.cos(THREE.MathUtils.degToRad(lat))))
-      placeOnSurface(group, dote, lat, lon, R_G)
+      placeOnSurface(doteGroup, dote, lat, lon, R_G)
       dote.rotateY(northAngle(dote))
-      terrainMeshes.push(dote.children[0])   // children[0] = 土手のメッシュ
+      const mesh = dote.children[0]   // children[0] = 土手のメッシュ
+      const hex = mesh.material.color.getHex()
+      if (!doteMats.has(hex)) doteMats.set(hex, mesh.material)
+      mesh.material = doteMats.get(hex)
     }
     const [c0, s1, s2, e1] = [0, 0, 0, 0].map(() => createDote({ tsubo: 40 }))
     const step = 2 * c0.userData.footprint.halfW + DOTE_GAP   // 隣どうしの中心の間隔（halfW = 裾 y=0 の半分）
@@ -733,6 +786,8 @@ export function createCoccolith({ renderer = null } = {}) {
         for (let col = 0; col < 4; col++) placeDote(createDote({ tsubo: 20 }), -12.0, 0.0, col * step20, row * step20)
       }
     }
+    mergeStatic(doteGroup)
+    terrainMeshes.push(...doteGroup.children.filter(o => o.isMesh))   // 上を歩いて越えられるよう地表と同じレイキャスト対象にする
   }
 
   // --- ランドマーク: ライト light01 ---------------------------------
@@ -765,22 +820,32 @@ export function createCoccolith({ renderer = null } = {}) {
     const LIGHT01_SINK = 0.1   // 斜面でも足元が浮かないよう地面にめり込ませる量 (m)
     const ray = new THREE.Raycaster()
     surface.updateMatrixWorld()
+    // ライトは全部 lightGroup に置き、点け消しする頭以外（棒・リング・耳）を全ライトでまとめる
+    const lightGroup = new THREE.Group()
+    group.add(lightGroup)
+    const lightGlows = []
     for (const { lat, lon } of LIGHT01_SPOTS) {
       const d = dirOf(lat, lon)
       ray.set(d.clone().multiplyScalar(R_C * 2), d.clone().negate())
       const ground = ray.intersectObject(surface)[0]?.point.length() ?? R_C + LAND_LIFT
       const light = createLight01()
       light.scale.setScalar(LIGHT01_SCALE)
-      placeOnSurface(group, light, lat, lon, ground - LIGHT01_SINK)
+      placeOnSurface(lightGroup, light, lat, lon, ground - LIGHT01_SINK)
       light.rotateY(northAngle(light))
-      colliders.push(light)
+      // 当たり判定はライトと同じ位置・向きの Object3D に持たせる（ライトの Group はまとめると空になって消えるので）
+      const col = new THREE.Object3D()
+      col.position.copy(light.position); col.quaternion.copy(light.quaternion); col.scale.copy(light.scale)
+      col.userData.footprint = light.userData.footprint
+      group.add(col)
+      colliders.push(col)
       let glow = null
       light.traverse(o => {
-        if (o.material?.emissive?.getHex()) { glow = o.material = o.material.clone(); glow.emissiveIntensity = 0 }
+        if (o.material?.emissive?.getHex()) { glow = o.material = o.material.clone(); glow.emissiveIntensity = 0; lightGlows.push(o) }
       })
       light.updateMatrix()
       lamps.push({ pos: light.userData.lamp.clone().applyMatrix4(light.matrix), glow })
     }
+    mergeStatic(lightGroup, { keep: o => lightGlows.includes(o) })
   }
 
   // --- EB_v87 (lat=-72, lon=90) --------------------------------
@@ -1054,7 +1119,7 @@ function createSakuGrass(sakuWrapper, sakuField, kind) {
   const mat = kind.material()
   if (kind.emissive !== undefined) mat.emissiveIntensity = kind.emissive
   const im = new THREE.InstancedMesh(kind.geometry(), mat, points.length)
-  im.castShadow    = true
+  im.castShadow    = false   // 数が多く影の描画が重いので、草は影を落とさない
   im.receiveShadow = true
   const up = new THREE.Vector3(0, 1, 0), quat = new THREE.Quaternion(), yRot = new THREE.Quaternion()
   const scaleV = new THREE.Vector3().setScalar(kind.scale), instMat = new THREE.Matrix4()
@@ -1166,11 +1231,11 @@ function _distToSeg(plat, plon, alat, alon, blat, blon) {
 //   emissive: テクスチャ自身の発光の強さ（省略時はパーツの既定値）。暗い場所で浮いて見えるなら下げる
 const GRASS_KIND_1 = {   // 2dgrass：細い葉の房（下部を大きく埋める形なので少し持ち上げる）
   geometry: createGrassTuftGeometry, material: createGrassMaterial,
-  scale: 2.5, lift: 0.2, seed: 'grass', emissive: 0.1,
+  scale: 2.5, lift: 0.2, seed: 'grass', emissive: 0.1, density: 2 / 3 * 2 / 3,   // 既定の 2/3 の密度（間隔は約1.22倍）
 }
 const GRASS_KIND_2 = {   // 2dgrass2：手描きの幅広い葉の房（旧 field01 の場所）
   geometry: createGrass2TuftGeometry, material: createGrass2Material,
-  scale: 2.5, lift: 0.0, seed: 'grass2', emissive: 0, density: 2 / 3 * 0.8,
+  scale: 2.5, lift: 0.0, seed: 'grass2', emissive: 0, density: 2 / 3 * 0.8 * 2 / 3,   // 前の密度（2/3 × 0.8）の 2/3
 }
 
 const FLOWER_STEM_KIND = {   // 花の茎：途中で折れた茎（6頂点）に葉（4頂点）を2枚。テクスチャは 2dgrass と同じ（濃い緑の単色）
@@ -1282,7 +1347,7 @@ function createGrassField(poly, noise3D, kind) {
   const mat = kind.material()
   if (kind.emissive !== undefined) mat.emissiveIntensity = kind.emissive
   const im = new THREE.InstancedMesh(kind.geometry(), mat, count)
-  im.castShadow    = true
+  im.castShadow    = false   // 数が多く影の描画が重いので、草は影を落とさない
   im.receiveShadow = true
 
   const up       = new THREE.Vector3(0, 1, 0)
