@@ -3,7 +3,7 @@ import { shotMode, applyStartPose, startWithLight, shotFrameRendered } from './s
 import { vJoy, initJoysticks } from './joystick.js'
 import { createCompass, createVethIndicator } from './hud.js'
 import { initFullscreenButton } from './fullscreen.js'
-import { initSettings, handleInvert, invSign } from './settings.js'
+import { initSettings, showSettingsFor, handleInvert, invSign } from './settings.js'
 import { isFlowerCutOpen } from './flowerCut.js'
 import { isPixelSceneOpen } from './pixelScene.js'
 import { createCoccolith, R_OCEAN } from './coccolith.js'
@@ -26,7 +26,9 @@ import { createCoinDrop } from './coinDrop.js'
 // --- レンダラー ---------------------------------------------
 const canvas = document.getElementById('c')
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true })
-renderer.setPixelRatio(shotMode ? window.devicePixelRatio : Math.min(window.devicePixelRatio, 1.5))   // 撮影時は画面の解像度どおりに描く
+// 描く解像度の上限: スマホ・タブレット（指で触る端末）は 1.25、それ以外は 1.5。撮影時は画面の解像度どおりに描く
+const MAX_PIXEL_RATIO = matchMedia('(pointer: coarse)').matches ? 1.25 : 1.5
+renderer.setPixelRatio(shotMode ? window.devicePixelRatio : Math.min(window.devicePixelRatio, MAX_PIXEL_RATIO))
 renderer.setSize(window.innerWidth, window.innerHeight)
 renderer.shadowMap.enabled = true
 renderer.shadowMap.type    = THREE.PCFSoftShadowMap
@@ -460,6 +462,7 @@ function nearDoor() {
 // 俯瞰ボタンのアイコン: 屋外は 俯瞰⇄sabちゃん、室内は 主観⇄後ろからの視点 の切り替え
 // obeye = 外から見る目（俯瞰へ）、subeye = sabちゃんの目（主観へ）、insab = sabちゃん入りの視点へ
 function updateTabBtn() {
+  showSettingsFor({ overview: !interior && overviewMode, interior: !!interior })   // 操作設定は今の場面の視点だけ出す
   const tabBtn = document.getElementById('tab-btn')
   if (!tabBtn) return
   const toSubjective = interior ? !firstPerson : overviewMode

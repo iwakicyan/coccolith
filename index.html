@@ -50,11 +50,12 @@
     #settings.open { display: flex; }
     #settings .set-title { color: rgba(255,255,255,0.5); margin-bottom: 2px; }
     #settings .set-row { display: flex; align-items: center; gap: 6px; }
+    #settings .set-row[hidden] { display: none; }
     #settings .set-row span { flex: 1; margin-right: 6px; white-space: nowrap; }
     #settings button {
       padding: 0 8px; background: rgba(0,0,0,0.25);
       border: 1px solid rgba(255,255,255,0.35); border-radius: 10px;
-      color: rgba(255,255,255,0.6); font: 11px monospace; line-height: 18px;
+      color: rgba(255,255,255,0.6); font: 16px system-ui, sans-serif; line-height: 20px;   /* ⇅ ⇆ の矢印が小さく見えないよう文字より大きめ */
       cursor: pointer; touch-action: manipulation;
       -webkit-tap-highlight-color: transparent;
     }
