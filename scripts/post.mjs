@@ -6,6 +6,7 @@
 //    npm run post -- --dry-run                                       … 投稿せず中身だけ表示
 //
 //  本文は座標とハッシュタグ（サイトへのリンクはプロフィールに置く）
+//  JSON の file が .mp4（scripts/video.mjs で撮った動画）なら動画として投稿する
 // ============================================================
 
 import { readFile, readdir } from 'node:fs/promises'
@@ -38,7 +39,10 @@ HASHTAGS.forEach((tag, i) => {
   if (i > 0) append(' ')
   append(`#${tag}`, { $type: 'app.bsky.richtext.facet#tag', tag })
 })
-const alt = `惑星 coccolith の lat ${fmt(meta.lat)}° lon ${fmt(meta.lon)}° から、方位 ${Math.round(meta.heading)}° を向いて撮った景色`
+const isVideo = meta.file.endsWith('.mp4')
+const alt = isVideo
+  ? `惑星 coccolith の lat ${fmt(meta.lat)}° lon ${fmt(meta.lon)}° から、方位 ${Math.round(meta.heading)}° へ ${meta.video.seconds} 秒まっすぐ走った景色`
+  : `惑星 coccolith の lat ${fmt(meta.lat)}° lon ${fmt(meta.lon)}° から、方位 ${Math.round(meta.heading)}° を向いて撮った景色`
 
 if (dryRun) {
   console.log(JSON.stringify({ text, facets, alt, image: meta.file }, null, 2))
@@ -50,15 +54,14 @@ if (!BLUESKY_HANDLE || !BLUESKY_APP_PASSWORD) throw new Error('BLUESKY_HANDLE �
 
 const agent = new AtpAgent({ service: 'https://bsky.social' })
 await agent.login({ identifier: BLUESKY_HANDLE, password: BLUESKY_APP_PASSWORD })
-const { data: blob } = await agent.uploadBlob(await readFile(meta.file), { encoding: 'image/jpeg' })
+const { data: blob } = await agent.uploadBlob(await readFile(meta.file), { encoding: isVideo ? 'video/mp4' : 'image/jpeg' })
 const res = await agent.post({
   text,
   facets,
   langs: ['ja'],
-  embed: {
-    $type: 'app.bsky.embed.images',
-    images: [{ image: blob.blob, alt, aspectRatio: IMG_SIZE }],
-  },
+  embed: isVideo
+    ? { $type: 'app.bsky.embed.video', video: blob.blob, alt, aspectRatio: { width: meta.video.width, height: meta.video.height } }
+    : { $type: 'app.bsky.embed.images', images: [{ image: blob.blob, alt, aspectRatio: IMG_SIZE }] },
   createdAt: new Date().toISOString(),
 })
 console.log(res.uri)

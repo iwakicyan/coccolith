@@ -29,7 +29,8 @@ jobs:
         env:
           RETRY_WINDOW: 100
         run: |
-          last=$(curl -fsS "https://public.api.bsky.app/xrpc/app.bsky.feed.getAuthorFeed?actor=planet-coccolith.bsky.social&limit=1&filter=posts_no_replies" | jq -r '.feed[0].post.record.createdAt // empty')
+          # 朝の動画の投稿（bluesky-video.yml）は数えない
+          last=$(curl -fsS "https://public.api.bsky.app/xrpc/app.bsky.feed.getAuthorFeed?actor=planet-coccolith.bsky.social&limit=5&filter=posts_no_replies" | jq -r '[.feed[] | select(.post.embed["$type"] != "app.bsky.embed.video#view")][0].post.record.createdAt // empty')
           echo "最後の投稿: ${last:-なし}"
           if [ -n "$last" ] && [ $(( $(date +%s) - $(date -d "$last" +%s) )) -lt $(( RETRY_WINDOW * 60 )) ]; then
             echo "本番の回で投稿済みなのでやり直さない"

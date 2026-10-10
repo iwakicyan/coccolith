@@ -1,0 +1,44 @@
+name: Post video to Bluesky
+
+# 毎朝 JST 7 時（UTC 22 時）に、惑星内のランダムな地点から 10 秒まっすぐ走る動画を撮って @planet-coccolith.bsky.social に投稿する
+# （混雑時は数十分遅れることがある）
+on:
+  schedule:
+    - cron: '0 22 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bluesky
+  cancel-in-progress: false
+
+jobs:
+  post:
+    runs-on: ubuntu-24.04   # bluesky.yml と同じく固定（Playwright の依存が揃うまで）
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+          fetch-depth: 0   # 看板の更新履歴（vite.config.js）が git log を読むので全履歴を取る
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps --only-shell chromium
+      - run: npm run build
+      - run: npm run video
+      - run: npm run post
+        env:
+          BLUESKY_HANDLE: planet-coccolith.bsky.social
+          BLUESKY_APP_PASSWORD: ${{ secrets.BLUESKY_APP_PASSWORD }}
+      - uses: actions/upload-artifact@v4   # 撮れた動画を数日だけ残す（見え方の確認用）
+        if: always()
+        with:
+          name: video-${{ github.run_id }}
+          path: shots/
+          retention-days: 7
+          if-no-files-found: ignore
