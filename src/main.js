@@ -597,6 +597,7 @@ const OVERVIEW_DIST = (R_C + LAND_LIFT) * 2.5  // 惑星全体が収まる距離
 // 俯瞰カメラの水平回転・垂直回転（ラジアン）
 let ovYaw   = 0
 let ovPitch = Math.PI * 0.25   // 初期は斜め上から
+let ovEnterYaw = 0, ovEnterPitch = 0   // 俯瞰に入ったときの値（回さずに戻ったら立ち位置を変えない）
 
 // --- 入力 ---------------------------------------------------
 const keys = {}
@@ -621,7 +622,13 @@ window.addEventListener('keydown', e => {
     overviewMode = !overviewMode
     updateTabBtn()
 
-    if (!overviewMode) {
+    if (overviewMode) {
+      // sabちゃんの真上から見下ろす（HUD の座標が切り替えの前後で変わらないように）
+      ovYaw   = Math.atan2(pDir.x, pDir.z)
+      ovPitch = Math.max(OV_PITCH_MIN, Math.min(OV_PITCH_MAX, Math.asin(pDir.y)))
+      ovEnterYaw = ovYaw
+      ovEnterPitch = ovPitch
+    } else if (ovYaw !== ovEnterYaw || ovPitch !== ovEnterPitch) {
       // 🔴 が指していた地表点（カメラ→原点方向のレイ）を新しい立ち位置にする
       const rayDir = camera.position.clone().negate().normalize()
       raycaster.set(camera.position.clone(), rayDir)
