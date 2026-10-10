@@ -6,7 +6,8 @@
 //    npm run post -- --dry-run                                       … 投稿せず中身だけ表示
 //
 //  本文は座標とハッシュタグ（サイトへのリンクはプロフィールに置く）
-//  JSON の file が .mp4（scripts/video.mjs で撮った動画）なら動画として投稿する
+//  JSON の file が .mp4（scripts/video.mjs で撮った動画）なら動画として投稿し、
+//  本文に撮った地点から始めるサイトへのリンクも入れる
 // ============================================================
 
 import { readFile, readdir } from 'node:fs/promises'
@@ -14,6 +15,7 @@ import { AtpAgent } from '@atproto/api'
 
 const HASHTAGS  = ['planet', 'planet_coccolith', 'time_of_coccolith', 'claude']   // 本文に並べるハッシュタグ（# なし）
 const IMG_SIZE  = { width: 2400, height: 1350 }   // shot.mjs の書き出しサイズ
+const SITE_URL  = 'https://iwakicyan.github.io/coccolith/'
 const VIDEO_SERVICE = 'https://video.bsky.app'
 const VIDEO_TIMEOUT = 10 * 60_000                 // 動画の変換を待つ上限
 
@@ -36,14 +38,20 @@ function append(s, feature) {
   if (feature) facets.push({ index: { byteStart: bytes(text), byteEnd: bytes(text) + bytes(s) }, features: [feature] })
   text += s
 }
+const isVideo = meta.file.endsWith('.mp4')
 append(`${meta.area} | lat: ${fmt(meta.lat)}°  lon: ${fmt(meta.lon)}°\n\n`)
+if (isVideo) {
+  // 撮り始めた地点・向きから始まるリンク（表示はサイトの URL だけ）
+  const link = `${SITE_URL}?lat=${meta.lat}&lon=${meta.lon}&heading=${meta.heading}`
+  append(SITE_URL.replace(/^https:\/\//, '').replace(/\/$/, ''), { $type: 'app.bsky.richtext.facet#link', uri: link })
+  append('\n\n')
+}
 HASHTAGS.forEach((tag, i) => {
   if (i > 0) append(' ')
   append(`#${tag}`, { $type: 'app.bsky.richtext.facet#tag', tag })
 })
-const isVideo = meta.file.endsWith('.mp4')
 const alt = isVideo
-  ? `惑星 coccolith の lat ${fmt(meta.lat)}° lon ${fmt(meta.lon)}° から、方位 ${Math.round(meta.heading)}° へ ${meta.video.seconds} 秒まっすぐ走った景色`
+  ? `惑星 coccolith の lat ${fmt(meta.lat)}° lon ${fmt(meta.lon)}° から、方位 ${Math.round(meta.heading)}° へ ${meta.video.seconds * (meta.video.slow ?? 1)} 秒まっすぐ走った景色`
   : `惑星 coccolith の lat ${fmt(meta.lat)}° lon ${fmt(meta.lon)}° から、方位 ${Math.round(meta.heading)}° を向いて撮った景色`
 
 if (dryRun) {
