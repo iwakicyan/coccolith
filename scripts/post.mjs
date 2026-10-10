@@ -14,6 +14,8 @@ import { AtpAgent } from '@atproto/api'
 
 const HASHTAGS  = ['planet', 'planet_coccolith', 'time_of_coccolith', 'claude']   // 本文に並べるハッシュタグ（# なし）
 const IMG_SIZE  = { width: 2400, height: 1350 }   // shot.mjs の書き出しサイズ
+const VIDEO_SERVICE = 'https://video.bsky.app'
+const VIDEO_TIMEOUT = 10 * 60_000                 // 動画の変換を待つ上限
 
 const args = process.argv.slice(2)
 const dryRun = args.includes('--dry-run')
@@ -54,14 +56,46 @@ if (!BLUESKY_HANDLE || !BLUESKY_APP_PASSWORD) throw new Error('BLUESKY_HANDLE �
 
 const agent = new AtpAgent({ service: 'https://bsky.social' })
 await agent.login({ identifier: BLUESKY_HANDLE, password: BLUESKY_APP_PASSWORD })
-const { data: blob } = await agent.uploadBlob(await readFile(meta.file), { encoding: isVideo ? 'video/mp4' : 'image/jpeg' })
+const blob = isVideo
+  ? await uploadVideo(meta.file)
+  : (await agent.uploadBlob(await readFile(meta.file), { encoding: 'image/jpeg' })).data.blob
 const res = await agent.post({
   text,
   facets,
   langs: ['ja'],
   embed: isVideo
-    ? { $type: 'app.bsky.embed.video', video: blob.blob, alt, aspectRatio: { width: meta.video.width, height: meta.video.height } }
-    : { $type: 'app.bsky.embed.images', images: [{ image: blob.blob, alt, aspectRatio: IMG_SIZE }] },
+    ? { $type: 'app.bsky.embed.video', video: blob, alt, aspectRatio: { width: meta.video.width, height: meta.video.height } }
+    : { $type: 'app.bsky.embed.images', images: [{ image: blob, alt, aspectRatio: IMG_SIZE }] },
   createdAt: new Date().toISOString(),
 })
 console.log(res.uri)
+
+// 動画は Bluesky の動画サービスに送り、再生用への変換が済んでから投稿する
+// （PDS へ uploadBlob で直接上げると、投稿はできても変換されず再生できない）
+async function uploadVideo(file) {
+  const { data: { token } } = await agent.com.atproto.server.getServiceAuth({
+    aud: `did:web:${agent.pdsUrl.host}`,
+    lxm: 'com.atproto.repo.uploadBlob',
+    exp: Math.floor(Date.now() / 1000) + 60 * 30,
+  })
+  const url = new URL(`${VIDEO_SERVICE}/xrpc/app.bsky.video.uploadVideo`)
+  url.searchParams.set('did', agent.session.did)
+  url.searchParams.set('name', file.split('/').at(-1))
+  const up = await fetch(url, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'video/mp4' },
+    body: await readFile(file),
+  })
+  const upJson = await up.json()
+  if (!up.ok && !upJson.jobId) throw new Error(`動画のアップロードに失敗した: ${up.status} ${JSON.stringify(upJson)}`)
+
+  const videoAgent = new AtpAgent({ service: VIDEO_SERVICE })
+  const deadline = Date.now() + VIDEO_TIMEOUT
+  for (;;) {
+    const { data: { jobStatus } } = await videoAgent.app.bsky.video.getJobStatus({ jobId: upJson.jobId })
+    if (jobStatus.blob) return jobStatus.blob
+    if (jobStatus.state === 'JOB_STATE_FAILED') throw new Error(`動画の変換に失敗した: ${jobStatus.failureCode ?? ''} ${jobStatus.error ?? ''} ${jobStatus.message ?? ''}`)
+    if (Date.now() > deadline) throw new Error(`動画の変換が終わらない（${jobStatus.state}）`)
+    await new Promise(r => setTimeout(r, 3000))
+  }
+}
