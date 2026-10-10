@@ -527,6 +527,7 @@ export function createCoccolith({ renderer = null } = {}) {
     board.geometry.computeBoundingBox()
     const size = board.geometry.boundingBox.getSize(new THREE.Vector3())
     addLedBoard(board, size.x * kanban.scale.x / size.y, __CHANGELOG__)   // 横に広げたぶん列を増やし、ドットを丸いままにする
+    addKanbanLabel(kanban, board)
   }
 
   // --- ランドマーク: 柵 saku_1 (lat=-5.6, lon=100.0) ----------------
@@ -1387,3 +1388,67 @@ function createGrassField(poly, noise3D, kind) {
   return group
 }
 
+
+// 看板の黒板の下（脚の切り欠きまでの帯）の真ん中に「UPDATE/更新」を光る文字で貼る
+// 帯は少し前へ傾いているので、看板の本体を正面から測って面の位置と傾きを合わせる（kanban のローカル座標）
+const KANBAN_LABEL_TEXT   = 'UPDATE/更新'
+const KANBAN_LABEL_COLOR  = '#b9b4ff'   // 青紫
+const KANBAN_LABEL_GLOW   = '#7a6cff'
+const KANBAN_LABEL_FILL   = 0.62        // 文字の高さ / 帯の高さ
+function addKanbanLabel(kanban, board) {
+  const body = kanban.children.find(o => o.isMesh && o !== board)
+  board.geometry.computeBoundingBox()
+  const yTop = board.geometry.boundingBox.min.y   // 黒板の下端
+  // 本体の表を、帯の上下 2 か所で正面から測る（ジオメトリそのものに当てるので kanban の拡大・配置は関係ない）
+  const probe = new THREE.Mesh(body.geometry)
+  const ray = new THREE.Raycaster()
+  const frontZ = (y) => {
+    ray.set(new THREE.Vector3(0, y, 1), new THREE.Vector3(0, 0, -1))
+    return ray.intersectObject(probe, false)[0]?.point.z
+  }
+  // 帯の下端（脚の間の切り欠きの天井）を探す: 中央で表が当たらなくなる高さ
+  let yBottom = yTop
+  while (yBottom > 0 && frontZ(yBottom - 0.002) !== undefined) yBottom -= 0.002
+  const h = yTop - yBottom
+  const y0 = yBottom + h * 0.2, y1 = yTop - h * 0.2
+  const z0 = frontZ(y0), z1 = frontZ(y1)
+  const tilt = Math.atan2(z1 - z0, y1 - y0)   // 上ほど前に出ている
+
+  // 文字をキャンバスに描く（にじませた影で光って見せる）
+  const PX = 96   // 文字の大きさ (px)
+  const font = `bold ${PX}px "Hiragino Sans", "Noto Sans JP", "Yu Gothic", sans-serif`
+  const measure = document.createElement('canvas').getContext('2d')
+  measure.font = font
+  const pad = PX * 0.4
+  const canvas = document.createElement('canvas')
+  canvas.width = Math.ceil(measure.measureText(KANBAN_LABEL_TEXT).width + pad * 2)
+  canvas.height = Math.ceil(PX * 1.3 + pad * 2)
+  const ctx = canvas.getContext('2d')
+  ctx.font = font
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  ctx.fillStyle = KANBAN_LABEL_COLOR
+  ctx.shadowColor = KANBAN_LABEL_GLOW
+  for (const blur of [PX * 0.35, PX * 0.15]) {   // 外側の広いにじみ → 内側の強いにじみ
+    ctx.shadowBlur = blur
+    ctx.fillText(KANBAN_LABEL_TEXT, canvas.width / 2, canvas.height / 2)
+  }
+  ctx.shadowBlur = 0
+  ctx.fillText(KANBAN_LABEL_TEXT, canvas.width / 2, canvas.height / 2)
+  const tex = new THREE.CanvasTexture(canvas)
+  tex.colorSpace = THREE.SRGBColorSpace
+  tex.anisotropy = 4
+
+  // 文字の高さを帯に合わせ、kanban の横の拡大（scale.x）を打ち消して縦横比を保つ
+  const textH = h * KANBAN_LABEL_FILL * canvas.height / (PX * 1.3)
+  const textW = textH * canvas.width / canvas.height
+  const mesh = new THREE.Mesh(
+    new THREE.PlaneGeometry(textW / kanban.scale.x, textH),
+    new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false, toneMapped: false, fog: false }),
+  )
+  const yc = (yBottom + yTop) / 2
+  mesh.position.set(0, yc, z0 + (z1 - z0) * (yc - y0) / (y1 - y0) + 0.002)
+  mesh.rotation.x = tilt   // 板の上 (+Y) を前 (+Z) へ倒す
+  mesh.renderOrder = 1
+  kanban.add(mesh)
+}
