@@ -5,7 +5,8 @@ import { createCompass, createVethIndicator } from './hud.js'
 import { initFullscreenButton } from './fullscreen.js'
 import { initSettings, showSettingsFor, handleInvert, invSign } from './settings.js'
 import { isFlowerCutOpen } from './flowerCut.js'
-import { isPixelSceneOpen } from './pixelScene.js'
+import { isPixelSceneOpen, openPixelScene } from './pixelScene.js'
+import { TREEHOUSE_PIXEL_LAYERS, TREEHOUSE_PIXEL_TEXT } from './pixelArt/treehouse.js'
 import { createCoccolith, R_OCEAN } from './coccolith.js'
 import { createVeth } from './veth.js'
 import { createCloud1, createFlatCloud } from './cloud1.js'
@@ -527,6 +528,7 @@ function useDoor() {
 
 // --- JUMP: HUD 右上の一覧から施設内へワープ -------------------
 // 行き先は外のドアの id。施設が増えたらここに足す
+// 一覧の一番下はいつも CREDIT（ツリーハウスの扉と同じドット絵のページ＝作者表記を開く）。項目は addJumpItem で CREDIT の上に足す
 const JUMP_SPOTS = [
   { id: 'tofu', label: 'TOFU-HOUSE' },
   { id: 'sshall', label: 'SS-HALL' },
@@ -538,16 +540,24 @@ function setJumpOpen(open) {
   jumpEl.classList.toggle('open', open)
   jumpBtn.setAttribute('aria-expanded', open)
 }
-for (const { id, label } of JUMP_SPOTS) {
-  const door = _doors.find(d => d.id === id)
-  if (!door) continue
+function createJumpButton(label, onClick) {
   const item = document.createElement('button')
   item.textContent = label
   item.addEventListener('click', () => {
     setJumpOpen(false)
-    if (!transitioning) enterInterior(door)
+    onClick()
   })
-  jumpListEl.append(item)
+  return item
+}
+const jumpCreditBtn = createJumpButton('CREDIT', () => openPixelScene(TREEHOUSE_PIXEL_LAYERS, { text: TREEHOUSE_PIXEL_TEXT }))
+jumpListEl.append(jumpCreditBtn)
+function addJumpItem(label, onClick) {
+  jumpListEl.insertBefore(createJumpButton(label, onClick), jumpCreditBtn)
+}
+for (const { id, label } of JUMP_SPOTS) {
+  const door = _doors.find(d => d.id === id)
+  if (!door) continue
+  addJumpItem(label, () => { if (!transitioning) enterInterior(door) })
 }
 jumpBtn.addEventListener('click', () => setJumpOpen(!jumpEl.classList.contains('open')))
 document.addEventListener('pointerdown', e => { if (!jumpEl.contains(e.target)) setJumpOpen(false) })
