@@ -96,7 +96,7 @@
     #coin-box.grabbing { cursor: grabbing; }
     #coin-box img { pointer-events: none; -webkit-user-drag: none; }
     #coin-ghost {
-      position: fixed; z-index: 30; width: 30px; height: 30px; margin: -15px 0 0 -15px;
+      position: fixed; z-index: 30; width: 60px; height: 60px; margin: -30px 0 0 -30px;   /* 指に隠れないよう大きめ（元画像より大きいので少しぼやける） */
       pointer-events: none; transition: transform 0.12s ease-out;
       filter: drop-shadow(0 2px 3px rgba(0,0,0,0.5));
     }
