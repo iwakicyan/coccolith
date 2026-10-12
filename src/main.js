@@ -19,6 +19,8 @@ import { setDoorGlow } from './doorGlow.js'
 import { updateLedBoards } from './ledBoard.js'
 import { createCoinIntro } from './coinIntro.js'
 import { createCoinDrop } from './coinDrop.js'
+import { whenNightEnvReady } from './nightEnv.js'
+import { toLambert } from './lambert.js'
 
 // ============================================================
 //  LMF — Layout Master File
@@ -1069,4 +1071,119 @@ function animate() {
   shotFrameRendered()
 }
 
-animate()
+// 照り返しの目立たない Phong / Standard を Lambert にそろえ、初回に作るシェーダーの数を減らす（lambert.js）
+// 金属（看板のフレーム・コイン箱・コイン）は映り込みがあるので残す。sabちゃんの目まわりの照り返しも残す
+const _sabShine = new Set()
+sabchan.group.traverse(o => { if (o.material?.isMeshPhongMaterial) _sabShine.add(o.material) })
+const _toLambert = toLambert(scene, m => m.metalness >= 0.5 || _sabShine.has(m))
+for (const lamp of lamps) lamp.glow = _toLambert.get(lamp.glow) ?? lamp.glow   // ライトの頭の発光は updateLampLight で点け消しする
+
+// 最初の描画で 30 近いシェーダーを 1 本ずつ同期でコンパイルすると、初回訪問のスマホでは数秒固まる
+// 先にまとめて非同期でコンパイルさせ（KHR_parallel_shader_compile があれば GPU 側で並列に進む）、そろってから描き始める
+// 金属の映り込みの夜景が届いてからにする（あとから届くと、そのマテリアルのシェーダーを作り直して止まる）。回線が遅いときは待ちすぎない
+// 影はシェーダーを重くする（影なしなら起動が 0.5 秒ほど速い）ので、まず影なしで描き始め、影つきのシェーダーが裏でそろってから影を出す
+// 撮影モードは描き始めから影が要るので、最初から影つきでそろえる
+const ENV_WAIT_MAX = 1500   // (ms)
+const deferShadows = !shotMode
+if (deferShadows) renderer.shadowMap.enabled = false
+Promise.race([whenNightEnvReady(), new Promise(r => setTimeout(r, ENV_WAIT_MAX))])
+  .then(() => renderer.compileAsync(scene, camera))
+  .catch(() => {})
+  .finally(() => {
+    animate()
+    if (deferShadows) prepareShadows()
+  })
+
+// 影つきのシェーダーを裏でコンパイルし、そろったら影を ON にする
+// 一度にまとめて頼むと GPU がそれにかかりきりで描画が 0.5 秒ほど止まるので、1 フレームに新しいシェーダー 1 本ずつにする
+// three.js は shadowMap.enabled を切り替えてもシェーダーを替えないので、切り替えるたびにマテリアルに needsUpdate を立てる
+// （一度作ったシェーダーはマテリアルごとに覚えているので、作り直しにはならない）
+const SHADOW_WAIT_NO_EXT = 300   // (ms) 並列コンパイルの拡張がなく、そろったか分からないとき、最後のコンパイルから温め始めるまで
+const WARM_LAYER = 31            // 温めるときに 1 つだけ描くためのレイヤー（ライトもこのレイヤーに入れておく）
+const _warmViewport = new THREE.Vector4(), _warmScissor = new THREE.Vector4()
+function prepareShadows() {
+  const queue = new Map()   // マテリアル → それを使うオブジェクト（1 つあればよい）
+  scene.traverse(o => { if (o.material) [].concat(o.material).forEach(m => queue.has(m) || queue.set(m, o)) })
+  const todo = [...queue.values()].map(o => [o, o]).concat(shadowDepthStandIns())   // [コンパイルに使うもの, 温めるときに描くもの]
+  const firstUse = new Map()   // 新しく作ったシェーダー → それを使って描くオブジェクト
+  const depthTarget = new THREE.WebGLRenderTarget(1, 1)   // 影のマップへ描くときと同じく、出力をリニアの色空間にする
+  const step = () => {
+    renderer.shadowMap.enabled = true
+    const before = renderer.info.programs.length
+    while (todo.length && renderer.info.programs.length === before) {
+      const [o, drawn] = todo.shift()
+      const isDepth = o !== drawn
+      renderer.setRenderTarget(isDepth ? depthTarget : null)
+      const fog = scene.fog
+      if (isDepth) scene.fog = null   // 影のマップは霧なしのシーンとして描かれる
+      renderer.compile(o, camera, scene)
+      scene.fog = fog
+      for (const m of [].concat(o.material)) {
+        const p = renderer.properties.get(m).currentProgram
+        if (p && !firstUse.has(p)) firstUse.set(p, drawn)
+        if (!isDepth) m.needsUpdate = true   // 次のフレームは、いま覚えた影つきではなく影なしのシェーダーで描く
+      }
+    }
+    renderer.setRenderTarget(null)
+    renderer.shadowMap.enabled = false
+    if (todo.length) requestAnimationFrame(step)
+    else waitReady()
+  }
+  const waitReady = () => {
+    if (!renderer.extensions.has('KHR_parallel_shader_compile')) { setTimeout(warmUp, SHADOW_WAIT_NO_EXT); return }
+    const check = () => [...firstUse.keys()].every(p => p.isReady()) ? requestAnimationFrame(warmUp) : setTimeout(check, 50)
+    check()
+  }
+  // コンパイルが済んでも、初めて描くときに uniform の読み出しや GPU 側の準備（Metal のパイプライン作り）で止まる
+  // そこで影を ON にした状態で、シェーダー 1 本ぶんのオブジェクトだけを画面の隅 1 ピクセルに描いて、1 フレームに 1 本ずつ慣らしておく
+  // （影を落とすものなら、影のマップへの深度の描画も一緒に慣れる。描いた 1 ピクセルは次のフレームで上書きされる）
+  scene.traverse(o => { if (o.isLight) o.layers.enable(WARM_LAYER) })
+  const warmCam = camera.clone()
+  warmCam.layers.set(WARM_LAYER)
+  const warmUp = () => {
+    const [[p, o]] = firstUse
+    firstUse.delete(p)
+    const culled = o.frustumCulled, autoClear = renderer.autoClear
+    o.layers.enable(WARM_LAYER); o.frustumCulled = false
+    for (const m of [].concat(o.material)) m.needsUpdate = true   // 影つきのシェーダーに切り替えて描く
+    renderer.shadowMap.enabled = true; renderer.autoClear = false
+    renderer.getViewport(_warmViewport); renderer.getScissor(_warmScissor)
+    renderer.setViewport(0, 0, 1, 1); renderer.setScissor(0, 0, 1, 1); renderer.setScissorTest(true)
+    warmCam.copy(camera, false); warmCam.layers.set(WARM_LAYER)
+    renderer.render(scene, warmCam)
+    renderer.setScissorTest(false); renderer.setViewport(_warmViewport); renderer.setScissor(_warmScissor)
+    renderer.shadowMap.enabled = false; renderer.autoClear = autoClear
+    o.layers.disable(WARM_LAYER); o.frustumCulled = culled
+    for (const m of [].concat(o.material)) m.needsUpdate = true   // 次のフレームは影なしに戻す
+    if (firstUse.size) requestAnimationFrame(warmUp)
+    else enable()
+  }
+  const enable = () => {
+    renderer.shadowMap.enabled = true
+    // 準備中にシーンへ加わったものも影つきにする（先に作っていないものは、ここで作るので少し止まる）
+    scene.traverse(o => { if (o.material) [].concat(o.material).forEach(m => { m.needsUpdate = true }) })
+  }
+  requestAnimationFrame(step)
+}
+
+// 影のマップを描く深度シェーダーも、three.js は初めて影を描くときにその場で作って止まる
+// 同じ設定の深度マテリアル（WebGLShadowMap の getDepthMaterial と同じ決め方）の代役を作って先にコンパイルしておけば、シェーダーが共有される
+// 戻り値: [代役, その影を落とす本物のオブジェクト] の並び
+const SHADOW_SIDE = { [THREE.FrontSide]: THREE.BackSide, [THREE.BackSide]: THREE.FrontSide, [THREE.DoubleSide]: THREE.DoubleSide }
+function shadowDepthStandIns() {
+  const standIns = new Map()
+  scene.traverseVisible(o => {
+    if (!o.castShadow || !(o.isMesh || o.isLine || o.isPoints)) return
+    for (const m of [].concat(o.material)) {
+      const d = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking })
+      d.side = m.shadowSide ?? SHADOW_SIDE[m.side]
+      d.map = m.map; d.alphaMap = m.alphaMap; d.alphaTest = m.alphaTest
+      d.displacementMap = m.displacementMap; d.displacementScale = m.displacementScale
+      d.wireframe = m.wireframe
+      const key = [d.side, !!d.map, !!d.alphaMap, d.alphaTest > 0, !!d.displacementMap, d.wireframe, !!o.isInstancedMesh, !!o.isSkinnedMesh, !!o.geometry.morphAttributes.position].join()
+      if (standIns.has(key)) continue
+      standIns.set(key, [o.isInstancedMesh ? new THREE.InstancedMesh(o.geometry, d, 1) : new THREE.Mesh(o.geometry, d), o])   // 温めるときは本物（o）を描く
+    }
+  })
+  return [...standIns.values()]
+}

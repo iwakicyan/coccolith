@@ -125,9 +125,10 @@ export function createVeth() {
   }
 
   // --- 大気（内層）24×16 = 425頂点 -------------------------
+  // flatShading: ほぼ透明で面の段差は見えない。ほかの半透明の flat なものとシェーダーを共有でき、起動時のコンパイルが 1 本減る
   group.add(new THREE.Mesh(
     new THREE.SphereGeometry(R_V * 1.035, 24, 16),
-    new THREE.MeshLambertMaterial({ color: 0xb8d4e8, transparent: true, opacity: 0.10, side: THREE.FrontSide })
+    new THREE.MeshLambertMaterial({ color: 0xb8d4e8, transparent: true, opacity: 0.10, side: THREE.FrontSide, flatShading: true })
   ))
 
   // --- 大気（外層・散乱光）18×12 = 247頂点 -----------------
