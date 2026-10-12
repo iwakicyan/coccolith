@@ -5,6 +5,8 @@
 // ============================================================
 
 const STORAGE_KEY = 'coccolith.handleInvert'
+const SPEED_KEY   = 'coccolith.moveSpeed'
+const SPEED_STEPS = [0.5, 1, 1.5]   // 移動速度の倍率の選択肢
 
 const ICON_GEAR = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M13.27 6.82 L15.14 7.07 L15.14 8.93 L13.27 9.18 L12.56 10.89 L13.71 12.39 L12.39 13.71 L10.89 12.56 L9.18 13.27 L8.93 15.14 L7.07 15.14 L6.82 13.27 L5.11 12.56 L3.61 13.71 L2.29 12.39 L3.44 10.89 L2.73 9.18 L0.86 8.93 L0.86 7.07 L2.73 6.82 L3.44 5.11 L2.29 3.61 L3.61 2.29 L5.11 3.44 L6.82 2.73 L7.07 0.86 L8.93 0.86 L9.18 2.73 L10.89 3.44 L12.39 2.29 L13.71 3.61 L12.56 5.11Z"/><circle cx="8" cy="8" r="2.2"/></svg>'
 
@@ -18,6 +20,8 @@ const VIEWS = [
 ]
 const rowOf = {}   // 視点 id → パネルの行
 export const handleInvert = Object.fromEntries(VIEWS.map(v => [v.id, { x: false, y: false }]))
+// 移動速度の倍率（屋外・室内とも）。main.js が毎フレーム読む
+export const moveSpeed = { k: 1 }
 
 function load() {
   try {
@@ -26,9 +30,16 @@ function load() {
       if (saved[v.id]) handleInvert[v.id] = { x: !!saved[v.id].x, y: !!saved[v.id].y }
     }
   } catch { /* 読めなければ初期設定のまま */ }
+  try {
+    const k = Number(localStorage.getItem(SPEED_KEY))
+    if (SPEED_STEPS.includes(k)) moveSpeed.k = k
+  } catch { /* 読めなければ 1 倍のまま */ }
 }
 function save() {
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(handleInvert)) } catch { /* 保存できなくても今回は効く */ }
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(handleInvert))
+    localStorage.setItem(SPEED_KEY, String(moveSpeed.k))
+  } catch { /* 保存できなくても今回は効く */ }
 }
 
 // 反転フラグ → 入力に掛ける符号
@@ -65,7 +76,32 @@ export function initSettings(btn, panel) {
   const title = document.createElement('div')
   title.className = 'set-title'
   title.textContent = 'ハンドルの向きを反転'
-  panel.append(title, ...rows)
+
+  // 移動速度（0.5 / 1 / 1.5 倍から1つ選ぶ）
+  const speedTitle = document.createElement('div')
+  speedTitle.className = 'set-title'
+  speedTitle.textContent = '移動速度'
+  const speedRow = document.createElement('div')
+  speedRow.className = 'set-row'
+  const speedBtns = SPEED_STEPS.map(k => {
+    const b = document.createElement('button')
+    b.className = 'set-speed'
+    b.textContent = `×${k}`
+    b.setAttribute('aria-label', `移動速度 ${k} 倍`)
+    b.addEventListener('click', () => {
+      moveSpeed.k = k
+      syncSpeed(); save(); b.blur()
+    })
+    return b
+  })
+  const syncSpeed = () => speedBtns.forEach((b, i) => {
+    const on = SPEED_STEPS[i] === moveSpeed.k
+    b.classList.toggle('on', on)
+    b.setAttribute('aria-pressed', on)
+  })
+  syncSpeed()
+  speedRow.append(...speedBtns)
+  panel.append(title, ...rows, speedTitle, speedRow)
 
   const setOpen = open => {
     panel.classList.toggle('open', open)

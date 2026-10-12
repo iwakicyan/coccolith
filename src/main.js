@@ -3,7 +3,7 @@ import { shotMode, applyStartPose, startWithLight, shotFrameRendered } from './s
 import { vJoy, initJoysticks } from './joystick.js'
 import { createCompass, createVethIndicator } from './hud.js'
 import { initFullscreenButton } from './fullscreen.js'
-import { initSettings, showSettingsFor, handleInvert, invSign } from './settings.js'
+import { initSettings, showSettingsFor, handleInvert, invSign, moveSpeed } from './settings.js'
 import { isFlowerCutOpen } from './flowerCut.js'
 import { isPixelSceneOpen, openPixelScene } from './pixelScene.js'
 import { TREEHOUSE_PIXEL_LAYERS, TREEHOUSE_PIXEL_TEXT } from './pixelArt/treehouse.js'
@@ -818,7 +818,7 @@ function updateInterior(dt, now, joyYaw, joyPitch) {
   const turnIn = (keys['KeyQ'] ? 1 : 0) - (keys['KeyE'] ? 1 : 0) - joyYaw
   if (Math.abs(turnIn) > 0.01) iFwd.applyAxisAngle(_iUp, TURN_SPD * dt * Math.max(-1, Math.min(1, turnIn)))
   _iRight.crossVectors(iFwd, _iUp)   // 画面右
-  const step = INTERIOR_SPEED * dt
+  const step = INTERIOR_SPEED * moveSpeed.k * dt
   const fbIn = (keys['KeyW'] ? 1 : 0) - (keys['KeyS'] ? 1 : 0) - vJoy.ly
   const lrIn = (keys['KeyD'] ? 1 : 0) - (keys['KeyA'] ? 1 : 0) + vJoy.lx
   if (Math.abs(fbIn) > 0.01) iPos.addScaledVector(iFwd,   step * Math.max(-1, Math.min(1, fbIn)))
@@ -949,7 +949,7 @@ function animate() {
     }
   } else {
     // --- 通常モード: sabちゃん追従3人称 ---
-    const da = (SPEED / R_C) * dt
+    const da = (SPEED * moveSpeed.k / R_C) * dt
 
     const backInv = handleInvert.back
     const turnIn = (keys['KeyQ'] ? 1 : 0) - (keys['KeyE'] ? 1 : 0) - joyYaw * invSign(backInv.x)
