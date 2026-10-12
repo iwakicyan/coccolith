@@ -22,7 +22,7 @@ const PULL_SPEED0 = 1.5    // 吸い寄せの初速 (m/s)
 const PULL_ACCEL  = 28     // 吸い寄せの加速度 (m/s²)
 const SHRINK_DIST = 1.2    // この距離から縮み始める (m)
 const VANISH_DIST = 0.25   // この距離まで来たら消える (m)
-const PICKUP_DIST = 3      // 道に並べたコインを拾う sabちゃんとの距離 (m)
+const PICKUP_DIST = 5      // 道に並べたコインを拾う sabちゃんとの距離 (m)
 const PICKUP_SPEED0 = 15   // 道に並べたコインの吸い寄せの初速 (m/s)。近づいたらすぐ回収されるよう速め
 
 const _up    = new THREE.Vector3()
