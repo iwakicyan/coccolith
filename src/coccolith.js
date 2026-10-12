@@ -1285,6 +1285,7 @@ function createGrassField(poly, noise3D, kind) {
   const EDGE_WIDTH     = 6.0   // 境界フェード幅 (度 ≈ 37.5m)
   const NOISE_FREQ     = 25
   const NOISE_STRENGTH = 0.8
+  const SHRINK_DEG     = (5 / R_C) * (180 / Math.PI)   // 境界を内側へ 5m 寄せる (度)
 
   const edgeNoise = createNoise3D(Alea(kind.seed + '-edge'))
 
@@ -1317,7 +1318,7 @@ function createGrassField(poly, noise3D, kind) {
         if (d < minDist) minDist = d
       }
       const inside      = _polyContains(lat, lon, poly)
-      const edgeFactor  = (inside ? 1 : -1) * minDist / EDGE_WIDTH
+      const edgeFactor  = ((inside ? 1 : -1) * minDist - SHRINK_DEG) / EDGE_WIDTH
 
       if (edgeFactor <= -NOISE_STRENGTH) continue
 
