@@ -795,6 +795,8 @@ const _ovN        = new THREE.Vector3()
 const _ovF        = new THREE.Vector3()
 const _ovR        = new THREE.Vector3()
 const _hudCamPos  = new THREE.Vector3()
+const _hudUp      = new THREE.Vector3()   // 俯瞰中のコンパス用: 画面の上方向
+const _hudFwd     = new THREE.Vector3()   // 俯瞰中のコンパス用: 視線方向
 let hudReady = false
 
 // sabちゃんの頭の揺れ・鼻とセンサーの明滅（屋外・室内共通）
@@ -1036,8 +1038,15 @@ function animate() {
   const hudCamPos = overviewMode
     ? _hudCamPos.copy(camera.position)
     : _hudCamPos.copy(pDir).multiplyScalar(R_C + 1)
-  drawCompass(pDir, pFwd)
-  drawVethIndicator(hudCamPos, pDir, pFwd, _vethWorldPos)
+  // 俯瞰中は sabちゃんではなくカメラの向き（画面の上・奥）でコンパスと veth の矢印を描く
+  let hudUp = pDir, hudFwd = pFwd
+  if (overviewMode) {
+    camera.updateMatrixWorld()
+    hudUp  = _hudUp.setFromMatrixColumn(camera.matrixWorld, 1)
+    hudFwd = _hudFwd.setFromMatrixColumn(camera.matrixWorld, 2).negate()
+  }
+  drawCompass(hudUp, hudFwd)
+  drawVethIndicator(hudCamPos, hudUp, hudFwd, _vethWorldPos)
   {
     // 俯瞰中は画面の中心（カメラの真下 = 俯瞰を抜けたときに立つ地点）の座標を出す
     // 文字は変わったときだけ書き換える（毎フレーム書くとページのレイアウトをやり直す）
