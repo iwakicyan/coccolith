@@ -4,6 +4,7 @@ import { vJoy, initJoysticks } from './joystick.js'
 import { createCompass, createVethIndicator } from './hud.js'
 import { initFullscreenButton } from './fullscreen.js'
 import { initSettings, showSettingsFor, handleInvert, invSign, moveSpeed } from './settings.js'
+import { initVisitCounter } from './visitCounter.js'
 import { isFlowerCutOpen } from './flowerCut.js'
 import { isPixelSceneOpen, openPixelScene } from './pixelScene.js'
 import { TREEHOUSE_PIXEL_LAYERS, TREEHOUSE_PIXEL_TEXT } from './pixelArt/treehouse.js'
@@ -672,6 +673,8 @@ initJoysticks()
 // --- HUD ----------------------------------------------------
 initFullscreenButton(document.getElementById('fs-btn'))
 initSettings(document.getElementById('settings-btn'), document.getElementById('settings'))
+// 訪問者数（開発サーバー・撮影モードでは数えない）
+initVisitCounter(document.getElementById('visit-count'), document.getElementById('visit-num'), { countable: !import.meta.env.DEV && !shotMode })
 const { drawCompass }       = createCompass(document.getElementById('compass'))
 const { drawVethIndicator } = createVethIndicator(document.getElementById('veth-ind'))
 const areaEl   = document.getElementById('area-code')

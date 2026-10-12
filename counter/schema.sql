@@ -1,0 +1,2 @@
+CREATE TABLE IF NOT EXISTS counter (id TEXT PRIMARY KEY, n INTEGER NOT NULL);
+INSERT OR IGNORE INTO counter (id, n) VALUES ('visitors', 0);

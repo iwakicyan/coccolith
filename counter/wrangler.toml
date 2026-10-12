@@ -1,0 +1,8 @@
+name = "coccolith-counter"
+main = "worker.js"
+compatibility_date = "2026-09-01"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "coccolith-counter"
+database_id = "74f1850c-70a7-40e0-b164-e26b8a399ad9"
