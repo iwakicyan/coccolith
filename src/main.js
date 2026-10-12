@@ -702,6 +702,15 @@ const isUnderwater = dir => getGroundHeight(dir) - 1 < R_OCEAN + TIDE_SHIFT
 }
 const coinIntro = createCoinIntro({ scene, renderer, getGround: dir => getGroundHeight(dir) - 1, onCollect: collectCoin })
 coinIntro.start(pDir, pFwd)
+// スポーン地点（北極）の正面、経度 -180° の線上に lat 86〜64 で 7 枚を等間隔に並べる
+{
+  const LINE_LAT0 = 86, LINE_LAT1 = 64, LINE_LON = -180, LINE_COUNT = 7
+  coinIntro.placeLine(Array.from({ length: LINE_COUNT }, (_, i) => {
+    const lat = LINE_LAT0 + (LINE_LAT1 - LINE_LAT0) * i / (LINE_COUNT - 1)
+    const phi = (90 - lat) * Math.PI / 180, theta = (LINE_LON + 180) * Math.PI / 180
+    return new THREE.Vector3(Math.sin(phi) * Math.cos(theta), Math.cos(phi), Math.sin(phi) * Math.sin(theta))
+  }))
+}
 // HUD のコイン数をつかんでコイン箱の投入口へドラッグすると、1 枚入れられる（coinDrop.js）
 const coinDrop = createCoinDrop({
   boxEl: coinBoxEl, scene, camera, renderer, slot: coinSlot,
