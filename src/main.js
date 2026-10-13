@@ -21,6 +21,7 @@ import { createCoinIntro } from './coinIntro.js'
 import { createCoinDrop } from './coinDrop.js'
 import { whenNightEnvReady } from './nightEnv.js'
 import { toLambert } from './lambert.js'
+import { createLightHeads } from './lightHeads.js'
 
 // ============================================================
 //  LMF — Layout Master File
@@ -888,6 +889,13 @@ function updateInterior(dt, now, joyYaw, joyPitch) {
   camera.rotateX(CAM_LIFT)
 }
 
+// ウロウロするライトの頭（光らない。lightHeads.js）。sabちゃんの 0.1 倍の速さで陸を歩き回る
+const lightHeads = createLightHeads({
+  scene, speed: SPEED * 0.1, radius: R_C,
+  getGround: dir => getGroundHeight(dir) - 1,
+  waterLevel: R_OCEAN + TIDE_SHIFT,
+})
+
 function animate() {
   requestAnimationFrame(animate)
   const now = performance.now()
@@ -923,6 +931,8 @@ function animate() {
     _crMat.makeBasis(_crZ, _crUp, _crFwd)           // +X=横, +Y=惑星法線, +Z=進行方向
     c.mesh.setRotationFromMatrix(_crMat)
   }
+
+  lightHeads.update(dt, now)
 
   // ハンドル入力（入力し始めはゆっくり）
   joyYawHeld   = Math.abs(vJoy.rx) > 0.05 ? joyYawHeld   + dt : 0
