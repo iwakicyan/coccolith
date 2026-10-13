@@ -14,7 +14,7 @@ import { createBridge01 } from '../my-3d-parts/landmark/bridge01.js'
 import { createCoinbox } from '../my-3d-parts/landmark/coinbox.js'
 import { createSShall } from '../my-3d-parts/landmark/sshall.js'
 import { createDote } from '../my-3d-parts/landmark/dote.js'
-import { createLight01 } from '../my-3d-parts/landmark/light01.js'
+import { createLight01, createLight01Pole } from '../my-3d-parts/landmark/light01.js'
 import { createHoisun, createHoason } from '../my-3d-parts/landmark/hoisun.js'
 import { mergeStatic } from '../my-3d-parts/parts/mergeStatic.js'
 import { addDoorGlow, addGroundGlow, addArchDoorGlow } from './doorGlow.js'
@@ -847,6 +847,47 @@ export function createCoccolith({ renderer = null } = {}) {
       lamps.push({ pos: light.userData.lamp.clone().applyMatrix4(light.matrix), glow })
     }
     mergeStatic(lightGroup, { keep: o => lightGlows.includes(o) })
+  }
+
+  // --- ランドマーク: ライト light01 の棒だけ -------------------------
+  // light01 と同じ 1.5 倍（高さ 4.65m）。ラインごとに始点→終点の大円を count 本で等分して並べる（両端にも置く）
+  // 地面の高さは地表メッシュへのレイキャストで求める
+  {
+    const LIGHT01_POLE_LINES = [
+      { from: { lat:  60, lon: 70 }, to: { lat: 72, lon: 5.5 }, count: 5 },    // 全長 169m・約42m 間隔
+      { from: { lat: -60, lon: 25 }, to: { lat: -48, lon: 20 }, count: 3 },    // 全長 77m・約39m 間隔
+      { from: { lat: -61, lon: -88 }, to: { lat: -47, lon: -76 }, count: 4 },  // 全長 98m・約33m 間隔
+    ]
+    const POLE_SCALE = 1.5
+    const POLE_SINK = 0.1   // 斜面でも足元が浮かないよう地面にめり込ませる量 (m)
+    const ray = new THREE.Raycaster()
+    surface.updateMatrixWorld()
+    const poleGroup = new THREE.Group()
+    group.add(poleGroup)
+    const spots = []
+    for (const { from, to, count } of LIGHT01_POLE_LINES) {
+      const a = dirOf(from.lat, from.lon), b = dirOf(to.lat, to.lon)
+      const angle = a.angleTo(b)
+      const axis = new THREE.Vector3().crossVectors(a, b).normalize()
+      for (let i = 0; i < count; i++) spots.push(a.clone().applyAxisAngle(axis, angle * i / (count - 1)))
+    }
+    for (const d of spots) {
+      ray.set(d.clone().multiplyScalar(R_C * 2), d.clone().negate())
+      const ground = ray.intersectObject(surface)[0]?.point.length() ?? R_C + LAND_LIFT
+      const pole = createLight01Pole()
+      pole.scale.setScalar(POLE_SCALE)
+      pole.position.copy(d).multiplyScalar(ground - POLE_SINK)
+      pole.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), d)
+      poleGroup.add(pole)
+      pole.rotateY(northAngle(pole))
+      // 当たり判定は棒と同じ位置・向きの Object3D に持たせる（棒の Group はまとめると空になって消えるので）
+      const col = new THREE.Object3D()
+      col.position.copy(pole.position); col.quaternion.copy(pole.quaternion); col.scale.copy(pole.scale)
+      col.userData.footprint = pole.userData.footprint
+      group.add(col)
+      colliders.push(col)
+    }
+    mergeStatic(poleGroup)
   }
 
   // --- EB_v87 (lat=-72, lon=90) --------------------------------
