@@ -6,6 +6,7 @@
 //  背景からはみ出したレイヤーも切らずに暗い背景の上に出す（ページの大きさ = 色のあるドット全体の範囲）
 //  brightness: そのレイヤーの色に掛ける明るさ（省略時 1。0.8 で 2 割暗く、1.1 で 1 割明るく）
 //  blink: true のレイヤーはふだんは出さず、ランダムな間隔で一瞬だけ重ねる（目を閉じた目元を重ねて瞬き）
+//  showOnTap: レイヤー を持つレイヤーはふだんは出さず、そのレイヤーの色のあるドットをタップするたびに出す・消すを切り替える（人物をタップで吹き出し）
 //  絵と CLOSE の間にテキストウィンドウを置く（横幅は背景の表示幅の TEXT_W 倍。text で中身を渡す。改行はそのまま、[表示する文字](URL) はリンクにする）
 //  閉じる: 外側のタップ・CLOSE・Esc
 // ============================================================
@@ -39,8 +40,9 @@ function layerDots(layer) {
 
 export function openPixelScene(layers, { text = '' } = {}) {
   if (pageEl) return
-  const dots = layers.filter(l => !l.blink).flatMap(layerDots)
-  const blinkDots = layers.filter(l => l.blink).flatMap(layerDots)
+  const layerDotsOf = new Map(layers.map(l => [l, layerDots(l)]))
+  const dots = layers.filter(l => !l.blink).flatMap(l => layerDotsOf.get(l))   // ページの大きさはタップで出すレイヤーも含めて決める
+  const blinkDots = layers.filter(l => l.blink).flatMap(l => layerDotsOf.get(l))
   const minX = Math.min(...dots.map(d => d.x)), maxX = Math.max(...dots.map(d => d.x))
   const minY = Math.min(...dots.map(d => d.y)), maxY = Math.max(...dots.map(d => d.y))
   const W = maxX - minX + 1, H = maxY - minY + 1
@@ -74,10 +76,44 @@ export function openPixelScene(layers, { text = '' } = {}) {
       ctx.fillRect(d.x - minX, d.y - minY, 1, 1)
     }
   }
-  paint(dots)
+  // タップで出すレイヤーは、出しているものだけ描く（元の重なり順のまま）
+  const shown = new Set()
+  let base = null   // 瞬きのあと戻す、目を開けた絵
+  const draw = () => {
+    ctx.clearRect(0, 0, W, H)
+    for (const l of layers) {
+      if (l.blink || (l.showOnTap && !shown.has(l))) continue
+      paint(layerDotsOf.get(l))
+    }
+    base = ctx.getImageData(0, 0, W, H)
+  }
+  draw()
+
+  // タップ: 押したドットが showOnTap のレイヤーに当たれば、そのレイヤーで出すものを切り替える
+  const tapLayers = layers.filter(l => l.showOnTap)
+  const hitArea = new Map()   // 押すレイヤー → 色のあるドットの "x,y"
+  for (const l of tapLayers) {
+    if (!hitArea.has(l.showOnTap)) hitArea.set(l.showOnTap, new Set(layerDotsOf.get(l.showOnTap).map(d => `${d.x},${d.y}`)))
+  }
+  const hitTarget = e => {
+    const r = cv.getBoundingClientRect()
+    const key = `${Math.floor((e.clientX - r.left) / r.width * W) + minX},${Math.floor((e.clientY - r.top) / r.height * H) + minY}`
+    for (const [target, area] of hitArea) if (area.has(key)) return target
+    return null
+  }
+  cv.addEventListener('click', e => {
+    const target = hitTarget(e)
+    if (!target) return
+    for (const l of tapLayers) {
+      if (l.showOnTap !== target) continue
+      if (shown.has(l)) shown.delete(l)
+      else shown.add(l)
+    }
+    draw()
+  })
+  cv.addEventListener('mousemove', e => { cv.style.cursor = hitTarget(e) ? 'pointer' : '' })
 
   // 瞬き: 目を閉じた目元を一瞬だけ重ね、元の絵に戻す
-  const base = ctx.getImageData(0, 0, W, H)
   let blinkTimer = null
   const rand = ([a, b]) => a + Math.random() * (b - a)
   const blink = () => {
