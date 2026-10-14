@@ -7,9 +7,13 @@
 //  brightness: そのレイヤーの色に掛ける明るさ（省略時 1。0.8 で 2 割暗く、1.1 で 1 割明るく）
 //  blink: true のレイヤーはふだんは出さず、ランダムな間隔で一瞬だけ重ねる（目を閉じた目元を重ねて瞬き）
 //  showOnTap: レイヤー を持つレイヤーはふだんは出さず、そのレイヤーの色のあるドットをタップするたびに出す・消すを切り替える（人物をタップで吹き出し）
+//  onTap: 関数 を持つレイヤーは、その色のあるドットをタップすると関数を呼ぶ（バインダーをタップで開発資料を開く）
+//  hoverLabel: 文字 を持つレイヤーは、カーソルを合わせると周り 1 ドットを白く縁取り、上にその文字を出す
 //  絵と CLOSE の間にテキストウィンドウを置く（横幅は背景の表示幅の TEXT_W 倍。text で中身を渡す。改行はそのまま、[表示する文字](URL) はリンクにする）
 //  閉じる: 外側のタップ・CLOSE・Esc
 // ============================================================
+
+import { isDocViewerOpen } from './docViewer.js'
 
 let pageEl = null
 export const isPixelSceneOpen = () => !!pageEl
@@ -20,6 +24,18 @@ const TEXT_W = 1.4   // テキストウィンドウの横幅（背景の表示�
 const BLINK_GAP    = [2000, 6000]   // 瞬きの間隔 (ms)。この範囲でランダム
 const BLINK_CLOSED = 130            // 目を閉じている長さ (ms)
 const BLINK_DOUBLE = 0.2            // 続けてもう一度瞬きする確率
+const OUTLINE_COLOR = '#FFFFFF'     // hoverLabel のレイヤーにカーソルを合わせたときの縁取りの色
+
+// 色のあるドットの周り 1 ドット（斜めも含む）のうち、色のないところを { x, y, color } で並べる
+function outlineDots(dots) {
+  const filled = new Set(dots.map(d => `${d.x},${d.y}`))
+  const out = new Map()
+  for (const d of dots) for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+    const key = `${d.x + dx},${d.y + dy}`
+    if (!filled.has(key)) out.set(key, { x: d.x + dx, y: d.y + dy, color: OUTLINE_COLOR })
+  }
+  return [...out.values()]
+}
 
 // 色のあるドットを { x, y, color } で並べる（brightness を掛けた色）
 function layerDots(layer) {
@@ -51,6 +67,7 @@ export function openPixelScene(layers, { text = '' } = {}) {
   el.id = 'pixel-scene'
   el.innerHTML = `
     <canvas class="ps-art"></canvas>
+    <div class="ps-label" hidden></div>
     <div class="ps-text"></div>
     <button class="ps-close">CLOSE</button>`
   const textEl = el.querySelector('.ps-text')
@@ -76,24 +93,27 @@ export function openPixelScene(layers, { text = '' } = {}) {
       ctx.fillRect(d.x - minX, d.y - minY, 1, 1)
     }
   }
+  const outlineOf = new Map(layers.filter(l => l.hoverLabel).map(l => [l, outlineDots(layerDotsOf.get(l))]))
   // タップで出すレイヤーは、出しているものだけ描く（元の重なり順のまま）
   const shown = new Set()
+  let hovered = null   // カーソルを合わせている hoverLabel のレイヤー（縁取りする）
   let base = null   // 瞬きのあと戻す、目を開けた絵
   const draw = () => {
     ctx.clearRect(0, 0, W, H)
     for (const l of layers) {
       if (l.blink || (l.showOnTap && !shown.has(l))) continue
       paint(layerDotsOf.get(l))
+      if (l === hovered) paint(outlineOf.get(l))   // 縁取りはそのレイヤーのすぐ上（手前のレイヤーより奥）に描く
     }
     base = ctx.getImageData(0, 0, W, H)
   }
   draw()
 
-  // タップ: 押したドットが showOnTap のレイヤーに当たれば、そのレイヤーで出すものを切り替える
+  // タップ: 押したドットが showOnTap のレイヤーに当たれば、そのレイヤーで出すものを切り替える。onTap のレイヤーならその関数を呼ぶ
   const tapLayers = layers.filter(l => l.showOnTap)
   const hitArea = new Map()   // 押すレイヤー → 色のあるドットの "x,y"
-  for (const l of tapLayers) {
-    if (!hitArea.has(l.showOnTap)) hitArea.set(l.showOnTap, new Set(layerDotsOf.get(l.showOnTap).map(d => `${d.x},${d.y}`)))
+  for (const target of [...tapLayers.map(l => l.showOnTap), ...layers.filter(l => l.onTap || l.hoverLabel)]) {
+    if (!hitArea.has(target)) hitArea.set(target, new Set(layerDotsOf.get(target).map(d => `${d.x},${d.y}`)))
   }
   const hitTarget = e => {
     const r = cv.getBoundingClientRect()
@@ -104,6 +124,7 @@ export function openPixelScene(layers, { text = '' } = {}) {
   cv.addEventListener('click', e => {
     const target = hitTarget(e)
     if (!target) return
+    if (target.onTap) { target.onTap(); return }
     for (const l of tapLayers) {
       if (l.showOnTap !== target) continue
       if (shown.has(l)) shown.delete(l)
@@ -111,7 +132,28 @@ export function openPixelScene(layers, { text = '' } = {}) {
     }
     draw()
   })
-  cv.addEventListener('mousemove', e => { cv.style.cursor = hitTarget(e) ? 'pointer' : '' })
+  // カーソルを合わせたとき: 押せるところは指マーク、hoverLabel のレイヤーは縁取りと文字を出す
+  const labelEl = el.querySelector('.ps-label')
+  const setHovered = l => {
+    if (l === hovered) return
+    hovered = l
+    draw()
+    labelEl.hidden = !l
+    if (!l) return
+    // 文字はレイヤーの色のあるドットの真上、縁取りの 1 ドット上に置く
+    const ds = layerDotsOf.get(l)
+    const r = cv.getBoundingClientRect(), s = r.width / W
+    const x0 = Math.min(...ds.map(d => d.x)), x1 = Math.max(...ds.map(d => d.x)) + 1, y0 = Math.min(...ds.map(d => d.y))
+    labelEl.textContent = l.hoverLabel
+    labelEl.style.left = `${r.left + ((x0 + x1) / 2 - minX) * s}px`
+    labelEl.style.top = `${r.top + (y0 - 2 - minY) * s}px`
+  }
+  cv.addEventListener('mousemove', e => {
+    const target = hitTarget(e)
+    cv.style.cursor = target && (target.onTap || tapLayers.some(l => l.showOnTap === target)) ? 'pointer' : ''
+    setHovered(target?.hoverLabel ? target : null)
+  })
+  cv.addEventListener('mouseleave', () => setHovered(null))
 
   // 瞬き: 目を閉じた目元を一瞬だけ重ね、元の絵に戻す
   let blinkTimer = null
@@ -127,6 +169,7 @@ export function openPixelScene(layers, { text = '' } = {}) {
 
   // ドットが潰れないよう、画面の物理ピクセルの整数倍で拡大する（スマホは 1px = 2〜3 ピクセルなので細かく刻める）
   const fit = () => {
+    setHovered(null)   // 大きさが変わると文字の位置がずれるので、いったん消す
     const dpr = devicePixelRatio || 1
     const fitW = innerWidth < innerHeight ? FIT_W_PORTRAIT : FIT_W
     const s = Math.max(1, Math.floor(Math.min(innerWidth * fitW / W, innerHeight * FIT_H / H) * dpr)) / dpr   // 1 ドットの大きさ (px)
@@ -145,7 +188,7 @@ export function openPixelScene(layers, { text = '' } = {}) {
     removeEventListener('resize', fit)
     removeEventListener('keydown', onKey, true)
   }
-  const onKey = e => { if (e.code === 'Escape') { close(); e.stopPropagation() } }
+  const onKey = e => { if (e.code === 'Escape' && !isDocViewerOpen()) { close(); e.stopPropagation() } }   // 開発資料を開いている間は、そちらを先に閉じる
   el.addEventListener('click', e => { if (e.target === el) close() })   // 絵の外側をタップ
   el.querySelector('.ps-close').addEventListener('click', close)
   addEventListener('resize', fit)

@@ -1,5 +1,7 @@
 // ツリーハウスの扉をタップで開くドット絵のページ（pixelScene.js）。背景から順に重ねる
 
+import { openDocViewer } from '../docViewer.js'
+
 // 背景 64×32（手前の人物より明る過ぎないよう少し暗くする）
 const background = {
   "brightness": 0.4,
@@ -279,8 +281,10 @@ const desk = {
   ]
 }
 
-// バインダー 64×32。机と同じ位置に重ね、天板の上に載せる
+// バインダー 64×32。机と同じ位置に重ね、天板の上に載せる。タップで開発資料を開く
 const binder = {
+  "onTap": openDocViewer,
+  "hoverLabel": "Documents",
   "x": desk.x, "y": desk.y,
   "palette": {
     "0": null,

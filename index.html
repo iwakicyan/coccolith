@@ -251,6 +251,29 @@
       cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent;
     }
     #pixel-scene button:hover { border-color: rgba(255,255,255,0.7); color: #fff; }
+    #pixel-scene .ps-label {
+      position: absolute; transform: translate(calc(-50% - 2ch - 0.16em), -100%); pointer-events: none;   /* 真ん中から 2 文字ぶん左へ */
+      color: #fff; font: 15px monospace; letter-spacing: 0.08em; text-shadow: 0 0 3px #000;
+    }
+    #pixel-scene .ps-label[hidden] { display: none; }
+    #doc-viewer {
+      position: fixed; inset: 0; z-index: 41;
+      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px;
+      background: rgba(0,0,10,0.95);
+      touch-action: none; user-select: none; -webkit-user-select: none;
+    }
+    #doc-viewer .dv-tabs { display: flex; gap: 8px; }
+    #doc-viewer .dv-stage { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; }
+    #doc-viewer .dv-img { max-width: min(80vw, 900px); max-height: 70vh; object-fit: contain; touch-action: none; }
+    #doc-viewer .dv-title { color: #EFEDE6; font: 12px monospace; letter-spacing: 0.08em; white-space: pre; }
+    #doc-viewer button {
+      padding: 0 14px; letter-spacing: 0.15em; background: rgba(0,0,0,0.25);
+      border: 1px solid rgba(255,255,255,0.35); border-radius: 12px;
+      color: rgba(255,255,255,0.8); font: 12px monospace; line-height: 26px;
+      cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent;
+    }
+    #doc-viewer button:hover, #doc-viewer .dv-tabs button.active { border-color: rgba(255,255,255,0.7); color: #fff; }
+    #doc-viewer .dv-prev, #doc-viewer .dv-next { flex: none; padding: 0; width: 32px; font-size: 20px; line-height: 40px; border-radius: 16px; }
   </style>
 </head>
 <body>
