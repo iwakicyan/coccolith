@@ -263,9 +263,17 @@
       touch-action: none; user-select: none; -webkit-user-select: none;
     }
     #doc-viewer .dv-tabs { display: flex; gap: 8px; }
-    #doc-viewer .dv-stage { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; }
-    #doc-viewer .dv-img { max-width: min(80vw, 900px); max-height: 70vh; object-fit: contain; touch-action: none; }
-    #doc-viewer .dv-title { color: #EFEDE6; font: 12px monospace; letter-spacing: 0.08em; white-space: pre; }
+    /* 画像の大きさが変わってもボタン・タブ・CLOSE が動かないよう、画像の置き場の大きさを決めておき、その中に収める */
+    #doc-viewer .dv-stage {
+      display: grid; grid-template-columns: 32px min(100vw - 96px, 900px) 32px; gap: 8px;
+      justify-content: center; align-items: center; height: 70vh; width: 100%;
+    }
+    #doc-viewer .dv-img { justify-self: center; max-width: 100%; max-height: 70vh; object-fit: contain; touch-action: none; }
+    #doc-viewer[data-cat="icon"] .dv-img { width: 240px; height: 240px; }   /* アイコンは元の大きさがばらばらなので、coin_icon（240px）に揃える */
+    #doc-viewer .dv-title {
+      max-width: 90vw; overflow: hidden; text-overflow: ellipsis;   /* 長いタイトルでも 1 行に収める */
+      color: #EFEDE6; font: 12px monospace; letter-spacing: 0.08em; white-space: pre;
+    }
     #doc-viewer button {
       padding: 0 14px; letter-spacing: 0.15em; background: rgba(0,0,0,0.25);
       border: 1px solid rgba(255,255,255,0.35); border-radius: 12px;

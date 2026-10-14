@@ -1,13 +1,13 @@
 // ============================================================
 //  開発資料ビューア — ツリーハウスのドット絵のバインダーをタップで開く、画像を 1 枚ずつ見るページ
-//  画像は DOC_DIR の中に置く。サブフォルダに分けるとフォルダ名がカテゴリのタブになる（pic/icon/xxx.png → icon）
+//  画像は DOC_DIR の中に置く。サブフォルダに分けるとフォルダ名がカテゴリのタブになる（documents/icon/xxx.png → icon）
 //  直下に置いた画像は MISC にまとめる。タイトルはファイル名（拡張子を除く）
 //  めくる: ‹ › ボタン・左右キー・左右スワイプ。閉じる: 外側のタップ・CLOSE・Esc
 // ============================================================
 
-// 仮に pic/ を使う（あとで documents/ に整理する予定。そのときはここのパスを書き換える）
-const files = import.meta.glob('/pic/**/*.{png,PNG,jpg,JPG,jpeg,JPEG,webp,gif}', { eager: true, query: '?url', import: 'default' })
-const DOC_DIR = '/pic/'
+// 置き場所を変えるときは、ここの 2 つのパスを書き換える
+const files = import.meta.glob('/documents/**/*.{png,PNG,jpg,JPG,jpeg,JPEG,webp,gif}', { eager: true, query: '?url', import: 'default' })
+const DOC_DIR = '/documents/'
 const MISC = 'misc'
 const SWIPE_MIN = 40   // これより大きく横に動かしたらスワイプとみなす (px)
 
@@ -45,6 +45,7 @@ export function openDocViewer() {
   const show = () => {
     const list = categories.get(cat)
     const item = list[index]
+    el.dataset.cat = cat   // カテゴリごとに見た目を変えられるように（icon は大きさを揃える。index.html）
     img.src = item.url
     img.alt = item.title
     titleEl.textContent = `${item.title}  (${index + 1}/${list.length})`
