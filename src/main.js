@@ -22,6 +22,8 @@ import { createCoinDrop } from './coinDrop.js'
 import { whenNightEnvReady } from './nightEnv.js'
 import { toLambert } from './lambert.js'
 import { createLightHeads } from './lightHeads.js'
+import { createPixelSpriteWalkers } from './pixelSprite.js'
+import { SPRITE_TEST } from './pixelArt/spriteTest.js'
 
 // ============================================================
 //  LMF — Layout Master File
@@ -896,6 +898,14 @@ const lightHeads = createLightHeads({
   waterLevel: R_OCEAN + TIDE_SHIFT,
 })
 
+// 8 方向スプライトの試し（仮の絵。pixelSprite.js）。スポーン地点（北極）のまわり 15m をうろうろする
+const spriteWalkers = createPixelSpriteWalkers({
+  scene, art: SPRITE_TEST, count: 3, height: 1.6, speed: SPEED * 0.05, radius: R_C,
+  getGround: dir => getGroundHeight(dir) - 1,
+  waterLevel: R_OCEAN + TIDE_SHIFT,
+  home: new THREE.Vector3(0, 1, 0), homeRadius: 15,
+})
+
 function animate() {
   requestAnimationFrame(animate)
   const now = performance.now()
@@ -1076,6 +1086,7 @@ function animate() {
   if (!interior) {
     camera.updateMatrixWorld()
     updateLedBoards(now / 1000, camera)
+    spriteWalkers.update(dt, camera)
   }
   renderer.render(interior ? interior.def.scene : scene, camera)
   shotFrameRendered()
