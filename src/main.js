@@ -23,7 +23,7 @@ import { whenNightEnvReady } from './nightEnv.js'
 import { toLambert } from './lambert.js'
 import { createLightHeads } from './lightHeads.js'
 import { createPixelSpriteWalkers } from './pixelSprite.js'
-import { SPRITE_TEST } from './pixelArt/spriteTest.js'
+import { SINKICHI } from './pixelArt/sinkichi.js'
 
 // ============================================================
 //  LMF — Layout Master File
@@ -898,12 +898,17 @@ const lightHeads = createLightHeads({
   waterLevel: R_OCEAN + TIDE_SHIFT,
 })
 
-// 8 方向スプライトの試し（仮の絵。pixelSprite.js）。スポーン地点（北極）のまわり 15m をうろうろする
+// 8 方向スプライトのしんきち（pixelSprite.js）。開くたびに陸のどこかに 1 匹出て、そのまわり 15m をうろうろする
+const sinkichiHome = new THREE.Vector3()
+for (let n = 0; n < 200; n++) {
+  sinkichiHome.randomDirection()
+  if (getGroundHeight(sinkichiHome) - 1 >= R_OCEAN + TIDE_SHIFT) break
+}
 const spriteWalkers = createPixelSpriteWalkers({
-  scene, art: SPRITE_TEST, count: 3, height: 1.6, speed: SPEED * 0.05, radius: R_C,
+  scene, art: SINKICHI, count: 1, height: 1.6, speed: SPEED * 0.05, radius: R_C,
   getGround: dir => getGroundHeight(dir) - 1,
   waterLevel: R_OCEAN + TIDE_SHIFT,
-  home: new THREE.Vector3(0, 1, 0), homeRadius: 15,
+  home: sinkichiHome, homeRadius: 15,
 })
 
 function animate() {

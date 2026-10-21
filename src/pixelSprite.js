@@ -2,46 +2,81 @@ import * as THREE from 'three'
 
 // ============================================================
 //  8 方向スプライト — ドット絵 1 枚の板を立て、見る角度で絵を差し替える（昔の 3D ゲームのキャラクターの出し方）
-//  絵のデータ（pixelArt/spriteTest.js の形）: { palette, width, height, views: { front, frontRight, right, backRight, back, top } }
+//  絵のデータ（pixelArt/sinkichi.js の形）:
+//    { cx, drawnSide, poses: { <ポーズ名>: { fps, views: { front, frontSide, side, backSide, back, top } } } }
+//    views の各方向はコマの配列。コマ = { palette, width, height, grid }（ドット絵エディタの書き出しそのまま）
+//    flipped(コマ) で左右反転したコマにできる（1 枚の絵を 2 コマ目に使い回すとき）
+//    cx: 物体の中心の列（左から）。幅の違う絵もこの列でそろえる
+//    drawnSide: 斜め前・真横・斜め後ろの絵が物体のどちら側から見た絵か（'left' / 'right'）
+//    fps: コマ送りの速さ（コマが 1 枚なら要らない）
 //  側面: 板は縦軸まわりだけ回って常にカメラの方を向く。オブジェクトの前の向きとカメラのいる方向の角度を 45° ごとに区切って絵を選ぶ
-//        左側の 3 方向（左斜め前・左・左斜め後ろ）は右側の絵を左右反転して使う
+//        反対側の 3 方向は描いた側の絵を左右反転して使う
+//        側面の絵でいちばん下にあるドットの行を地面に合わせる
 //  天面: カメラが TOP_ENTER より高い角度から見下ろしたら、立てた板を隠して地面と平行な板に top の絵を出す（オブジェクトの向きと一緒に回る）
-//  絵は 6 枚を 1 枚のテクスチャに並べ、板の UV を差し替えて切り替える
+//        top は前が画像の上、物体の右が画像の右
+//  絵はすべて 1 枚のテクスチャに並べ、板の UV を差し替えて切り替える
 //  板の法線はどちらも「上」に向け、向きを変えても明るさが変わらず、その場所の地面と同じように太陽で照らされるようにする
 // ============================================================
 
-const VIEWS = ['front', 'frontRight', 'right', 'backRight', 'back', 'top']
-const COLS  = 3
+const VIEWS = ['front', 'frontSide', 'side', 'backSide', 'back', 'top']
+const SIDE_VIEWS = new Set(['frontSide', 'side', 'backSide'])
 // 角度の区切り（カメラが 45° ごとの中心からこれ以上離れたら隣の絵へ。22.5° より大きくして境目でちらつかないようにする）
 const SECTOR_HOLD = THREE.MathUtils.degToRad(22.5 + 4)
 const TOP_ENTER = THREE.MathUtils.degToRad(60)   // 見下ろす角度がこれを超えたら天面に
 const TOP_LEAVE = THREE.MathUtils.degToRad(55)   // 天面からこれより下がったら側面に戻す
 const SELF_LIGHT = 0.4   // 日の当たらないところでも絵が見えるよう、絵の色をこの割合だけ自分で光らせる
-// 側面の向き番号（カメラが前から左回りに 45° ずつ。負は右側）→ 使う絵と左右反転
+// 側面の向き番号（カメラが前から左回りに 45° ずつ。負は右側）→ 使う絵と、物体の左側から見ているか
 const SECTOR_VIEW = {
-  0: ['front', false], [-1]: ['frontRight', false], [-2]: ['right', false], [-3]: ['backRight', false],
-  1: ['frontRight', true], 2: ['right', true], 3: ['backRight', true], 4: ['back', false], [-4]: ['back', false],
+  0: ['front', false], [-1]: ['frontSide', false], [-2]: ['side', false], [-3]: ['backSide', false],
+  1: ['frontSide', true], 2: ['side', true], 3: ['backSide', true], 4: ['back', false], [-4]: ['back', false],
 }
 
-// 絵 1 枚ぶんのテクスチャとマテリアル（同じ絵のスプライトはこれを共有する）
+export const flipped = frame => ({ ...frame, flip: !frame.flip })
+
+// 絵 1 組ぶんのテクスチャとマテリアル（同じ絵のスプライトはこれを共有する）
 function buildSheet(art) {
-  const { palette, width: w, height: h, views } = art
+  const { cx, drawnSide, poses } = art
+  // 同じ絵（grid）は 1 回だけ描く
+  const grids = new Map()
+  for (const pose of Object.values(poses)) for (const view of VIEWS) for (const f of pose.views[view]) grids.set(f.grid, f)
+  const frames = [...grids.values()]
+  // マスの大きさ: 中心 cx を左右の真ん中にして、どの絵もはみ出さない幅
+  const cw = 2 * Math.max(...frames.map(f => Math.max(cx, f.width - cx)))
+  const ch = Math.max(...frames.map(f => f.height))
+  // 足元: 側面の絵でいちばん下にあるドットの行
+  let foot = 0
+  for (const pose of Object.values(poses)) for (const view of VIEWS) {
+    if (view === 'top') continue
+    for (const f of pose.views[view]) f.grid.forEach((row, y) => { if (row.some(n => f.palette[n])) foot = Math.max(foot, y) })
+  }
+
   // 絵と絵の間は 1 px 空けて、隣の絵のドットがにじまないようにする
+  const cols = Math.ceil(Math.sqrt(frames.length))
   const cv = document.createElement('canvas')
-  cv.width = COLS * (w + 1)
-  cv.height = Math.ceil(VIEWS.length / COLS) * (h + 1)
+  cv.width = cols * (cw + 1)
+  cv.height = Math.ceil(frames.length / cols) * (ch + 1)
   const ctx = cv.getContext('2d')
-  const cells = {}
-  VIEWS.forEach((name, i) => {
-    const ox = (i % COLS) * (w + 1), oy = Math.floor(i / COLS) * (h + 1)
-    views[name].forEach((row, y) => row.forEach((n, x) => {
-      if (!palette[n]) return
-      ctx.fillStyle = palette[n]
-      ctx.fillRect(ox + x, oy + y, 1, 1)
+  const cellOf = new Map()
+  frames.forEach((f, i) => {
+    const ox = (i % cols) * (cw + 1), oy = Math.floor(i / cols) * (ch + 1)
+    const dx = ox + cw / 2 - cx
+    f.grid.forEach((row, y) => row.forEach((n, x) => {
+      if (!f.palette[n]) return
+      ctx.fillStyle = f.palette[n]
+      ctx.fillRect(dx + x, oy + y, 1, 1)
     }))
     // UV（テクスチャは上下反転して貼られるので v は下から）
-    cells[name] = { u0: ox / cv.width, u1: (ox + w) / cv.width, v0: 1 - (oy + h) / cv.height, v1: 1 - oy / cv.height }
+    cellOf.set(f.grid, { u0: ox / cv.width, u1: (ox + cw) / cv.width, v0: 1 - (oy + ch) / cv.height, v1: 1 - oy / cv.height })
   })
+  // ポーズ → 方向 → コマごとの { cell, mirror }。描いた側と反対の側面は、あとで見る側に合わせてもう一度反転する
+  const looks = {}
+  for (const [name, pose] of Object.entries(poses)) {
+    looks[name] = { fps: pose.fps ?? 0, views: {} }
+    for (const view of VIEWS) looks[name].views[view] = pose.views[view].map(f => ({
+      cell: cellOf.get(f.grid), mirror: !!f.flip !== (drawnSide === 'left' && SIDE_VIEWS.has(view)),
+    }))
+  }
+
   const tex = new THREE.CanvasTexture(cv)
   tex.colorSpace = THREE.SRGBColorSpace
   tex.magFilter = tex.minFilter = THREE.NearestFilter
@@ -49,7 +84,7 @@ function buildSheet(art) {
   const mat = new THREE.MeshLambertMaterial({
     map: tex, emissiveMap: tex, emissive: 0xffffff, emissiveIntensity: SELF_LIGHT, alphaTest: 0.5, side: THREE.DoubleSide,
   })
-  return { mat, cells, aspect: w / h }
+  return { mat, looks, aspect: cw / ch, footFrac: (ch - 1 - foot) / ch }
 }
 
 // 板の UV を絵 cell に合わせる（mirror: 左右反転）。PlaneGeometry の頂点は 左上・右上・左下・右下 の順
@@ -68,20 +103,19 @@ function upNormals(geo, up) {
 
 const _cam = new THREE.Vector3()
 
-// sheet: buildSheet の戻り値 / height: 側面の絵の高さ (m) / topLift: 天面の板を置く高さ (m)
+// sheet: buildSheet の戻り値 / height: 絵 1 マスの高さ (m) / topLift: 天面の板を置く高さ (m)
 function createSprite(sheet, height, topLift) {
   const group = new THREE.Group()   // 原点 = 足元、local Y = 上、local Z = オブジェクトの前
   const w = height * sheet.aspect
 
-  const sideGeo = new THREE.PlaneGeometry(w, height).translate(0, height / 2, 0)
+  const sideGeo = new THREE.PlaneGeometry(w, height).translate(0, height * (0.5 - sheet.footFrac), 0)
   upNormals(sideGeo, [0, 1, 0])
   const sideMesh = new THREE.Mesh(sideGeo, sheet.mat)
   group.add(sideMesh)
 
   // 天面: 絵の上 → 前（+Z）、絵の右 → オブジェクトの右（-X）、法線 → 上（+Y）
-  const topGeo = new THREE.PlaneGeometry(w, w)
+  const topGeo = new THREE.PlaneGeometry(w, height)
   upNormals(topGeo, [0, 0, 1])
-  setCell(topGeo, sheet.cells.top, false)
   const topMesh = new THREE.Mesh(topGeo, sheet.mat)
   topMesh.setRotationFromMatrix(new THREE.Matrix4().makeBasis(
     new THREE.Vector3(-1, 0, 0), new THREE.Vector3(0, 0, 1), new THREE.Vector3(0, 1, 0)))
@@ -89,10 +123,10 @@ function createSprite(sheet, height, topLift) {
   topMesh.visible = false
   group.add(topMesh)
 
-  let sector = null, showTop = false
+  let sector = null, showTop = false, shown = ''
 
-  // group の位置・向きを決めたあとに呼ぶ
-  function face(camera) {
+  // group の位置・向きを決めたあとに呼ぶ。pose: ポーズ名 / step: 何コマ目か（コマ数で回る）
+  function face(camera, pose, step) {
     group.updateMatrixWorld()
     group.worldToLocal(camera.getWorldPosition(_cam))
     const yaw  = Math.atan2(_cam.x, _cam.z)   // 0 = 前から、正 = オブジェクトの左側（+X）から
@@ -101,20 +135,25 @@ function createSprite(sheet, height, topLift) {
     showTop = showTop ? elev > TOP_LEAVE : elev > TOP_ENTER
     topMesh.visible = showTop
     sideMesh.visible = !showTop
-    if (showTop) return
 
-    sideMesh.rotation.y = yaw
-    let d = Math.abs(yaw - (sector ?? 0) * Math.PI / 4)
-    if (d > Math.PI) d = 2 * Math.PI - d
-    if (sector === null || d > SECTOR_HOLD) {
-      let s = Math.round(yaw / (Math.PI / 4))
-      if (s === -4) s = 4
-      if (s !== sector) {
+    if (!showTop) {
+      sideMesh.rotation.y = yaw
+      let d = Math.abs(yaw - (sector ?? 0) * Math.PI / 4)
+      if (d > Math.PI) d = 2 * Math.PI - d
+      if (sector === null || d > SECTOR_HOLD) {
+        let s = Math.round(yaw / (Math.PI / 4))
+        if (s === -4) s = 4
         sector = s
-        const [name, mirror] = SECTOR_VIEW[s]
-        setCell(sideGeo, sheet.cells[name], mirror)
       }
     }
+
+    const [view, fromLeft] = showTop ? ['top', false] : SECTOR_VIEW[sector]
+    const frames = sheet.looks[pose].views[view]
+    const i = step % frames.length
+    const key = `${pose}/${view}/${fromLeft}/${i}`
+    if (key === shown) return
+    shown = key
+    setCell(showTop ? topGeo : sideGeo, frames[i].cell, frames[i].mirror !== fromLeft)
   }
 
   return { group, face }
@@ -122,6 +161,7 @@ function createSprite(sheet, height, topLift) {
 
 // ------------------------------------------------------------
 //  地面をうろうろするスプライト（歩き方は lightHeads.js と同じ。ときどき立ち止まる）
+//  歩いている間は絵の walk のポーズをコマ送りし、立ち止まったら sit のポーズにする
 //  home のまわり homeRadius (m) より外に出たら home の方へ曲がって戻る
 // ------------------------------------------------------------
 const TURN_MAX    = 1.0   // 曲がる速さの上限 (rad/s)
@@ -136,7 +176,7 @@ const _next  = new THREE.Vector3()
 const _toHome = new THREE.Vector3()
 const _m     = new THREE.Matrix4()
 
-// art: 絵のデータ / count: 数 / height: 側面の絵の高さ (m) / speed: 歩く速さ (m/s) / radius: 惑星の半径 (m)
+// art: 絵のデータ / count: 数 / height: 絵 1 マスの高さ (m) / speed: 歩く速さ (m/s) / radius: 惑星の半径 (m)
 // getGround(dir): 単位ベクトル dir の地点の地面の高さ（惑星中心から m） / waterLevel: 地面がこれより低ければ海 (m)
 export function createPixelSpriteWalkers({ scene, art, count, height, speed, radius, getGround, waterLevel, home, homeRadius }) {
   const sheet = buildSheet(art)
@@ -154,7 +194,7 @@ export function createPixelSpriteWalkers({ scene, art, count, height, speed, rad
     const fwd = new THREE.Vector3().randomDirection()
     fwd.addScaledVector(dir, -fwd.dot(dir)).normalize()
     scene.add(sprite.group)
-    walkers.push({ sprite, dir, fwd, ground: getGround(dir), turn: 0, turnTarget: 0, walking: false, timer: rand(STOP_TIME) })
+    walkers.push({ sprite, dir, fwd, ground: getGround(dir), turn: 0, turnTarget: 0, walking: false, timer: rand(STOP_TIME), step: 0 })
   }
 
   function update(dt, camera) {
@@ -164,8 +204,10 @@ export function createPixelSpriteWalkers({ scene, art, count, height, speed, rad
       if (w.timer <= 0) {
         w.walking = !w.walking
         w.timer = rand(w.walking ? WALK_TIME : STOP_TIME)
+        w.step = 0
       }
       if (w.walking) {
+        w.step += dt * sheet.looks.walk.fps
         if (Math.random() < dt / TURN_CHANGE) w.turnTarget = (Math.random() * 2 - 1) * TURN_MAX
         // home から離れすぎたら home の方へ曲がる
         if (w.dir.angleTo(home) > homeAngle) {
@@ -192,7 +234,7 @@ export function createPixelSpriteWalkers({ scene, art, count, height, speed, rad
       const g = w.sprite.group
       g.setRotationFromMatrix(_m.makeBasis(_right.crossVectors(w.dir, w.fwd), w.dir, w.fwd))
       g.position.copy(w.dir).multiplyScalar(w.ground)
-      w.sprite.face(camera)
+      w.sprite.face(camera, w.walking ? 'walk' : 'sit', Math.floor(w.step))
     }
   }
 
