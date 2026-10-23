@@ -23,7 +23,6 @@ import { whenNightEnvReady } from './nightEnv.js'
 import { toLambert } from './lambert.js'
 import { createLightHeads } from './lightHeads.js'
 import { createPixelSpriteWalkers } from './pixelSprite.js'
-import { SINKICHI } from './pixelArt/sinkichi.js'
 
 // ============================================================
 //  LMF — Layout Master File
@@ -898,18 +897,16 @@ const lightHeads = createLightHeads({
   waterLevel: R_OCEAN + TIDE_SHIFT,
 })
 
-// 8 方向スプライトのしんきち（pixelSprite.js）。開くたびに陸のどこかに 1 匹出て、そのまわり 15m をうろうろする
-const sinkichiHome = new THREE.Vector3()
-for (let n = 0; n < 200; n++) {
-  sinkichiHome.randomDirection()
-  if (getGroundHeight(sinkichiHome) - 1 >= R_OCEAN + TIDE_SHIFT) break
-}
-const spriteWalkers = createPixelSpriteWalkers({
-  scene, art: SINKICHI, count: 1, height: 1.6, speed: SPEED * 0.05, radius: R_C,
-  getGround: dir => getGroundHeight(dir) - 1,
-  waterLevel: R_OCEAN + TIDE_SHIFT,
-  home: sinkichiHome, homeRadius: 15,
-})
+// ドット絵スプライト（pixelSprite.js）: pixelArt/sprites/ の絵を全部読み込み、開くたびに陸のランダムな地点に count 匹ずつ出す
+// 絵を足すときは scripts/import-sprite.mjs で書き出してこのフォルダに置くだけでよい
+// ドットの大きさはどの絵も同じ（しんきちの 36 px が 1.6m）
+const SPRITE_DOT = 1.6 / 36
+const spriteWalkers = Object.values(import.meta.glob('./pixelArt/sprites/*.js', { eager: true, import: 'default' }))
+  .map(art => createPixelSpriteWalkers({
+    scene, art, count: art.count, dot: SPRITE_DOT, speed: SPEED * 0.05, radius: R_C,
+    getGround: dir => getGroundHeight(dir) - 1,
+    waterLevel: R_OCEAN + TIDE_SHIFT,
+  }))
 
 function animate() {
   requestAnimationFrame(animate)
@@ -1091,7 +1088,7 @@ function animate() {
   if (!interior) {
     camera.updateMatrixWorld()
     updateLedBoards(now / 1000, camera)
-    spriteWalkers.update(dt, camera)
+    for (const w of spriteWalkers) w.update(dt, camera)
   }
   renderer.render(interior ? interior.def.scene : scene, camera)
   shotFrameRendered()
