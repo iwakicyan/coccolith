@@ -394,6 +394,7 @@ function getSmoothGroundHeight(dir, dt) {
 // --- 建物の当たり判定 ---------------------------------------
 // 建物ローカルの XZ 矩形（footprint）＋余白の内側に sabちゃんの中心が入ったら、
 // 一番浅い辺の外へ押し戻す。建物は静的なので逆行列は起動時に一度だけ計算する
+// 矩形は建物の上下へ無限に伸びた柱なので、そのままだと星の中心を抜けた反対側にも判定が出る。建物と同じ半球にいるときだけ見る
 const COLLIDER_MARGIN = 0.5   // 壁からの余白 (m)
 const SAB_BODY_R      = 4.3 * SAB_SCALE   // sabちゃんの耳端までの半径 (m)
 const _colliderData = colliders.map(obj => {
@@ -402,12 +403,16 @@ const _colliderData = colliders.map(obj => {
   // 判定は建物ローカル座標で行うので、拡大した建物では余白 (m) をスケールで割る（X と Z で倍率が違う建物もある）
   const scale = obj.getWorldScale(new THREE.Vector3())
   const pad = COLLIDER_MARGIN + SAB_BODY_R
-  return { mat: obj.matrixWorld.clone(), inv: obj.matrixWorld.clone().invert(), hx: halfW + pad / scale.x, hz: halfD + pad / scale.z }
+  return {
+    mat: obj.matrixWorld.clone(), inv: obj.matrixWorld.clone().invert(), hx: halfW + pad / scale.x, hz: halfD + pad / scale.z,
+    dir: new THREE.Vector3().setFromMatrixPosition(obj.matrixWorld).normalize(),   // 建物のある方向（星の中心から）
+  }
 })
 const _colP = new THREE.Vector3()
 
 function resolveColliders() {
   for (const c of _colliderData) {
+    if (pDir.dot(c.dir) <= 0) continue   // 星の反対側の建物
     _colP.copy(pDir).multiplyScalar(R_C + LAND_LIFT).applyMatrix4(c.inv)
     const dx = c.hx - Math.abs(_colP.x)
     const dz = c.hz - Math.abs(_colP.z)
