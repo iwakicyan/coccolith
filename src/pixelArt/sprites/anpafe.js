@@ -1228,7 +1228,7 @@ const sitTop1 = {
 }
 
 export default {
-  count: 5,   // 何匹出すか
+  count: 1,   // 何匹出すか
   cx: 17,
   drawnSide: 'left',
   poses: {
