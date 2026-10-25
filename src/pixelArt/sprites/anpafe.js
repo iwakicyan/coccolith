@@ -3,6 +3,9 @@
 //  正面・斜め前・真横・斜め後ろ・背面・天面の 8 方向
 //  歩き: 各方向 2 コマ。立ち止まったら座り（静止）の絵
 //  横の絵は左側から見た絵（顔が画面の左）。どの絵も左から 17 列目が中心
+//  斜め後ろの絵だけは右側から見た絵として描かれていたので、flipped で左右反転して使う
+
+import { flipped } from '../../pixelSprite.js'
 
 // プリン歩正面1
 const walkFront1 = {
@@ -1239,7 +1242,7 @@ export default {
         front: [walkFront1, walkFront2],
         frontSide: [walkFrontSide1, walkFrontSide2],
         side: [walkSide1, walkSide2],
-        backSide: [walkBackSide1, walkBackSide2],
+        backSide: [flipped(walkBackSide1), flipped(walkBackSide2)],   // 斜め後ろだけ右側から見た絵なので左右反転
         back: [walkBack1, walkBack2],
         top: [walkTop1, walkTop2],
       },
@@ -1249,7 +1252,7 @@ export default {
         front: [sitFront1],
         frontSide: [sitFrontSide1],
         side: [sitSide1],
-        backSide: [sitBackSide1],
+        backSide: [flipped(sitBackSide1)],
         back: [sitBack1],
         top: [sitTop1],
       },
