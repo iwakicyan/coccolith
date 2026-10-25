@@ -326,7 +326,7 @@ export function createCoccolith({ renderer = null } = {}) {
   // --- ランドマーク #02: forest1 (lat=45.0, lon=-20.0) --------
   const forest1Wrapper = new THREE.Group()
   forest1Wrapper.add(createForest1())
-  forest1Wrapper.scale.setScalar(8)
+  forest1Wrapper.scale.setScalar(6.4)
   placeOnSurface(group, forest1Wrapper, 45.0, -20.0, R_C + LAND_LIFT)
 
   // --- ランドマーク #03: forest1 (lat=54.6, lon=-36.6) --------
@@ -334,7 +334,7 @@ export function createCoccolith({ renderer = null } = {}) {
   const forest1b = createForest1()
   forest1b.rotation.y = Math.PI
   forest1Wrapper2.add(forest1b)
-  forest1Wrapper2.scale.setScalar(8)
+  forest1Wrapper2.scale.setScalar(6.4)
   placeOnSurface(group, forest1Wrapper2, 54.6, -36.6, R_C + LAND_LIFT - 0.5)
 
   // --- ランドマーク #04: forest1 (lat=62.5, lon=5.0) ----------
@@ -342,7 +342,7 @@ export function createCoccolith({ renderer = null } = {}) {
   const forest1c = createForest1()
   forest1c.rotation.y = Math.PI / 2
   forest1Wrapper3.add(forest1c)
-  forest1Wrapper3.scale.setScalar(8)
+  forest1Wrapper3.scale.setScalar(6.4)
   placeOnSurface(group, forest1Wrapper3, 62.5, 5.0, R_C + LAND_LIFT)
 
   // --- ランドマーク #05: Frame_6-4 (lat=8.6, lon=7.0) ----------
