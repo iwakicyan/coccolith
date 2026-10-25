@@ -34,7 +34,7 @@ const VIEW_ORDER = ['front', 'frontSide', 'side', 'backSide', 'back', 'top']
 
 const txt = readFileSync(src, 'utf8').replace(/^﻿/, '').replace(/\r/g, '')
 const frames = []   // { label, pose, view, n, json, width }
-const re = /^([^\s{\[\]}"_][^\n]*)\n(\{[\s\S]*?\n\})/gm
+const re = /^([^\s{\[\]}"_][^\n]*)\n\s*(\{[\s\S]*?\n\})/gm
 for (let m; (m = re.exec(txt));) {
   const label = m[1].trim()
   const view = VIEW_WORDS.find(([w]) => label.includes(w))?.[1]
