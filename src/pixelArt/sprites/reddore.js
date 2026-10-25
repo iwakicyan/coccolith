@@ -707,7 +707,7 @@ const walkTop2 = {
 }
 
 export default {
-  count: 5,   // 何匹出すか
+  count: 10,   // 何匹出すか
   cx: 15,
   drawnSide: 'left',
   poses: {
