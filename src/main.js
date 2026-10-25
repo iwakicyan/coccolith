@@ -899,11 +899,11 @@ const lightHeads = createLightHeads({
 
 // ドット絵スプライト（pixelSprite.js）: pixelArt/sprites/ の絵を全部読み込み、開くたびに陸のランダムな地点に count 匹ずつ出す
 // 絵を足すときは scripts/import-sprite.mjs で書き出してこのフォルダに置くだけでよい
-// ドットの大きさはどの絵も同じ（しんきちの 36 px が 1.6m）
+// ドットの大きさはどの絵も同じ（しんきちの 36 px が 1.6m）。絵に scale があればその倍にする
 const SPRITE_DOT = 1.6 / 36
 const spriteWalkers = Object.values(import.meta.glob('./pixelArt/sprites/*.js', { eager: true, import: 'default' }))
   .map(art => createPixelSpriteWalkers({
-    scene, art, count: art.count, dot: SPRITE_DOT, speed: SPEED * 0.05, radius: R_C,
+    scene, art, count: art.count, dot: SPRITE_DOT * (art.scale ?? 1), speed: SPEED * 0.05, radius: R_C,
     getGround: dir => getGroundHeight(dir) - 1,
     waterLevel: R_OCEAN + TIDE_SHIFT,
   }))

@@ -6,6 +6,7 @@ import * as THREE from 'three'
 //    { count, cx, drawnSide, poses: { <ポーズ名>: { fps, views: { front, frontSide, side, backSide, back, top } } } }
 //    斜め前・斜め後ろ（frontSide / backSide）のない絵は 4 方向にして、見る角度を 90° ごとに区切る（pixelArt/sprites/satoukuma.js の形）
 //    count: 何匹出すか（main.js が使う）
+//    scale: 大きさの倍率（ドット 1 つの大きさにかける。なければ 1。main.js が使う）
 //    views の各方向はコマの配列。コマ = { palette, width, height, grid }（ドット絵エディタの書き出しそのまま）
 //    flipped(コマ) で左右反転したコマにできる（1 枚の絵を 2 コマ目に使い回すとき）
 //    cx: 物体の中心の列（左から）。幅の違う絵もこの列でそろえる

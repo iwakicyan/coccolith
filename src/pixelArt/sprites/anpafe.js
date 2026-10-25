@@ -1229,6 +1229,7 @@ const sitTop1 = {
 
 export default {
   count: 1,   // 何匹出すか
+  scale: 2,   // 大きさ（ほかの絵の何倍か）
   cx: 17,
   drawnSide: 'left',
   poses: {
