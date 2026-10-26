@@ -282,12 +282,9 @@ export function createPixelSpriteWalkers({ scene, art, count, dot, speed, radius
 
 // ------------------------------------------------------------
 //  空を飛びまわるスプライト（飛行機など。絵は pixelArt/flyers/ の形）
-//  惑星の中心から altitude の高さを、ゆっくり曲がりながらまっすぐ飛ぶ（大円に沿って進み、ときどき向きを少し変える）
+//  惑星の中心から altitude の高さを、曲がらずにまっすぐ飛ぶ（出たときの向きの大円に沿って星をぐるぐる回る）
 //  絵のポーズは fly
 // ------------------------------------------------------------
-const FLY_TURN_MAX    = 0.12   // 曲がる速さの上限 (rad/s)
-const FLY_TURN_CHANGE = 8      // 曲がる速さが変わる時間のめやす (s)
-
 // art: 絵のデータ / count: 数 / dot: ドット 1 つの大きさ (m) / speed: 飛ぶ速さ (m/s) / altitude: 惑星中心からの高さ (m)
 export function createPixelSpriteFlyers({ scene, art, count, dot, speed, altitude }) {
   const sheet = buildSheet(art)
@@ -297,24 +294,17 @@ export function createPixelSpriteFlyers({ scene, art, count, dot, speed, altitud
   for (let i = 0; i < count; i++) {
     const sprite = createSprite(sheet, height, 0)
     const dir = new THREE.Vector3().randomDirection()
-    const fwd = new THREE.Vector3().randomDirection()
-    fwd.addScaledVector(dir, -fwd.dot(dir)).normalize()
+    const axis = new THREE.Vector3().randomDirection().cross(dir).normalize()   // 飛ぶ大円の軸（ずっと変えない）
     scene.add(sprite.group)
-    flyers.push({ sprite, dir, fwd, turn: 0, turnTarget: 0 })
+    flyers.push({ sprite, dir, axis, fwd: new THREE.Vector3() })
   }
 
   function update(dt, camera) {
     const da = speed / altitude * dt
     for (const f of flyers) {
-      if (Math.random() < dt / FLY_TURN_CHANGE) f.turnTarget = (Math.random() * 2 - 1) * FLY_TURN_MAX
-      f.turn += (f.turnTarget - f.turn) * Math.min(1, dt * 0.5)
-      f.fwd.applyAxisAngle(f.dir, f.turn * dt)
-
-      // 前へ進む（進む向きも一緒に回して、大円に沿わせる）
-      _axis.crossVectors(f.dir, f.fwd).normalize()
-      f.dir.applyAxisAngle(_axis, da).normalize()
-      f.fwd.applyAxisAngle(_axis, da)
-      f.fwd.addScaledVector(f.dir, -f.fwd.dot(f.dir)).normalize()
+      // 大円の軸のまわりに回って前へ進む。前 = 軸 × 上
+      f.dir.applyAxisAngle(f.axis, da).normalize()
+      f.fwd.crossVectors(f.axis, f.dir).normalize()
 
       // 置く: local Y = 上、local Z = 前、原点 = 物体の中心
       const g = f.sprite.group
