@@ -1130,7 +1130,7 @@ const flyBackSide1 = {
 }
 
 export default {
-  count: 2,   // 何機出すか
+  count: 1,   // 何機出すか
   scale: 40,   // 大きさの倍率（歩くキャラのドットの 40 倍。56 ドットの絵が 100m ほど）
   drawnSide: 'left',
   poses: {

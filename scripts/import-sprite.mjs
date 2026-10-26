@@ -90,7 +90,7 @@ const out = flying ? `// ${title}（空を飛びまわる 8 方向スプライ�
 
 ${frames.map(f => `// ${f.label}\nconst ${varName(f)} = ${f.json}\n`).join('\n')}
 export default {
-  count: ${countArg ? count : 2},   // 何機出すか
+  count: ${countArg ? count : 1},   // 何機出すか
   scale: 40,   // 大きさの倍率（歩くキャラのドットの 40 倍。56 ドットの絵が 100m ほど）
   drawnSide: 'left',
   poses: {
