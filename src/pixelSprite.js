@@ -35,11 +35,11 @@ const bandView = (band, view) => BANDS[band] ? BANDS[band] + view[0].toUpperCase
 const SECTOR_MARGIN = THREE.MathUtils.degToRad(4)
 const TOP_ENTER = THREE.MathUtils.degToRad(60)   // 見下ろす角度がこれを超えたら天面に
 const TOP_LEAVE = THREE.MathUtils.degToRad(55)   // 天面からこれより下がったら側面に戻す
-const BOTTOM_ENTER = THREE.MathUtils.degToRad(45)   // 空を飛ぶもの: 見上げる角度がこれを超えたら真下の絵に（地上からよく見えるよう天面より広く）
-const BOTTOM_LEAVE = THREE.MathUtils.degToRad(40)   // 真下からこれより浅くなったら側面に戻す
+const FLY_FLAT_ENTER = THREE.MathUtils.degToRad(45)   // 空を飛ぶもの: 見上げる・見下ろす角度がこれを超えたら真下・天面の絵に（歩くものより広く）
+const FLY_FLAT_LEAVE = THREE.MathUtils.degToRad(40)   // 真下・天面からこれより浅くなったら側面に戻す
 const BAND_ENTER = THREE.MathUtils.degToRad(22)  // 空を飛ぶもの: 見上げる・見下ろす角度がこれを超えたら下方・上からの絵に
 const BAND_LEAVE = THREE.MathUtils.degToRad(16)  // これより水平に近づいたら水平の絵に戻す
-const BAND_TILT  = THREE.MathUtils.degToRad(40)  // 下方・上からの絵の板を傾ける角度（その段のまん中あたり）
+const BAND_TILT  = THREE.MathUtils.degToRad(33)  // 下方・上からの絵の板を傾ける角度（その段 22°〜45° のまん中あたり）
 const SELF_LIGHT = 0.4   // 日の当たらないところでも絵が見えるよう、絵の色をこの割合だけ自分で光らせる
 // 側面の向き番号（カメラが前から左回りに 45°（4 方向なら 90°）ずつ。負は右側）→ 使う絵と、物体の左側から見ているか
 const SECTOR_VIEW_8 = {
@@ -175,8 +175,9 @@ function createSprite(sheet, height, topLift) {
     const elev = Math.atan2(_cam.y - topLift, Math.hypot(_cam.x, _cam.z))
 
     // 天面・真下の板に出すか（flat: 'top' / 'bottom' / null）
-    const up   = elev > (flat === 'top' ? TOP_LEAVE : TOP_ENTER)
-    const down = sheet.flying && elev < -(flat === 'bottom' ? BOTTOM_LEAVE : BOTTOM_ENTER)
+    const [enter, leave] = sheet.flying ? [FLY_FLAT_ENTER, FLY_FLAT_LEAVE] : [TOP_ENTER, TOP_LEAVE]
+    const up   = elev > (flat === 'top' ? leave : enter)
+    const down = sheet.flying && elev < -(flat === 'bottom' ? leave : enter)
     flat = up ? 'top' : down ? 'bottom' : null
     topMesh.visible = flat === 'top'
     if (bottomMesh) bottomMesh.visible = flat === 'bottom'
