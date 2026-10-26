@@ -915,7 +915,7 @@ const spriteWalkers = Object.values(import.meta.glob('./pixelArt/sprites/*.js', 
 
 // 空を飛ぶドット絵スプライト（pixelSprite.js）: pixelArt/flyers/ の絵を全部読み込み、雲より上を count 機ずつ飛ばす
 // 絵を足すときは scripts/import-sprite.mjs で書き出す（名前に 真下・下方・水平・上から があれば flyers/ に入る）
-const FLYER_H = R_C + LAND_LIFT + 100   // 飛ぶ高さ（惑星中心から m。陸から 100m、雲生き物より 90m 上）
+const FLYER_H = R_C + LAND_LIFT + 80   // 飛ぶ高さ（惑星中心から m。陸から 80m、雲生き物より 70m 上）
 const spriteFlyers = Object.values(import.meta.glob('./pixelArt/flyers/*.js', { eager: true, import: 'default' }))
   .map(art => createPixelSpriteFlyers({
     scene, art, count: art.count, dot: SPRITE_DOT * (art.scale ?? 1), speed: SPEED * 0.6, altitude: FLYER_H,
