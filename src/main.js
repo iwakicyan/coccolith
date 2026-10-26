@@ -22,7 +22,7 @@ import { createCoinDrop } from './coinDrop.js'
 import { whenNightEnvReady } from './nightEnv.js'
 import { toLambert } from './lambert.js'
 import { createLightHeads } from './lightHeads.js'
-import { createPixelSpriteWalkers } from './pixelSprite.js'
+import { createPixelSpriteWalkers, createPixelSpriteFlyers } from './pixelSprite.js'
 
 // ============================================================
 //  LMF — Layout Master File
@@ -913,6 +913,14 @@ const spriteWalkers = Object.values(import.meta.glob('./pixelArt/sprites/*.js', 
     waterLevel: R_OCEAN + TIDE_SHIFT,
   }))
 
+// 空を飛ぶドット絵スプライト（pixelSprite.js）: pixelArt/flyers/ の絵を全部読み込み、雲より上を count 機ずつ飛ばす
+// 絵を足すときは scripts/import-sprite.mjs で書き出す（名前に 真下・下方・水平・上から があれば flyers/ に入る）
+const FLYER_H = R_C + LAND_LIFT + 35   // 飛ぶ高さ（惑星中心から m。雲生き物より 25m 上）
+const spriteFlyers = Object.values(import.meta.glob('./pixelArt/flyers/*.js', { eager: true, import: 'default' }))
+  .map(art => createPixelSpriteFlyers({
+    scene, art, count: art.count, dot: SPRITE_DOT * (art.scale ?? 1), speed: SPEED * 0.6, altitude: FLYER_H,
+  }))
+
 function animate() {
   requestAnimationFrame(animate)
   const now = performance.now()
@@ -1094,6 +1102,7 @@ function animate() {
     camera.updateMatrixWorld()
     updateLedBoards(now / 1000, camera)
     for (const w of spriteWalkers) w.update(dt, camera)
+    for (const f of spriteFlyers) f.update(dt, camera)
   }
   renderer.render(interior ? interior.def.scene : scene, camera)
   shotFrameRendered()
