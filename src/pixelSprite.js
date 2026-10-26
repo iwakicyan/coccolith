@@ -20,7 +20,8 @@ import * as THREE from 'three'
 //  絵はすべて 1 枚のテクスチャに並べ、板の UV を差し替えて切り替える
 //  空を飛ぶもの（pixelArt/flyers/airplane.js の形。views に bottom があるもの）:
 //    側面の絵を見る高さで 3 段に分ける: 見上げる（below〜）・水平（front など）・見下ろす（above〜）。どの段も 8 方向
-//    側面の板はカメラの方へ上下にも傾ける。真下から見上げたら bottom の絵（前が画像の上、見上げたまま見える向き）を地面と平行な板に出す
+//    側面の板はカメラを追わず、選んだ絵の角度（45° ごとの向きと、段ごとの傾き BAND_TILT）に向けたままにする
+//    （カメラを動かしても絵が一緒に回って見えないよう、絵が変わるまで機体と一緒に止まっている）。真下から見上げたら bottom の絵（前が画像の上、見上げたまま見える向き）を地面と平行な板に出す
 //    絵はマスの上下左右のまん中にそろえ、物体の中心を板のまん中にする（cx は使わない）
 //  板の法線はどちらも「上」に向け、向きを変えても明るさが変わらず、その場所の地面と同じように太陽で照らされるようにする
 // ============================================================
@@ -36,6 +37,7 @@ const TOP_ENTER = THREE.MathUtils.degToRad(60)   // 見下ろす角度がこれ�
 const TOP_LEAVE = THREE.MathUtils.degToRad(55)   // 天面からこれより下がったら側面に戻す（真下も同じ角度で）
 const BAND_ENTER = THREE.MathUtils.degToRad(22)  // 空を飛ぶもの: 見上げる・見下ろす角度がこれを超えたら下方・上からの絵に
 const BAND_LEAVE = THREE.MathUtils.degToRad(16)  // これより水平に近づいたら水平の絵に戻す
+const BAND_TILT  = THREE.MathUtils.degToRad(40)  // 下方・上からの絵の板を傾ける角度（その段のまん中あたり）
 const SELF_LIGHT = 0.4   // 日の当たらないところでも絵が見えるよう、絵の色をこの割合だけ自分で光らせる
 // 側面の向き番号（カメラが前から左回りに 45°（4 方向なら 90°）ずつ。負は右側）→ 使う絵と、物体の左側から見ているか
 const SECTOR_VIEW_8 = {
@@ -179,8 +181,7 @@ function createSprite(sheet, height, topLift) {
     sideMesh.visible = !flat
 
     if (!flat) {
-      // 空を飛ぶものは板をカメラの方へ上下にも傾け、見る高さで段を選ぶ
-      sideMesh.rotation.set(sheet.flying ? -elev : 0, yaw, 0)
+      // 空を飛ぶものは見る高さで段を選ぶ
       if (sheet.flying && (band === 0 || band * elev < BAND_LEAVE)) band = elev > BAND_ENTER ? 1 : elev < -BAND_ENTER ? -1 : 0
       let d = Math.abs(yaw - (sector ?? 0) * sheet.sectorAngle)
       if (d > Math.PI) d = 2 * Math.PI - d
@@ -189,6 +190,9 @@ function createSprite(sheet, height, topLift) {
         if (s === -back) s = back
         sector = s
       }
+      // 歩くものは板を常にカメラへ向ける。空を飛ぶものは選んだ絵の向き・段の傾きに止めておく
+      if (sheet.flying) sideMesh.rotation.set(-band * BAND_TILT, sector * sheet.sectorAngle, 0)
+      else sideMesh.rotation.set(0, yaw, 0)
     }
 
     const [view, fromLeft] = flat ? [flat, false] : sheet.sectorView[sector]
