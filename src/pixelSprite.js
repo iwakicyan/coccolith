@@ -34,7 +34,9 @@ const bandView = (band, view) => BANDS[band] ? BANDS[band] + view[0].toUpperCase
 // 角度の区切りの余裕（カメラが区切りの中心から半分の角度よりこれだけ余計に離れたら隣の絵へ。境目でちらつかないようにする）
 const SECTOR_MARGIN = THREE.MathUtils.degToRad(4)
 const TOP_ENTER = THREE.MathUtils.degToRad(60)   // 見下ろす角度がこれを超えたら天面に
-const TOP_LEAVE = THREE.MathUtils.degToRad(55)   // 天面からこれより下がったら側面に戻す（真下も同じ角度で）
+const TOP_LEAVE = THREE.MathUtils.degToRad(55)   // 天面からこれより下がったら側面に戻す
+const BOTTOM_ENTER = THREE.MathUtils.degToRad(45)   // 空を飛ぶもの: 見上げる角度がこれを超えたら真下の絵に（地上からよく見えるよう天面より広く）
+const BOTTOM_LEAVE = THREE.MathUtils.degToRad(40)   // 真下からこれより浅くなったら側面に戻す
 const BAND_ENTER = THREE.MathUtils.degToRad(22)  // 空を飛ぶもの: 見上げる・見下ろす角度がこれを超えたら下方・上からの絵に
 const BAND_LEAVE = THREE.MathUtils.degToRad(16)  // これより水平に近づいたら水平の絵に戻す
 const BAND_TILT  = THREE.MathUtils.degToRad(40)  // 下方・上からの絵の板を傾ける角度（その段のまん中あたり）
@@ -174,7 +176,7 @@ function createSprite(sheet, height, topLift) {
 
     // 天面・真下の板に出すか（flat: 'top' / 'bottom' / null）
     const up   = elev > (flat === 'top' ? TOP_LEAVE : TOP_ENTER)
-    const down = sheet.flying && elev < -(flat === 'bottom' ? TOP_LEAVE : TOP_ENTER)
+    const down = sheet.flying && elev < -(flat === 'bottom' ? BOTTOM_LEAVE : BOTTOM_ENTER)
     flat = up ? 'top' : down ? 'bottom' : null
     topMesh.visible = flat === 'top'
     if (bottomMesh) bottomMesh.visible = flat === 'bottom'
