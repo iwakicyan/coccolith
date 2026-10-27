@@ -1,5 +1,6 @@
 import * as THREE from 'three'
 import { MeshBVH, acceleratedRaycast } from 'three-mesh-bvh'
+import { createHorizonCull, HIDDEN_LAYER } from './horizonCull.js'
 import { shotMode, applyStartPose, startWithLight, shotFrameRendered } from './shot.js'   // 画像の読み込み待ちのため先に読む
 import { vJoy, initJoysticks } from './joystick.js'
 import { createCompass, createVethIndicator } from './hud.js'
@@ -63,6 +64,7 @@ sun.shadow.mapSize.height = SHADOW_MAP
 sun.shadow.camera.near   = 19600
 sun.shadow.camera.far    = 20400
 sun.shadow.intensity     = 0.2
+sun.shadow.camera.layers.enable(HIDDEN_LAYER)   // 地平線の向こうでカメラから隠したもの（horizonCull.js）も影は落とす
 scene.add(sun, sun.target)
 
 // 影の範囲を中心 (y, z)（太陽は +X なので、太陽から見た横・縦は y と z）に合わせる
@@ -931,6 +933,10 @@ const spriteFlyers = Object.values(import.meta.glob('./pixelArt/flyers/*.js', { 
     scene, art, count: art.count, dot: SPRITE_DOT * (art.scale ?? 1), speed: SPEED * 0.6, altitude: FLYER_H,
   }))
 
+// 地平線の向こう（星の裏）に隠れたものを描かない（horizonCull.js）。星はいちばん低い海底（356m）より少し小さい球とみなす
+// 地形メッシュは地面を測るレイキャストに使うので隠さない
+const horizonCull = createHorizonCull({ scene, radius: R_C - 4, exclude: new Set(terrainMeshes) })
+
 function animate() {
   requestAnimationFrame(animate)
   const now = performance.now()
@@ -1113,6 +1119,7 @@ function animate() {
     updateLedBoards(now / 1000, camera)
     for (const w of spriteWalkers) w.update(dt, camera)
     for (const f of spriteFlyers) f.update(dt, camera)
+    horizonCull.update(camera)
   }
   renderer.render(interior ? interior.def.scene : scene, camera)
   shotFrameRendered()
