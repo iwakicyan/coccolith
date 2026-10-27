@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import { MeshBVH, acceleratedRaycast } from 'three-mesh-bvh'
 import { shotMode, applyStartPose, startWithLight, shotFrameRendered } from './shot.js'   // 画像の読み込み待ちのため先に読む
 import { vJoy, initJoysticks } from './joystick.js'
 import { createCompass, createVethIndicator } from './hud.js'
@@ -85,6 +86,12 @@ scene.add(new THREE.AmbientLight(0x334455, 1.0))
 // --- 天体 ---------------------------------------------------
 const { group: coccolith, terrainMeshes, oceanMesh, colliders, lamps, coinSlot } = createCoccolith({ renderer })
 terrainMeshes.forEach(m => m.receiveShadow = true)
+// 地形に当たり判定の索引（BVH。three-mesh-bvh）をつけ、地面を測るレイキャストで三角形を総当たりしないようにする
+// （1 回 0.4ms → 0.008ms。索引を作るのは起動時に 6ms ほど）
+for (const m of terrainMeshes) {
+  m.geometry.boundsTree = new MeshBVH(m.geometry)
+  m.raycast = acceleratedRaycast
+}
 oceanMesh.receiveShadow = true
 scene.add(coccolith)
 
@@ -352,6 +359,7 @@ const creatures = [
 
 // --- レイキャスター -----------------------------------------
 const raycaster = new THREE.Raycaster()
+raycaster.firstHitOnly = true   // 索引つきのメッシュは、いちばん手前の 1 点だけ探す（地面を測るのも俯瞰のクリックも hits[0] しか使わない）
 
 // 地表追従: 惑星外側から中心方向にレイを飛ばし、
 // 最初のヒット点（= 最も外側の地表面）の惑星中心からの距離 +1m にカメラを置く。
