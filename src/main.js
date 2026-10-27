@@ -378,7 +378,9 @@ let groundRawPrev = null, groundOffset = 0
 const _groundPrevDir = new THREE.Vector3()
 
 function getSmoothGroundHeight(dir, dt) {
-  const rawH = getGroundHeight(dir)
+  // 前のフレームから動いていなければ（1mm 未満）測り直さず、前の高さを使う
+  const still = groundRawPrev !== null && _groundPrevDir.angleTo(dir) * groundRawPrev < 0.001
+  const rawH = still ? groundRawPrev : getGroundHeight(dir)
   if (groundRawPrev !== null) {
     const jump  = rawH - groundRawPrev
     const moved = _groundPrevDir.angleTo(dir) * rawH
