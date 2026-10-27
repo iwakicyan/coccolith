@@ -13,6 +13,9 @@ const HEAD_LIFT  = 1.96   // 地面から頭の中心までの高さ (m)。sab�
 const TURN_MAX   = 1.2    // 曲がる速さの上限 (rad/s)
 const TURN_CHANGE = 0.8   // 曲がる速さが変わる時間のめやす (s)
 const BOB        = 0.2    // ふわふわ上下する幅 (m)
+// 地面を測る間隔 (m)。毎フレーム測ると重いので、この距離だけ先を 1 回測り、そこまでの高さは前に測った高さとのあいだをならす
+// 海もこの距離だけ先で見つけて向きを変える（pixelSprite.js の歩くスプライトと同じ）
+const PROBE_STEP = 0.5
 
 const _right = new THREE.Vector3()
 const _axis  = new THREE.Vector3()
@@ -32,15 +35,18 @@ export function createLightHeads({ scene, speed, radius, getGround, waterLevel }
 
     // 陸に当たるまでランダムな地点を引き直す
     const dir = new THREE.Vector3()
+    let ground
     for (let n = 0; n < 50; n++) {
       dir.randomDirection()
-      if (getGround(dir) >= waterLevel) break
+      ground = getGround(dir)
+      if (ground >= waterLevel) break
     }
     const fwd = new THREE.Vector3().randomDirection()
     fwd.addScaledVector(dir, -fwd.dot(dir)).normalize()
 
     scene.add(obj)
-    heads.push({ obj, lampY, dir, fwd, ground: getGround(dir), turn: 0, turnTarget: 0, phase: Math.random() * Math.PI * 2 })
+    // ground0: 前に測った地点の高さ / ground1: PROBE_STEP 先の高さ（null ならまだ測っていない） / travel: ground0 の地点から歩いた距離 (m)
+    heads.push({ obj, lampY, dir, fwd, ground, ground0: ground, ground1: null, travel: 0, turn: 0, turnTarget: 0, phase: Math.random() * Math.PI * 2 })
   }
 
   function update(dt, now) {
@@ -51,15 +57,24 @@ export function createLightHeads({ scene, speed, radius, getGround, waterLevel }
       h.turn += (h.turnTarget - h.turn) * Math.min(1, dt * 2)
       h.fwd.applyAxisAngle(h.dir, h.turn * dt)
 
-      // 前へ進む（dir を右向きの軸で回す）。海なら進まずに後ろ寄りへ向きを変える
+      // PROBE_STEP 先の地面を測る（dir を右向きの軸で回した先）。海なら進まずに後ろ寄りへ向きを変える（次のフレームで向きを変えた先を測り直す）
       _axis.crossVectors(h.dir, h.fwd).normalize()
-      _next.copy(h.dir).applyAxisAngle(_axis, da).normalize()
-      const ground = getGround(_next)
-      if (ground < waterLevel) {
-        h.fwd.applyAxisAngle(h.dir, Math.PI * (0.6 + Math.random() * 0.8))
-      } else {
-        h.dir.copy(_next)
-        h.ground = ground
+      if (h.ground1 === null) {
+        const ahead = getGround(_next.copy(h.dir).applyAxisAngle(_axis, PROBE_STEP / radius))
+        if (ahead < waterLevel) h.fwd.applyAxisAngle(h.dir, Math.PI * (0.6 + Math.random() * 0.8))
+        else h.ground1 = ahead
+      }
+      // 前へ進み、高さは測った 2 地点のあいだをならす。測った地点まで来たら次を測る
+      if (h.ground1 !== null) {
+        h.dir.applyAxisAngle(_axis, da).normalize()
+        h.travel += speed * dt
+        if (h.travel >= PROBE_STEP) {
+          h.ground = h.ground0 = h.ground1
+          h.ground1 = null
+          h.travel = 0
+        } else {
+          h.ground = h.ground0 + (h.ground1 - h.ground0) * (h.travel / PROBE_STEP)
+        }
       }
       h.fwd.addScaledVector(h.dir, -h.fwd.dot(h.dir)).normalize()
 
