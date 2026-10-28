@@ -29,6 +29,18 @@ const FRONT = rect(F), BACK = rect(B)
 const TOWER = Array.from({ length: TW.seg }, (_, k) => ringPt(TOWER_R, k * STEP))
 const ROOMS = [FRONT, BACK, TOWER]
 
+// 壁に飾る絵（shots/ のスクショを scripts/import-shots.mjs で切り抜いたもの）。大きさは F15 号の横長（65.2 × 53.0 cm）
+const GALLERY = Object.values(import.meta.glob('./gallery/*.jpg', { eager: true, query: '?url', import: 'default' }))
+const PIC = {
+  w: 0.652, h: 0.53,       // 絵の大きさ (m)
+  frame: 0.045,            // 額縁の幅
+  depth: 0.035,            // 額縁の厚み（壁から出る分）
+  frameColor: 0x362b20,
+  y: 1.45,                 // 絵の中心の床からの高さ
+  pitch: 1.6,              // 絵と絵の中心の間隔
+  margin: 0.8,             // 壁の端（と扉）から絵の中心までの最低の距離
+}
+
 // 扉（正面の棟の壁の真ん中）
 const DOOR_X = s((F.x0 + F.x1) / 2), DOOR_Z = s(F.z1)
 const DOOR_W = DR.w * SCALE, DOOR_H = y(DR.h), DOOR_T = DR.t * SCALE   // 扉の大きさは外観どおり
@@ -171,6 +183,39 @@ export function createSShallInterior() {
     add(new THREE.Mesh(g, mCeil))
   }
 
+  // 絵: 棟の壁に PIC.pitch おきに額縁の掛かる場所をとり、名前順に掛ける（場所が余れば奥の壁は空く）
+  // 額縁は壁の子にして、壁がカメラとの間に入って隠れるときに一緒に隠れるようにする
+  const mPicFrame = new THREE.MeshLambertMaterial({ color: PIC.frameColor })
+  const loader = new THREE.TextureLoader()
+  let picIndex = 0
+  function hangPictures({ e, a, b }, wallMesh) {
+    const d = [e.q[0] - e.p[0], e.q[1] - e.p[1]], len = Math.hypot(d[0], d[1])
+    const L = (b - a) * len
+    const n = Math.floor((L - 2 * PIC.margin) / PIC.pitch) + 1
+    if (n < 1) return
+    wallMesh.updateMatrixWorld()
+    for (let k = 0; k < n; k++) {
+      const t = (a * len + L / 2 + (k - (n - 1) / 2) * PIC.pitch) / len
+      const x = e.p[0] + d[0] * t, z = e.p[1] + d[1] * t
+      if (Math.abs(z - DOOR_Z) < 0.01 && Math.abs(x - DOOR_X) < DOOR_W / 2 + PIC.margin) continue   // 扉のところは空ける
+      if (picIndex >= GALLERY.length) return
+      const pic = new THREE.Group()
+      pic.position.set(x, PIC.y, z)
+      pic.rotation.y = Math.atan2(-e.n[0], -e.n[1])   // +z を部屋の内側（-n）へ
+      const fw = PIC.w + PIC.frame * 2, fh = PIC.h + PIC.frame * 2
+      const frame = new THREE.Mesh(new THREE.BoxGeometry(fw, fh, PIC.depth), mPicFrame)
+      frame.position.z = PIC.depth / 2
+      pic.add(frame)
+      const tex = loader.load(GALLERY[picIndex++])
+      tex.colorSpace = THREE.SRGBColorSpace
+      const img = new THREE.Mesh(new THREE.PlaneGeometry(PIC.w, PIC.h), new THREE.MeshBasicMaterial({ map: tex }))
+      img.position.z = PIC.depth + 0.002
+      pic.add(img)
+      scene.add(pic)
+      wallMesh.attach(pic)
+    }
+  }
+
   // 壁: 辺 e の a〜b の部分を、外側へ厚み T の板にする。元の角で終わる端は T/2 延ばして角を埋める
   function wall({ e, a, b }, y0, y1, outline) {
     const d = [e.q[0] - e.p[0], e.q[1] - e.p[1]], len = Math.hypot(d[0], d[1])
@@ -185,7 +230,10 @@ export function createSShallInterior() {
   }
   ROOMS.forEach((poly, i) => {
     const others = ROOMS.filter((_, j) => j !== i)
-    for (const w of outerWalls(poly, others)) wall(w, 0, H_ROOM)
+    for (const w of outerWalls(poly, others)) {
+      const m = wall(w, 0, H_ROOM)
+      if (poly !== TOWER) hangPictures(w, m)
+    }
   })
   // 塔の吹き抜け: 棟の天井より上は12角形の壁が一周。内向きの板にして、下端は天井より少し下げる
   // （箱にすると底面が天井と同じ高さに重なってチラつく）
