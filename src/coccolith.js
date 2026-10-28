@@ -1241,7 +1241,7 @@ function createRoutePoints(routes, interval = 10) {
 
   const geo = new THREE.BufferGeometry()
   geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
-  const mat = new THREE.PointsMaterial({ color: 0xffffff, size: 2, sizeAttenuation: true })
+  const mat = new THREE.PointsMaterial({ color: 0xffffff, size: 1.3, sizeAttenuation: true })   // size: 点の大きさ (m 相当。遠いほど小さく見える)
   return new THREE.Points(geo, mat)
 }
 
