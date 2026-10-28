@@ -6,13 +6,16 @@
 //  名前の最後に数字がある絵（Ice1, Ice2, …）がパラパラ漫画のコマ（番号順）。数字のない絵はテロップで、どのコマの上にも重ねる
 //  コマは横一列に並べた PNG に、テロップは別の PNG にして、index.html の「loading:begin」〜「loading:end」の CSS に data URI で埋め込む
 //  JS や画像を読み込むより前から出せるように、ファイルを分けずに HTML へ直接入れる
+//  最初の INTRO_FRAMES コマは INTRO_SEC 秒で速めに流し、描き始めるまでにそこまで見せる。まだ描き始めなければ続きのコマを FPS で流し、最後まで来たら 1 コマ目から FPS でくり返す
 //  描き直したら、これを実行し直す
 // ============================================================
 
 import { readFileSync, writeFileSync } from 'node:fs'
 import { deflateSync, crc32 } from 'node:zlib'
 
-const FPS = 4   // 1 秒に何コマ
+const FPS = 4            // 1 秒に何コマ
+const INTRO_FRAMES = 8   // 最初に速めに流すコマ数
+const INTRO_SEC = 1      // そのコマを流しきる秒数
 
 const src = process.argv[2]
 if (!src?.endsWith('.txt')) {
@@ -69,9 +72,24 @@ frames.forEach(({ art }, i) => paint(sheet, W * frames.length, art, i * W))
 let telopUri = null
 if (telop) { const t = new Uint8Array(W * H * 4); paint(t, W, telop, 0); telopUri = dataUri(png(t, W, H)) }
 
+// コマ k（0 から）を出す background-position-x（絵の幅がコマ N 枚ぶんなので、0% が 1 コマ目・100% が最後のコマ）
+const N = frames.length
+const pos = (k) => `${+(k / (N - 1) * 100).toFixed(4)}%`
+// steps(n, jump-none) で a〜b コマ目を 1 コマずつ同じ長さで出す。あとに書いたアニメほど優先されるので、遅れて始まるものが前のものを引き継ぐ
+const anims = [], keyframes = []
+const flip = (name, a, b, sec, delay, count) => {
+  anims.push(`${name} ${+sec.toFixed(4)}s steps(${b - a + 1}, jump-none) ${+delay.toFixed(4)}s ${count}`)
+  keyframes.push(`    @keyframes ${name} { from { background-position-x: ${pos(a)}; } to { background-position-x: ${pos(b)}; } }`)
+}
+const intro = Math.min(INTRO_FRAMES, N)
+flip('ld-intro', 0, intro - 1, INTRO_SEC, 0, 1)
+if (intro < N) flip('ld-rest', intro, N - 1, (N - intro) / FPS, INTRO_SEC, 1)
+flip('ld-loop', 0, N - 1, N / FPS, INTRO_SEC + (N - intro) / FPS, 'infinite')
+
 const css = [
-  `    /* ${src.split('/').pop()} から scripts/import-loading.mjs で書き出したもの（${frames.length} コマ、1 秒に ${FPS} コマ）。手で直さず、描き直したら書き出し直す */`,
-  `    #loading .ld-frames { background-image: url(${dataUri(png(sheet, W * frames.length, H))}); background-size: ${frames.length * 100}% 100%; animation: ld-flip ${frames.length / FPS}s steps(${frames.length}, jump-none) infinite; }`,
+  `    /* ${src.split('/').pop()} から scripts/import-loading.mjs で書き出したもの（${N} コマ。最初の ${intro} コマを ${INTRO_SEC} 秒で、そのあとは 1 秒に ${FPS} コマ）。手で直さず、描き直したら書き出し直す */`,
+  `    #loading .ld-frames { background-image: url(${dataUri(png(sheet, W * frames.length, H))}); background-size: ${N * 100}% 100%; animation: ${anims.join(', ')}; }`,
+  ...keyframes,
   telopUri ? `    #loading .ld-telop { background-image: url(${telopUri}); background-size: 100% 100%; }` : `    #loading .ld-telop { display: none; }`,
 ]
 

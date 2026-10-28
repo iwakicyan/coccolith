@@ -1129,6 +1129,7 @@ function animate() {
 // 最初のフレームを描いたら、ローディング表示（index.html の #loading）を薄くして消す
 let hideLoading = () => {
   hideLoading = () => {}
+  performance.mark('first-frame')   // 描き始めるまでの時間を測るとき用（performance.getEntriesByName('first-frame')）
   const el = document.getElementById('loading')
   el.classList.add('done')
   el.addEventListener('transitionend', () => el.remove(), { once: true })
