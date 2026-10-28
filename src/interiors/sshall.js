@@ -265,8 +265,7 @@ export function createSShallInterior() {
   const mPicFrame = new THREE.MeshLambertMaterial({ color: PIC.frameColor })
   const loader = new THREE.TextureLoader()
   let picIndex = 0
-  const pictures = []   // 掛けた絵の中心と壁の外向きの法線（主観ビューで近づくと正面へ向けるのに使う）
-  function hangPictures({ e, a, b }, wallMesh) {
+  function hangPictures({ e, a, b }, wallMesh, run) {
     const d = [e.q[0] - e.p[0], e.q[1] - e.p[1]], len = Math.hypot(d[0], d[1])
     const L = (b - a) * len, mid = a * len + L / 2   // 壁の長さと、辺の始点から壁の真ん中までの距離
     let at   // 絵の中心の、辺の始点からの距離
@@ -284,11 +283,11 @@ export function createSShallInterior() {
     for (const u of at) {
       const x = e.p[0] + d[0] / len * u, z = e.p[1] + d[1] / len * u
       if (picIndex >= GALLERY.length) return
-      pictures.push({ x, y: PIC.y, z, n: e.n })
+      const fw = PIC.w + PIC.frame * 2, fh = PIC.h + PIC.frame * 2
+      run.pics.push({ x, y: PIC.y, z, n: e.n, w: fw, u: x * -e.n[1] + z * e.n[0], wall: run })
       const pic = new THREE.Group()
       pic.position.set(x, PIC.y, z)
       pic.rotation.y = Math.atan2(-e.n[0], -e.n[1])   // +z を部屋の内側（-n）へ
-      const fw = PIC.w + PIC.frame * 2, fh = PIC.h + PIC.frame * 2
       const frame = new THREE.Mesh(new THREE.BoxGeometry(fw, fh, PIC.depth), mPicFrame)
       frame.position.z = PIC.depth / 2
       pic.add(frame)
@@ -314,13 +313,30 @@ export function createSShallInterior() {
     m.rotation.y = Math.atan2(-d[1], d[0])
     return add(m, outline)
   }
+  // 壁ごとに、部屋の内側から壁を向いて右へ進む向きの両端 A→B と、掛けた絵（pics）を持つ
+  const runs = []
   ROOMS.forEach((poly, i) => {
     const others = ROOMS.filter((_, j) => j !== i)
     for (const w of outerWalls(poly, others)) {
       const m = wall(w, 0, H_ROOM)
-      if (poly !== TOWER) hangPictures(w, m)
+      const { e, a, b } = w, d = [e.q[0] - e.p[0], e.q[1] - e.p[1]]
+      let A = [e.p[0] + d[0] * a, e.p[1] + d[1] * a], B = [e.p[0] + d[0] * b, e.p[1] + d[1] * b]
+      if ((B[0] - A[0]) * -e.n[1] + (B[1] - A[1]) * e.n[0] < 0) [A, B] = [B, A]   // 右向き = 法線 n を左へ 90° 回した向き
+      const run = { A, B, pics: [] }
+      runs.push(run)
+      if (poly !== TOWER) hangPictures(w, m, run)
     }
   })
+  // 絵の並び: 壁を端どうしでつないで部屋を右回りに一周する順。主観ビューの ‹ › で隣の絵へ移るのに使う
+  const loop = [runs[0]]
+  for (;;) {
+    const B = loop.at(-1).B
+    const next = runs.find((r) => !loop.includes(r) && Math.hypot(r.A[0] - B[0], r.A[1] - B[1]) < 1e-3)
+    if (!next) break
+    loop.push(next)
+  }
+  // 掛けた絵の中心・壁の外向きの法線・額縁の幅（主観ビューで近づくと正面へ向ける・‹ › で隣へ移る）
+  const pictures = (loop.length === runs.length ? loop : runs).flatMap((r) => r.pics.sort((p, q) => p.u - q.u))
   // 床のライン（壁から FLOOR_LINE.dist）。床と同じ Lambert にして、シェーダーを増やさない
   {
     const m = new THREE.Mesh(floorLine(FLOOR_LINE.dist, FLOOR_LINE.width), new THREE.MeshLambertMaterial({ color: FLOOR_LINE.color }))

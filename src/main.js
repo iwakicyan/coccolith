@@ -529,6 +529,8 @@ async function exitInterior() {
   transitioning = true
   await fadeTo(1)
   const { door } = interior
+  picFocus = picMove = null
+  updatePicArrows(null)
   showOccluders()
   scene.add(sabchan.group)
   interior = null
@@ -680,6 +682,11 @@ window.addEventListener('keydown', e => {
     return
   }
   if (e.code === 'KeyL' && !e.repeat) toggleSabLight()
+  if ((e.code === 'ArrowLeft' || e.code === 'ArrowRight') && interior && firstPerson) {
+    if (!e.repeat) stepPicture(e.code === 'ArrowLeft' ? -1 : 1)
+    e.preventDefault()
+    return
+  }
   keys[e.code] = true
   e.preventDefault()
 })
@@ -864,7 +871,7 @@ const PIC_SNAP_DIST   = 1.25   // 壁からこの距離 (m) 以内で吸い付�
 const PIC_SNAP_SIDE   = 0.8    // 絵の中心から壁に沿ってこの距離 (m) 以内
 const PIC_SNAP_FACING = 0.5    // 向きと壁の法線の内積がこれ以上（およそ 60° 以内）で絵の方を向いているとみなす
 const PIC_SNAP_RATE   = 6      // 寄せる速さ（1/s。大きいほど早く吸い付く）
-function snapToPicture(pictures, dt, turnIn, pitchIn, moving) {
+function snapToPicture(pictures, dt, turnIn, pitchIn, moving) {   // 吸い付いた絵を返す（なければ null）
   let best = null
   for (const p of pictures) {
     const dx = iPos.x - p.x, dz = iPos.z - p.z
@@ -874,7 +881,7 @@ function snapToPicture(pictures, dt, turnIn, pitchIn, moving) {
     if (iFwd.x * p.n[0] + iFwd.z * p.n[1] < PIC_SNAP_FACING) continue
     if (!best || dist < best.dist) best = { p, dist, side }
   }
-  if (!best) return
+  if (!best) return null
   const { p, dist, side } = best
   const k = 1 - Math.exp(-PIC_SNAP_RATE * dt)
   if (Math.abs(turnIn) <= 0.01) {
@@ -886,6 +893,64 @@ function snapToPicture(pictures, dt, turnIn, pitchIn, moving) {
   if (!moving) {
     iPos.x += p.n[1] * side * k
     iPos.z -= p.n[0] * side * k
+  }
+  return p
+}
+
+// 吸い付いている間は額縁の左右に ‹ › を出し、押すと（←→ キーでも）隣の絵の正面（床のラインの上）へ移る
+// 並びは室内の def.pictures の順（部屋を右回りに一周）。同じ壁の隣へはすべるように動き、別の壁へは暗転して移る
+const PIC_VIEW_DIST  = 1.0    // 移った先の壁からの距離 (m)
+const PIC_MOVE_TIME  = 0.7    // 同じ壁の隣へすべる時間 (s)
+const PIC_ARROW_GAP  = 0.12   // 額縁の端から矢印の中心までの距離 (m)
+const PIC_ARROW_EDGE = 28     // 矢印を画面の端からこれ (px) より内側に収める
+const picPrevBtn = document.getElementById('pic-prev')
+const picNextBtn = document.getElementById('pic-next')
+let picFocus = null   // 吸い付いている絵
+let picMove  = null   // すべっている途中 { from, to, fromFwd, toFwd, fromPitch, toPitch, t }
+const _picV = new THREE.Vector3()
+
+function stepPicture(d) {
+  const pics = interior?.def.pictures
+  if (!pics || !picFocus || picMove || transitioning) return
+  const p = pics[(pics.indexOf(picFocus) + d + pics.length) % pics.length]
+  const to = new THREE.Vector3(p.x - p.n[0] * PIC_VIEW_DIST, 0, p.z - p.n[1] * PIC_VIEW_DIST)
+  const toFwd = new THREE.Vector3(p.n[0], 0, p.n[1])
+  const toPitch = Math.atan2(p.y - FP_EYE_H, PIC_VIEW_DIST)
+  if (p.wall === picFocus.wall) {
+    picMove = { from: iPos.clone(), to, fromFwd: iFwd.clone(), toFwd, fromPitch: fpPitch, toPitch, t: 0 }
+    return
+  }
+  transitioning = true
+  fadeTo(1).then(() => {
+    if (interior && firstPerson) { iPos.copy(to); iFwd.copy(toFwd); fpPitch = toPitch }
+    return fadeTo(0)
+  }).finally(() => { transitioning = false })
+}
+picPrevBtn.addEventListener('click', () => stepPicture(-1))
+picNextBtn.addEventListener('click', () => stepPicture(1))
+
+function movePicture(dt) {
+  const m = picMove
+  m.t = Math.min(1, m.t + dt / PIC_MOVE_TIME)
+  const e = m.t * m.t * (3 - 2 * m.t)
+  iPos.lerpVectors(m.from, m.to, e)
+  iFwd.lerpVectors(m.fromFwd, m.toFwd, e).normalize()
+  fpPitch = m.fromPitch + (m.toPitch - m.fromPitch) * e
+  if (m.t >= 1) picMove = null
+}
+
+// 額縁の左右の端のすぐ外を画面に写した位置に矢印を置く（camera を決めたあとに呼ぶ）
+function updatePicArrows(p) {
+  const show = !!p && !picMove && !transitioning
+  picPrevBtn.hidden = picNextBtn.hidden = !show
+  if (!show) return
+  camera.updateMatrixWorld()
+  const off = p.w / 2 + PIC_ARROW_GAP
+  for (const [btn, s] of [[picPrevBtn, -1], [picNextBtn, 1]]) {
+    _picV.set(p.x - p.n[1] * off * s - p.n[0] * 0.05, p.y, p.z + p.n[0] * off * s - p.n[1] * 0.05).project(camera)   // 右向き = (-n.z, n.x)
+    const x = (_picV.x + 1) / 2 * innerWidth, y = (1 - _picV.y) / 2 * innerHeight
+    btn.style.left = `${Math.max(PIC_ARROW_EDGE, Math.min(innerWidth - PIC_ARROW_EDGE, x))}px`
+    btn.style.top = `${y}px`
   }
 }
 
@@ -900,7 +965,9 @@ function updateInterior(dt, now, joyYaw, joyPitch) {
   if (Math.abs(fbIn) > 0.01) iPos.addScaledVector(iFwd,   step * Math.max(-1, Math.min(1, fbIn)))
   if (Math.abs(lrIn) > 0.01) iPos.addScaledVector(_iRight, step * Math.max(-1, Math.min(1, lrIn)))
   const pitchIn = (keys['ArrowUp'] ? 1 : 0) - (keys['ArrowDown'] ? 1 : 0) - joyPitch
-  if (firstPerson && def.pictures) snapToPicture(def.pictures, dt, turnIn, pitchIn, Math.abs(fbIn) > 0.01 || Math.abs(lrIn) > 0.01)
+  if (!firstPerson) picMove = null
+  if (picMove) movePicture(dt)   // 移っている間は操作より優先
+  picFocus = firstPerson && def.pictures && !picMove ? snapToPicture(def.pictures, dt, turnIn, pitchIn, Math.abs(fbIn) > 0.01 || Math.abs(lrIn) > 0.01) : null
   def.resolve(iPos, INTERIOR_BODY_R, SAB_HEIGHT)
   iPos.y = def.floorAt(iPos.x, iPos.z, iPos.y)
 
@@ -923,8 +990,10 @@ function updateInterior(dt, now, joyYaw, joyPitch) {
     _iDir.copy(iFwd).multiplyScalar(Math.cos(fpPitch)).addScaledVector(_iUp, Math.sin(fpPitch)).add(camera.position)
     camera.up.copy(_iUp)
     camera.lookAt(_iDir)
+    updatePicArrows(picFocus)
     return
   }
+  updatePicArrows(null)
 
   // 3人称カメラ（屋外と同じ角度）。カメラと sabちゃんの間にある壁・天井・床はそのフレームだけ隠す
   const camAngle = Math.max(0.05, Math.min(Math.PI * 0.45, CAM_BASE_ANGLE + pitch))

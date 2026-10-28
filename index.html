@@ -193,6 +193,17 @@
     #tab-btn.insab { background-image: url(/ui/insab.png); }   /* 室内の主観中: sabちゃん入りの視点に戻る */
     /* 自動撮影モード（?shot=1。shot.js）: 下のコントローラーと操作説明を隠し、HUD は残す */
     body.shot #drive-btn, body.shot #joy-right, body.shot #tab-btn, body.shot #ctrl { display: none; }
+    /* 主観ビューで SS館の絵に吸い付いたとき、額縁の左右に出す ‹ ›（隣の絵へ移る。位置は main.js が毎フレーム決める）。見た目は開発資料ビューアの ‹ › と同じ */
+    .pic-arrow {
+      position: fixed; z-index: 20; transform: translate(-50%, -50%);
+      width: 32px; padding: 0; background: rgba(0,0,0,0.25);
+      border: 1px solid rgba(255,255,255,0.35); border-radius: 16px;
+      color: rgba(255,255,255,0.8); font: 20px monospace; line-height: 40px;
+      cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent;
+    }
+    .pic-arrow:hover { border-color: rgba(255,255,255,0.7); color: #fff; }
+    .pic-arrow[hidden] { display: none; }
+    body.shot .pic-arrow { display: none; }
     /* 室内⇄屋外の切り替え時の暗転 */
     #fade {
       position: fixed; inset: 0; z-index: 30; background: #000;
@@ -319,6 +330,8 @@
   <div class="joy-handle"></div>
 </div>
 <button id="tab-btn" aria-label="俯瞰"></button>
+<button id="pic-prev" class="pic-arrow" aria-label="前の作品" hidden>‹</button>
+<button id="pic-next" class="pic-arrow" aria-label="次の作品" hidden>›</button>
 <div id="fade"></div>
   <script type="module" src="/src/main.js"></script>
 </body>
