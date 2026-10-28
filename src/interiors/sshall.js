@@ -41,6 +41,9 @@ const PIC = {
   margin: 0.8,             // 壁の端（と扉）から絵の中心までの最低の距離
 }
 
+// 床のライン（壁から dist のところを一周する明るいグレーの線）
+const FLOOR_LINE = { dist: 1.0, width: 0.05, color: 0xd4d4d4 }
+
 // 扉（正面の棟の壁の真ん中）
 const DOOR_X = s((F.x0 + F.x1) / 2), DOOR_Z = s(F.z1)
 const DOOR_W = DR.w * SCALE, DOOR_H = y(DR.h), DOOR_T = DR.t * SCALE   // 扉の大きさは外観どおり
@@ -134,6 +137,79 @@ function resolve(pos, r) {
   }
   pos.x = best[0]
   pos.z = best[1]
+}
+
+// 床のライン: 壁の内側の面からちょうど dist の距離を通る線を、幅 width の帯にする
+// 各壁を dist だけ内側へずらした線と、壁の端を中心にした半径 dist の円を候補にして、
+// 部屋の中にあって、どの壁からも dist 以上離れているところだけを残す（凹んだ角は丸く回り込む）
+function floorLine(dist, width) {
+  const walls = ROOMS.flatMap((poly, i) => outerWalls(poly, ROOMS.filter((_, j) => j !== i)).map(({ e, a, b }) => {
+    const d = [e.q[0] - e.p[0], e.q[1] - e.p[1]]
+    return { A: [e.p[0] + d[0] * a, e.p[1] + d[1] * a], B: [e.p[0] + d[0] * b, e.p[1] + d[1] * b], n: e.n }
+  }))
+  const segDist = ([x, z], { A, B }) => {
+    const dx = B[0] - A[0], dz = B[1] - A[1]
+    const t = Math.min(1, Math.max(0, ((x - A[0]) * dx + (z - A[1]) * dz) / (dx * dx + dz * dz)))
+    return Math.hypot(x - A[0] - dx * t, z - A[1] - dz * t)
+  }
+  const inside = (p) => ROOMS.some((poly) => edges(poly).every((e) => e.n[0] * (p[0] - e.p[0]) + e.n[1] * (p[1] - e.p[1]) <= 1e-9))
+  const ok = (p) => inside(p) && walls.every((w) => segDist(p, w) >= dist - 1e-4)
+
+  // 候補の線 at(t)（t = 0〜1）
+  const paths = []
+  for (const { A, B, n } of walls) {
+    paths.push({ at: (t) => [A[0] + (B[0] - A[0]) * t - n[0] * dist, A[1] + (B[1] - A[1]) * t - n[1] * dist], len: Math.hypot(B[0] - A[0], B[1] - A[1]) })
+  }
+  const corners = new Map()
+  for (const { A, B } of walls) for (const P of [A, B]) corners.set(P.map((v) => v.toFixed(4)).join(), P)
+  for (const P of corners.values()) {
+    paths.push({ at: (t) => [P[0] + dist * Math.cos(t * Math.PI * 2), P[1] + dist * Math.sin(t * Math.PI * 2)], len: Math.PI * 2 * dist })
+  }
+
+  // 線ごとに細かく調べて、残す区間の端は二分探索で詰め、区間ごとに帯（四角の連なり）にする
+  const pos = []
+  const ribbon = (pts) => {
+    for (let i = 0; i + 1 < pts.length; i++) {
+      const [ax, az] = pts[i], [bx, bz] = pts[i + 1]
+      const l = Math.hypot(bx - ax, bz - az)
+      if (l < 1e-6) continue
+      const ox = -(bz - az) / l * width / 2, oz = (bx - ax) / l * width / 2
+      quad([ax + ox, az + oz], [bx + ox, bz + oz], [bx - ox, bz - oz], [ax - ox, az - oz])
+    }
+  }
+  // 四角 a-b-c-d を、上から見て反時計回り（表が上）の三角形 2 つにする
+  const quad = (a, b, c, d) => {
+    const up = (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]) < 0   // x→z の外積が負 = 上から見て反時計回り
+    const vs = up ? [a, b, c, a, c, d] : [a, c, b, a, d, c]
+    for (const [x, z] of vs) pos.push(x, 0, z)
+  }
+  const edge = (path, tIn, tOut) => {   // tIn は残す側、tOut は捨てる側
+    for (let k = 0; k < 30; k++) {
+      const m = (tIn + tOut) / 2
+      if (ok(path.at(m))) tIn = m; else tOut = m
+    }
+    return tIn
+  }
+  for (const path of paths) {
+    const N = Math.max(2, Math.ceil(path.len / 0.05))
+    let run = null
+    for (let k = 0; k <= N; k++) {
+      const t = k / N
+      if (ok(path.at(t))) {
+        if (!run) run = k === 0 ? [path.at(0)] : [path.at(edge(path, t, (k - 1) / N))]
+        run.push(path.at(t))
+      } else if (run) {
+        run.push(path.at(edge(path, (k - 1) / N, t)))
+        ribbon(run)
+        run = null
+      }
+    }
+    if (run) ribbon(run)
+  }
+  const g = new THREE.BufferGeometry()
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3))
+  g.computeVertexNormals()
+  return g
 }
 
 export function createSShallInterior() {
@@ -243,6 +319,12 @@ export function createSShallInterior() {
       if (poly !== TOWER) hangPictures(w, m)
     }
   })
+  // 床のライン（壁から FLOOR_LINE.dist）。床と同じ Lambert にして、シェーダーを増やさない
+  {
+    const m = new THREE.Mesh(floorLine(FLOOR_LINE.dist, FLOOR_LINE.width), new THREE.MeshLambertMaterial({ color: FLOOR_LINE.color }))
+    m.position.y = 0.004
+    scene.add(m)
+  }
   // 塔の吹き抜け: 棟の天井より上は12角形の壁が一周。内向きの板にして、下端は天井より少し下げる
   // （箱にすると底面が天井と同じ高さに重なってチラつく）
   for (const e of edges(TOWER)) {
