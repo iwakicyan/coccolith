@@ -3,6 +3,7 @@ name: Post to Bluesky
 # 4 時間ごとに惑星内のランダムな地点を撮って @planet-coccolith.bsky.social に投稿する（同じ写真を Mastodon にも投稿する）
 # （UTC の 3,7,11… 時 = JST の 0,4,8,12,16,20 時。混雑時は数十分遅れることがある）
 # 1 時間後にもう一度起き、その回の投稿がまだなければ（ランナーが取れなかった・途中で失敗したなど）やり直す
+# JST 12 時の回（とそのやり直し）だけは、地表ではなく俯瞰で惑星の全体を撮る
 on:
   schedule:
     - cron: '0 3-23/4 * * *'   # 本番
@@ -56,8 +57,11 @@ jobs:
       - run: npm ci
       - run: npx playwright install --with-deps --only-shell chromium
       - run: npm run build
+      # UTC 3〜6 時（JST 12 時の回と、遅れたりやり直したりしたとき）は俯瞰で撮る
       - id: shot
-        run: npm run shot
+        run: |
+          h=$(date -u +%-H)
+          if [ "$h" -ge 3 ] && [ "$h" -lt 7 ]; then npm run shot -- "view=overview"; else npm run shot; fi
       - run: npm run post
         env:
           BLUESKY_HANDLE: planet-coccolith.bsky.social

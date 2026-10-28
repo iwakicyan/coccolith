@@ -1,7 +1,7 @@
 import * as THREE from 'three'
 import { MeshBVH, acceleratedRaycast } from 'three-mesh-bvh'
 import { createHorizonCull, HIDDEN_LAYER } from './horizonCull.js'
-import { shotMode, applyStartPose, startWithLight, shotFrameRendered } from './shot.js'   // 画像の読み込み待ちのため先に読む
+import { shotMode, startInOverview, applyStartPose, startWithLight, shotFrameRendered } from './shot.js'   // 画像の読み込み待ちのため先に読む
 import { vJoy, initJoysticks } from './joystick.js'
 import { createCompass, createVethIndicator } from './hud.js'
 import { initFullscreenButton } from './fullscreen.js'
@@ -655,11 +655,7 @@ window.addEventListener('keydown', e => {
     updateTabBtn()
 
     if (overviewMode) {
-      // sabちゃんの真上から見下ろす（HUD の座標が切り替えの前後で変わらないように）
-      ovYaw   = Math.atan2(pDir.x, pDir.z)
-      ovPitch = Math.max(OV_PITCH_MIN, Math.min(OV_PITCH_MAX, Math.asin(pDir.y)))
-      ovEnterYaw = ovYaw
-      ovEnterPitch = ovPitch
+      lookDownOnSab()
     } else if (ovYaw !== ovEnterYaw || ovPitch !== ovEnterPitch) {
       // 🔴 が指していた地表点（カメラ→原点方向のレイ）を新しい立ち位置にする
       const rayDir = camera.position.clone().negate().normalize()
@@ -773,6 +769,19 @@ const PITCH_SPD = 1.2     // ピッチ速度 (rad/s)
 const OV_SPD    = 1.2     // 俯瞰回転速度 (rad/s)
 const OV_PITCH_MIN = -Math.PI * 0.49  // 南半球まで回せるよう負値に
 const OV_PITCH_MAX =  Math.PI * 0.49
+// 俯瞰に入るとき、sabちゃんの真上から見下ろす（HUD の座標が切り替えの前後で変わらないように）
+function lookDownOnSab() {
+  ovYaw   = Math.atan2(pDir.x, pDir.z)
+  ovPitch = Math.max(OV_PITCH_MIN, Math.min(OV_PITCH_MAX, Math.asin(pDir.y)))
+  ovEnterYaw = ovYaw
+  ovEnterPitch = ovPitch
+}
+// URL の view=overview で俯瞰から始める
+if (startInOverview) {
+  overviewMode = true
+  lookDownOnSab()
+  updateTabBtn()
+}
 // ハンドル入力の立ち上がり: 入力開始時は start 倍から、time 秒かけて max 倍（トップスピード）へ
 const JOY_RAMP_YAW   = { start: 0.15, time: 0.7, max: 0.6 }
 const JOY_RAMP_PITCH = { start: 0.1,  time: 1.0, max: 0.4 }   // 上下は横より重く: 動き出しをゆっくり、最高速は横の約半分（0.48 rad/s。横は 0.9 rad/s）

@@ -32,6 +32,8 @@ export function buildPost(meta) {
     : null
   const alt = isVideo
     ? `惑星 coccolith の lat ${fmt(meta.lat)}° lon ${fmt(meta.lon)}° から、方位 ${Math.round(meta.heading)}° へ ${meta.video.seconds * (meta.video.slow ?? 1)} 秒まっすぐ走った景色`
-    : `惑星 coccolith の lat ${fmt(meta.lat)}° lon ${fmt(meta.lon)}° から、方位 ${Math.round(meta.heading)}° を向いて撮った景色`
+    : meta.view === 'overview'
+      ? `惑星 coccolith を、lat ${fmt(meta.lat)}° lon ${fmt(meta.lon)}° の上空から見下ろした全体の姿`
+      : `惑星 coccolith の lat ${fmt(meta.lat)}° lon ${fmt(meta.lon)}° から、方位 ${Math.round(meta.heading)}° を向いて撮った景色`
   return { isVideo, head, link, hashtags: HASHTAGS, alt }
 }

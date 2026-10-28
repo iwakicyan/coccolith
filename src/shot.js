@@ -5,6 +5,8 @@ import * as THREE from 'three'
 //
 //  ?lat=33.5&lon=-1&heading=120&pitch=10&light=1
 //    その地点・向きから始める（heading: 北=0 東=90 の度、pitch: カメラの見上げ角の度、light: sabちゃんのライト 1=ON 0=OFF）
+//  ?view=overview
+//    俯瞰から始める（lat・lon の地点の真上から惑星を見下ろす）
 //  ?shot=1
 //    下のコントローラーを隠し、指定がない値はランダムにして（地点は海中を避け、夜側ではライトも SHOT_LIGHT_CHANCE の確率で点ける）、
 //    画像の読み込みと起動演出が済んだら window.__shot.ready を true にする（scripts/shot.mjs が待って撮る）
@@ -107,3 +109,5 @@ export function shotFrameRendered() {
 }
 
 export const shotMode = isShot
+export const startInOverview = params.get('view') === 'overview'
+if (isShot) window.__shot.view = startInOverview ? 'overview' : 'ground'

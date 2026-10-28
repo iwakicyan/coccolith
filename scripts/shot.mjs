@@ -3,6 +3,7 @@
 //
 //    npm run build && npm run shot              … ランダムな地点
 //    npm run shot -- "lat=33.5&lon=-1"           … 地点を指定（指定のない値はランダム）
+//    npm run shot -- "view=overview"             … 俯瞰で惑星の全体を撮る（ランダムな地点の真上から）
 //
 //  dist/ を vite preview で配信し、ヘッドレスの Chromium で ?shot=1 を開いて
 //  window.__shot.ready（src/shot.js）を待ってから撮る。
@@ -37,7 +38,7 @@ try {
   await page.waitForFunction(() => window.__shot?.ready, null, { timeout: READY_TIMEOUT, polling: 500 })
   const shot = await page.evaluate(() => ({
     lat: window.__shot.lat, lon: window.__shot.lon, heading: window.__shot.heading, pitch: window.__shot.pitch,
-    light: window.__shot.light,
+    light: window.__shot.light, view: window.__shot.view,
     area: document.getElementById('area-code').textContent,
   }))
 
