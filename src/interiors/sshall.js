@@ -37,8 +37,8 @@ const PIC = {
   depth: 0.04,             // 額縁の厚み（壁から出る分）
   frameColor: 0x362b20,
   y: 1.5,                  // 絵の中心の床からの高さ
-  gap: 2.0,                // 1 つの壁の 2 枚の中心の間隔（壁が短ければ詰める）
-  margin: 0.8,             // 壁の端（と扉）から絵の中心までの最低の距離
+  pitch: 3.3,              // 絵と絵のだいたいの間隔。壁を長さに応じた枚数で等分して、その真ん中に掛ける
+  margin: 0.8,             // 絵を掛ける壁に要る、額縁の両側の余白
 }
 
 // 床のライン（壁から dist のところを一周する明るいグレーの線）
@@ -259,46 +259,46 @@ export function createSShallInterior() {
     add(new THREE.Mesh(g, mCeil))
   }
 
-  // 絵: 棟の壁 1 つに 2 枚ずつ（扉のある壁は扉の左右に 1 枚ずつ）、名前順に掛ける（絵が足りなければ後の壁は空き、壁が足りなければ残りの絵は掛けない）
-  // 2 枚掛けられない短い壁には掛けない
-  // 額縁は壁の子にして、壁がカメラとの間に入って隠れるときに一緒に隠れるようにする
+  // 絵の掛かる場所: 棟の壁をだいたい PIC.pitch ごとに区切って、区切りの真ん中に 1 枚ずつ（短い壁は 1 枚、扉のある壁は扉の左右を別の壁として）
+  // 部屋を一周してだいたい等間隔になる。絵が入らないほど短い壁には掛けない
+  function pictureSlots({ e, a, b }, wallMesh, run) {
+    const d = [e.q[0] - e.p[0], e.q[1] - e.p[1]], len = Math.hypot(d[0], d[1])
+    const fw = PIC.w + PIC.frame * 2
+    let spans = [[a * len, b * len]]   // 絵を並べる区間（辺の始点からの距離）
+    if (Math.abs(e.p[1] - DOOR_Z) < 0.01 && Math.abs(e.q[1] - DOOR_Z) < 0.01) {
+      const doorAt = (DOOR_X - e.p[0]) * d[0] / len + (DOOR_Z - e.p[1]) * d[1] / len, half = DOOR_W / 2
+      spans = [[a * len, doorAt - half], [doorAt + half, b * len]]
+    }
+    for (const [s0, s1] of spans) {
+      const L = s1 - s0
+      if (L < fw + 2 * PIC.margin) continue
+      const n = Math.max(1, Math.min(Math.round(L / PIC.pitch), Math.floor(L / (fw + PIC.margin))))
+      for (let k = 0; k < n; k++) {
+        const u = s0 + (k + 0.5) * L / n
+        const x = e.p[0] + d[0] / len * u, z = e.p[1] + d[1] / len * u
+        run.pics.push({ x, y: PIC.y, z, n: e.n, w: fw, u: x * -e.n[1] + z * e.n[0], wall: run, wallMesh })
+      }
+    }
+  }
+
+  // 絵を掛ける。額縁は壁の子にして、壁がカメラとの間に入って隠れるときに一緒に隠れるようにする
   const mPicFrame = new THREE.MeshLambertMaterial({ color: PIC.frameColor })
   const loader = new THREE.TextureLoader()
-  let picIndex = 0
-  function hangPictures({ e, a, b }, wallMesh, run) {
-    const d = [e.q[0] - e.p[0], e.q[1] - e.p[1]], len = Math.hypot(d[0], d[1])
-    const L = (b - a) * len, mid = a * len + L / 2   // 壁の長さと、辺の始点から壁の真ん中までの距離
-    let at   // 絵の中心の、辺の始点からの距離
-    const doorAt = (DOOR_X - e.p[0]) * d[0] / len + (DOOR_Z - e.p[1]) * d[1] / len
-    if (Math.abs(e.p[1] - DOOR_Z) < 0.01 && Math.abs(e.q[1] - DOOR_Z) < 0.01) {
-      // 扉のある壁: 扉の左右それぞれの真ん中
-      const half = DOOR_W / 2
-      at = [(a * len + doorAt - half) / 2, (doorAt + half + b * len) / 2]
-    } else {
-      const gap = Math.min(PIC.gap, L - 2 * PIC.margin)
-      if (gap < PIC.w + PIC.frame * 2 + 0.3) return
-      at = [mid - gap / 2, mid + gap / 2]
-    }
-    wallMesh.updateMatrixWorld()
-    for (const u of at) {
-      const x = e.p[0] + d[0] / len * u, z = e.p[1] + d[1] / len * u
-      if (picIndex >= GALLERY.length) return
-      const fw = PIC.w + PIC.frame * 2, fh = PIC.h + PIC.frame * 2
-      run.pics.push({ x, y: PIC.y, z, n: e.n, w: fw, u: x * -e.n[1] + z * e.n[0], wall: run })
-      const pic = new THREE.Group()
-      pic.position.set(x, PIC.y, z)
-      pic.rotation.y = Math.atan2(-e.n[0], -e.n[1])   // +z を部屋の内側（-n）へ
-      const frame = new THREE.Mesh(new THREE.BoxGeometry(fw, fh, PIC.depth), mPicFrame)
-      frame.position.z = PIC.depth / 2
-      pic.add(frame)
-      const tex = loader.load(GALLERY[picIndex++])
-      tex.colorSpace = THREE.SRGBColorSpace
-      const img = new THREE.Mesh(new THREE.PlaneGeometry(PIC.w, PIC.h), new THREE.MeshBasicMaterial({ map: tex }))
-      img.position.z = PIC.depth + 0.002
-      pic.add(img)
-      scene.add(pic)
-      wallMesh.attach(pic)
-    }
+  function hang(p, url) {
+    const pic = new THREE.Group()
+    pic.position.set(p.x, p.y, p.z)
+    pic.rotation.y = Math.atan2(-p.n[0], -p.n[1])   // +z を部屋の内側（-n）へ
+    const frame = new THREE.Mesh(new THREE.BoxGeometry(p.w, PIC.h + PIC.frame * 2, PIC.depth), mPicFrame)
+    frame.position.z = PIC.depth / 2
+    pic.add(frame)
+    const tex = loader.load(url)
+    tex.colorSpace = THREE.SRGBColorSpace
+    const img = new THREE.Mesh(new THREE.PlaneGeometry(PIC.w, PIC.h), new THREE.MeshBasicMaterial({ map: tex }))
+    img.position.z = PIC.depth + 0.002
+    pic.add(img)
+    scene.add(pic)
+    p.wallMesh.updateMatrixWorld()
+    p.wallMesh.attach(pic)
   }
 
   // 壁: 辺 e の a〜b の部分を、外側へ厚み T の板にする。元の角で終わる端は T/2 延ばして角を埋める
@@ -313,7 +313,7 @@ export function createSShallInterior() {
     m.rotation.y = Math.atan2(-d[1], d[0])
     return add(m, outline)
   }
-  // 壁ごとに、部屋の内側から壁を向いて右へ進む向きの両端 A→B と、掛けた絵（pics）を持つ
+  // 壁ごとに、部屋の内側から壁を向いて右へ進む向きの両端 A→B と、絵の掛かる場所（pics）を持つ
   const runs = []
   ROOMS.forEach((poly, i) => {
     const others = ROOMS.filter((_, j) => j !== i)
@@ -324,7 +324,7 @@ export function createSShallInterior() {
       if ((B[0] - A[0]) * -e.n[1] + (B[1] - A[1]) * e.n[0] < 0) [A, B] = [B, A]   // 右向き = 法線 n を左へ 90° 回した向き
       const run = { A, B, pics: [] }
       runs.push(run)
-      if (poly !== TOWER) hangPictures(w, m, run)
+      if (poly !== TOWER) pictureSlots(w, m, run)
     }
   })
   // 絵の並び: 壁を端どうしでつないで部屋を右回りに一周する順。主観ビューの ‹ › で隣の絵へ移るのに使う
@@ -335,8 +335,10 @@ export function createSShallInterior() {
     if (!next) break
     loop.push(next)
   }
-  // 掛けた絵の中心・壁の外向きの法線・額縁の幅（主観ビューで近づくと正面へ向ける・‹ › で隣へ移る）
-  const pictures = (loop.length === runs.length ? loop : runs).flatMap((r) => r.pics.sort((p, q) => p.u - q.u))
+  // この順に名前順の絵を掛ける（場所が足りなければ残りの絵は掛けない）
+  // pictures: 掛けた絵の中心・壁の外向きの法線・額縁の幅（主観ビューで近づくと正面へ向ける・‹ › で隣へ移る）
+  const pictures = (loop.length === runs.length ? loop : runs).flatMap((r) => r.pics.sort((p, q) => p.u - q.u)).slice(0, GALLERY.length)
+  pictures.forEach((p, i) => hang(p, GALLERY[i]))
   // 床のライン（壁から FLOOR_LINE.dist）。床と同じ Lambert にして、シェーダーを増やさない
   {
     const m = new THREE.Mesh(floorLine(FLOOR_LINE.dist, FLOOR_LINE.width), new THREE.MeshLambertMaterial({ color: FLOOR_LINE.color }))
