@@ -29,15 +29,15 @@ const FRONT = rect(F), BACK = rect(B)
 const TOWER = Array.from({ length: TW.seg }, (_, k) => ringPt(TOWER_R, k * STEP))
 const ROOMS = [FRONT, BACK, TOWER]
 
-// 壁に飾る絵（shots/ のスクショを scripts/import-shots.mjs で切り抜いたもの）。大きさは F15 号の横長（65.2 × 53.0 cm）
+// 壁に飾る絵（shots/ のスクショを scripts/import-shots.mjs で切り抜いたもの）。大きさは F20 号の横長（72.7 × 60.6 cm）
 const GALLERY = Object.values(import.meta.glob('./gallery/*.jpg', { eager: true, query: '?url', import: 'default' }))
 const PIC = {
-  w: 0.652, h: 0.53,       // 絵の大きさ (m)
-  frame: 0.045,            // 額縁の幅
-  depth: 0.035,            // 額縁の厚み（壁から出る分）
+  w: 0.727, h: 0.606,      // 絵の大きさ (m)
+  frame: 0.05,             // 額縁の幅
+  depth: 0.04,             // 額縁の厚み（壁から出る分）
   frameColor: 0x362b20,
-  y: 1.45,                 // 絵の中心の床からの高さ
-  pitch: 1.6,              // 絵と絵の中心の間隔
+  y: 1.5,                  // 絵の中心の床からの高さ
+  gap: 2.0,                // 1 つの壁の 2 枚の中心の間隔（壁が短ければ詰める）
   margin: 0.8,             // 壁の端（と扉）から絵の中心までの最低の距離
 }
 
@@ -183,21 +183,29 @@ export function createSShallInterior() {
     add(new THREE.Mesh(g, mCeil))
   }
 
-  // 絵: 棟の壁に PIC.pitch おきに額縁の掛かる場所をとり、名前順に掛ける（場所が余れば奥の壁は空く）
+  // 絵: 棟の壁 1 つに 2 枚ずつ（扉のある壁は扉の左右に 1 枚ずつ）、名前順に掛ける（絵が足りなければ後の壁は空き、壁が足りなければ残りの絵は掛けない）
+  // 2 枚掛けられない短い壁には掛けない
   // 額縁は壁の子にして、壁がカメラとの間に入って隠れるときに一緒に隠れるようにする
   const mPicFrame = new THREE.MeshLambertMaterial({ color: PIC.frameColor })
   const loader = new THREE.TextureLoader()
   let picIndex = 0
   function hangPictures({ e, a, b }, wallMesh) {
     const d = [e.q[0] - e.p[0], e.q[1] - e.p[1]], len = Math.hypot(d[0], d[1])
-    const L = (b - a) * len
-    const n = Math.floor((L - 2 * PIC.margin) / PIC.pitch) + 1
-    if (n < 1) return
+    const L = (b - a) * len, mid = a * len + L / 2   // 壁の長さと、辺の始点から壁の真ん中までの距離
+    let at   // 絵の中心の、辺の始点からの距離
+    const doorAt = (DOOR_X - e.p[0]) * d[0] / len + (DOOR_Z - e.p[1]) * d[1] / len
+    if (Math.abs(e.p[1] - DOOR_Z) < 0.01 && Math.abs(e.q[1] - DOOR_Z) < 0.01) {
+      // 扉のある壁: 扉の左右それぞれの真ん中
+      const half = DOOR_W / 2
+      at = [(a * len + doorAt - half) / 2, (doorAt + half + b * len) / 2]
+    } else {
+      const gap = Math.min(PIC.gap, L - 2 * PIC.margin)
+      if (gap < PIC.w + PIC.frame * 2 + 0.3) return
+      at = [mid - gap / 2, mid + gap / 2]
+    }
     wallMesh.updateMatrixWorld()
-    for (let k = 0; k < n; k++) {
-      const t = (a * len + L / 2 + (k - (n - 1) / 2) * PIC.pitch) / len
-      const x = e.p[0] + d[0] * t, z = e.p[1] + d[1] * t
-      if (Math.abs(z - DOOR_Z) < 0.01 && Math.abs(x - DOOR_X) < DOOR_W / 2 + PIC.margin) continue   // 扉のところは空ける
+    for (const u of at) {
+      const x = e.p[0] + d[0] / len * u, z = e.p[1] + d[1] / len * u
       if (picIndex >= GALLERY.length) return
       const pic = new THREE.Group()
       pic.position.set(x, PIC.y, z)
