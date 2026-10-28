@@ -1123,6 +1123,15 @@ function animate() {
   }
   renderer.render(interior ? interior.def.scene : scene, camera)
   shotFrameRendered()
+  hideLoading()
+}
+
+// 最初のフレームを描いたら、ローディング表示（index.html の #loading）を薄くして消す
+let hideLoading = () => {
+  hideLoading = () => {}
+  const el = document.getElementById('loading')
+  el.classList.add('done')
+  el.addEventListener('transitionend', () => el.remove(), { once: true })
 }
 
 // 照り返しの目立たない Phong / Standard を Lambert にそろえ、初回に作るシェーダーの数を減らす（lambert.js）

@@ -8,7 +8,8 @@
     "shot": "node scripts/shot.mjs",
     "video": "node scripts/video.mjs",
     "post": "node scripts/post.mjs",
-    "sprite": "node scripts/import-sprite.mjs"
+    "sprite": "node scripts/import-sprite.mjs",
+    "loading": "node scripts/import-loading.mjs"
   },
   "dependencies": {
     "alea": "^1.0.1",
