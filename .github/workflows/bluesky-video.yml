@@ -1,6 +1,6 @@
 name: Post video to Bluesky
 
-# 毎朝 JST 7 時（UTC 22 時）に、惑星内のランダムな地点から 10 秒まっすぐ走る動画を撮って @planet-coccolith.bsky.social に投稿する
+# 毎朝 JST 7 時（UTC 22 時）に、惑星内のランダムな地点から 10 秒まっすぐ走る動画を撮って @planet-coccolith.bsky.social に投稿する（同じ動画を Mastodon にも投稿する）
 # （混雑時は数十分遅れることがある）
 on:
   schedule:
@@ -18,6 +18,8 @@ jobs:
   post:
     runs-on: ubuntu-24.04   # bluesky.yml と同じく固定（Playwright の依存が揃うまで）
     timeout-minutes: 40
+    env:
+      HAS_MASTODON: ${{ secrets.MASTODON_ACCESS_TOKEN != '' }}   # トークンを登録するまでは Mastodon への投稿を飛ばす
     steps:
       - uses: actions/checkout@v4
         with:
@@ -30,11 +32,16 @@ jobs:
       - run: npm ci
       - run: npx playwright install --with-deps --only-shell chromium
       - run: npm run build
-      - run: npm run video
+      - id: video
+        run: npm run video
       - run: npm run post
         env:
           BLUESKY_HANDLE: planet-coccolith.bsky.social
           BLUESKY_APP_PASSWORD: ${{ secrets.BLUESKY_APP_PASSWORD }}
+      - if: ${{ !cancelled() && steps.video.outcome == 'success' && env.HAS_MASTODON == 'true' }}   # Bluesky への投稿が失敗しても撮れていれば投稿する
+        run: npm run post:mastodon
+        env:
+          MASTODON_ACCESS_TOKEN: ${{ secrets.MASTODON_ACCESS_TOKEN }}
       - uses: actions/upload-artifact@v4   # 撮れた動画を数日だけ残す（見え方の確認用）
         if: always()
         with:

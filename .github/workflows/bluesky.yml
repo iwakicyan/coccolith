@@ -1,6 +1,6 @@
 name: Post to Bluesky
 
-# 4 時間ごとに惑星内のランダムな地点を撮って @planet-coccolith.bsky.social に投稿する
+# 4 時間ごとに惑星内のランダムな地点を撮って @planet-coccolith.bsky.social に投稿する（同じ写真を Mastodon にも投稿する）
 # （UTC の 3,7,11… 時 = JST の 0,4,8,12,16,20 時。混雑時は数十分遅れることがある）
 # 1 時間後にもう一度起き、その回の投稿がまだなければ（ランナーが取れなかった・途中で失敗したなど）やり直す
 on:
@@ -42,6 +42,8 @@ jobs:
     if: needs.check.outputs.skip != 'true'
     runs-on: ubuntu-24.04   # ubuntu-latest は 2026-10-19 から Ubuntu 26 に移る。Playwright の依存が揃うまでは固定しておく
     timeout-minutes: 20
+    env:
+      HAS_MASTODON: ${{ secrets.MASTODON_ACCESS_TOKEN != '' }}   # トークンを登録するまでは Mastodon への投稿を飛ばす
     steps:
       - uses: actions/checkout@v4
         with:
@@ -54,11 +56,17 @@ jobs:
       - run: npm ci
       - run: npx playwright install --with-deps --only-shell chromium
       - run: npm run build
-      - run: npm run shot
+      - id: shot
+        run: npm run shot
       - run: npm run post
         env:
           BLUESKY_HANDLE: planet-coccolith.bsky.social
           BLUESKY_APP_PASSWORD: ${{ secrets.BLUESKY_APP_PASSWORD }}
+      # Bluesky への投稿が失敗しても撮れていれば投稿する。やり直しの回は、本番の回で投稿できていれば投稿しない
+      - if: ${{ !cancelled() && steps.shot.outcome == 'success' && env.HAS_MASTODON == 'true' }}
+        run: npm run post:mastodon -- ${{ github.event.schedule == '0 */4 * * *' && '--skip-if-posted-within=100' || '' }}
+        env:
+          MASTODON_ACCESS_TOKEN: ${{ secrets.MASTODON_ACCESS_TOKEN }}
       - uses: actions/upload-artifact@v4   # 撮れた画像を数日だけ残す（見え方の確認用）
         if: always()
         with:
