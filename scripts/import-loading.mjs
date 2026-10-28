@@ -16,6 +16,7 @@ import { deflateSync, crc32 } from 'node:zlib'
 const FPS = 4            // 1 秒に何コマ
 const INTRO_FRAMES = 8   // 最初に速めに流すコマ数
 const INTRO_SEC = 1      // そのコマを流しきる秒数
+const TELOP_COLOR = '#FFFFFF'   // テロップを塗る色（txt の色にかかわらずこの 1 色に。txt の色のままにするなら null）
 
 const src = process.argv[2]
 if (!src?.endsWith('.txt')) {
@@ -35,7 +36,7 @@ for (let m; (m = re.exec(txt));) {
   const n = label.match(/(\d+)\s*$/)?.[1]
   if (n) frames.push({ n: Number(n), art })
   else if (telop) throw new Error(`番号のない絵が 2 枚ある（「${label}」）。テロップは 1 枚だけ`)
-  else telop = art
+  else telop = TELOP_COLOR ? { ...art, palette: Object.fromEntries(Object.entries(art.palette).map(([k, v]) => [k, v && TELOP_COLOR])) } : art
 }
 if (!frames.length) throw new Error('コマ（名前の最後に番号のある絵）が見つからない')
 frames.sort((a, b) => a.n - b.n)
