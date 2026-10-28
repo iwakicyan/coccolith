@@ -857,6 +857,38 @@ function showOccluders() {
 const _iRay   = new THREE.Raycaster()
 const _iMat   = new THREE.Matrix4()
 
+// 主観ビューで壁の絵の前（床のラインあたり）まで近づき、絵の方を向いていたら、向き・見上げ・左右の位置を絵の正面へ吸い付かせる
+// 操作している間はその操作を優先する（回していれば向きは、動いていれば位置は寄せない）
+// pictures: 室内の def.pictures（{ x, y, z = 絵の中心, n = 壁の外向きの法線 [x, z] }）
+const PIC_SNAP_DIST   = 1.25   // 壁からこの距離 (m) 以内で吸い付く
+const PIC_SNAP_SIDE   = 0.8    // 絵の中心から壁に沿ってこの距離 (m) 以内
+const PIC_SNAP_FACING = 0.5    // 向きと壁の法線の内積がこれ以上（およそ 60° 以内）で絵の方を向いているとみなす
+const PIC_SNAP_RATE   = 6      // 寄せる速さ（1/s。大きいほど早く吸い付く）
+function snapToPicture(pictures, dt, turnIn, pitchIn, moving) {
+  let best = null
+  for (const p of pictures) {
+    const dx = iPos.x - p.x, dz = iPos.z - p.z
+    const dist = -(dx * p.n[0] + dz * p.n[1])   // 壁からの距離（部屋の内側が正）
+    const side = -dx * p.n[1] + dz * p.n[0]     // 壁に沿った絵の中心からのずれ
+    if (dist < 0 || dist > PIC_SNAP_DIST || Math.abs(side) > PIC_SNAP_SIDE) continue
+    if (iFwd.x * p.n[0] + iFwd.z * p.n[1] < PIC_SNAP_FACING) continue
+    if (!best || dist < best.dist) best = { p, dist, side }
+  }
+  if (!best) return
+  const { p, dist, side } = best
+  const k = 1 - Math.exp(-PIC_SNAP_RATE * dt)
+  if (Math.abs(turnIn) <= 0.01) {
+    iFwd.x += (p.n[0] - iFwd.x) * k
+    iFwd.z += (p.n[1] - iFwd.z) * k
+    iFwd.setY(0).normalize()
+  }
+  if (Math.abs(pitchIn) <= 0.01) fpPitch += (Math.atan2(p.y - FP_EYE_H, dist) - fpPitch) * k
+  if (!moving) {
+    iPos.x += p.n[1] * side * k
+    iPos.z -= p.n[0] * side * k
+  }
+}
+
 function updateInterior(dt, now, joyYaw, joyPitch) {
   const { def } = interior
   const turnIn = (keys['KeyQ'] ? 1 : 0) - (keys['KeyE'] ? 1 : 0) - joyYaw
@@ -867,10 +899,11 @@ function updateInterior(dt, now, joyYaw, joyPitch) {
   const lrIn = (keys['KeyD'] ? 1 : 0) - (keys['KeyA'] ? 1 : 0) + vJoy.lx
   if (Math.abs(fbIn) > 0.01) iPos.addScaledVector(iFwd,   step * Math.max(-1, Math.min(1, fbIn)))
   if (Math.abs(lrIn) > 0.01) iPos.addScaledVector(_iRight, step * Math.max(-1, Math.min(1, lrIn)))
+  const pitchIn = (keys['ArrowUp'] ? 1 : 0) - (keys['ArrowDown'] ? 1 : 0) - joyPitch
+  if (firstPerson && def.pictures) snapToPicture(def.pictures, dt, turnIn, pitchIn, Math.abs(fbIn) > 0.01 || Math.abs(lrIn) > 0.01)
   def.resolve(iPos, INTERIOR_BODY_R, SAB_HEIGHT)
   iPos.y = def.floorAt(iPos.x, iPos.z, iPos.y)
 
-  const pitchIn = (keys['ArrowUp'] ? 1 : 0) - (keys['ArrowDown'] ? 1 : 0) - joyPitch
   if (Math.abs(pitchIn) > 0.01) {
     const d = PITCH_SPD * dt * Math.max(-1, Math.min(1, pitchIn))
     if (firstPerson) fpPitch = Math.max(-FP_PITCH_MAX, Math.min(FP_PITCH_MAX, fpPitch + d))   // ↑ で見上げ

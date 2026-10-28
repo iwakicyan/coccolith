@@ -265,6 +265,7 @@ export function createSShallInterior() {
   const mPicFrame = new THREE.MeshLambertMaterial({ color: PIC.frameColor })
   const loader = new THREE.TextureLoader()
   let picIndex = 0
+  const pictures = []   // 掛けた絵の中心と壁の外向きの法線（主観ビューで近づくと正面へ向けるのに使う）
   function hangPictures({ e, a, b }, wallMesh) {
     const d = [e.q[0] - e.p[0], e.q[1] - e.p[1]], len = Math.hypot(d[0], d[1])
     const L = (b - a) * len, mid = a * len + L / 2   // 壁の長さと、辺の始点から壁の真ん中までの距離
@@ -283,6 +284,7 @@ export function createSShallInterior() {
     for (const u of at) {
       const x = e.p[0] + d[0] / len * u, z = e.p[1] + d[1] / len * u
       if (picIndex >= GALLERY.length) return
+      pictures.push({ x, y: PIC.y, z, n: e.n })
       const pic = new THREE.Group()
       pic.position.set(x, PIC.y, z)
       pic.rotation.y = Math.atan2(-e.n[0], -e.n[1])   // +z を部屋の内側（-n）へ
@@ -410,6 +412,7 @@ export function createSShallInterior() {
     scene,
     solids,
     floorAt: () => 0,
+    pictures,
     resolve,
     // 入ったときの位置と向き（扉の内側、部屋の奥＝塔の方を向く）
     spawn: { x: DOOR_X, z: DOOR_Z - 1.6, fwd: new THREE.Vector3(0, 0, -1) },
