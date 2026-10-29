@@ -919,7 +919,7 @@ export function createCoccolith({ renderer = null } = {}) {
 // 島[GF] (lat 0-36°N, lon 72-108°E) に岩を InstancedMesh で散布
 // 底面クランプなし・全軸ランダム回転。draw call = 形状数（3回）
 // 豆腐ハウス: 幅15m × 奥行12m × 高さ6m。原点 = 底面中心、+Z 面が正面（玄関ホール側）
-// 外扉は図面どおり右側面（+X 面）の正面寄り。室内は src/interiors/tofu.js
+// 外扉は左側面（-X 面）の正面寄り（室内の図面では右の壁。図面を上から見ると、正面を上にしたとき右が -X になる）。室内は src/interiors/tofu.js
 function createTofuHouse() {
   const W = 15, D = 12, H = 6
   const house = new THREE.Group()
@@ -938,23 +938,23 @@ function createTofuHouse() {
   // 手描き風の白い輪郭線
   house.add(new THREE.LineSegments(new THREE.EdgesGeometry(boxGeo), new THREE.LineBasicMaterial({ color: 0xFFFFFF })))
 
-  // 外扉（右側面、正面の角から 0.3〜1.9m）
+  // 外扉（左側面、正面の角から 0.3〜1.9m）
   const DOOR_W = 1.6, DOOR_H = 2.6, doorZ = D / 2 - 1.1
   const door = new THREE.Mesh(new THREE.BoxGeometry(0.12, DOOR_H, DOOR_W), new THREE.MeshLambertMaterial({ color: 0x74523F }))
-  door.position.set(W / 2 + 0.06, DOOR_H / 2, doorZ)
+  door.position.set(-W / 2 - 0.06, DOOR_H / 2, doorZ)
   house.add(door)
   addDoorGlow(door)
-  house.userData.door = { id: 'tofu', mesh: door, local: new THREE.Vector3(W / 2, 0, doorZ), outward: new THREE.Vector3(1, 0, 0) }
+  house.userData.door = { id: 'tofu', mesh: door, local: new THREE.Vector3(-W / 2, 0, doorZ), outward: new THREE.Vector3(-1, 0, 0) }
 
   // ドアノブ（奥側）と蝶番×2（正面側）
   const metal = new THREE.MeshLambertMaterial({ color: 0x3A3040 })
   const knob = new THREE.Mesh(new THREE.SphereGeometry(0.08, 8, 6), metal)
-  knob.position.set(W / 2 + 0.15, DOOR_H * 0.48, doorZ - DOOR_W / 2 + 0.2)
+  knob.position.set(-W / 2 - 0.15, DOOR_H * 0.48, doorZ - DOOR_W / 2 + 0.2)
   house.add(knob)
   const hingeGeo = new THREE.BoxGeometry(0.06, 0.22, 0.06)
   ;[0.75, 0.25].forEach((h) => {
     const hinge = new THREE.Mesh(hingeGeo, metal)
-    hinge.position.set(W / 2 + 0.12, DOOR_H * h, doorZ + DOOR_W / 2 + 0.03)
+    hinge.position.set(-W / 2 - 0.12, DOOR_H * h, doorZ + DOOR_W / 2 + 0.03)
     house.add(hinge)
   })
 
