@@ -477,6 +477,30 @@ const _iUp = new THREE.Vector3(0, 1, 0)
 const fadeEl  = document.getElementById('fade')
 const fadeTo  = (v) => new Promise(r => { fadeEl.style.opacity = v; setTimeout(r, 350) })
 
+// ローディング表示（index.html の #loading。ドット絵のパラパラ漫画）
+// ページを開いたときは HTML の時点で出ていて、最初のフレームを描いたら薄くして消す。建物に入るときは showLoading で出し直す
+// loadingHold のあいだは描いても消さない（建物の中の絵を描けるようになるまで、外の絵を描いているので）
+const loadingEl = document.getElementById('loading')
+let loadingShown = true
+let loadingHold = false
+let firstFrameMarked = false
+function showLoading() {
+  loadingShown = true
+  loadingEl.classList.remove('done')
+  const frames = loadingEl.querySelector('.ld-frames')   // コマ送りを 1 コマ目からやり直す
+  frames.style.animation = 'none'
+  void frames.offsetWidth
+  frames.style.animation = ''
+}
+function hideLoading() {
+  loadingShown = false
+  loadingEl.classList.add('done')
+  if (!firstFrameMarked) {
+    firstFrameMarked = true
+    performance.mark('first-frame')   // 描き始めるまでの時間を測るとき用（performance.getEntriesByName('first-frame')）
+  }
+}
+
 function nearDoor() {
   for (const d of _doors) if (R_C * pDir.angleTo(d.dir) < DOOR_REACH) return d
   return null
@@ -508,18 +532,23 @@ function setFirstPerson(on) {
 
 async function enterInterior(door) {
   transitioning = true
+  loadingHold = true
+  showLoading()
   await fadeTo(1)
   try {
     const def = _interiorCache[door.id] ??= await INTERIORS[door.id]()
+    // 中のシェーダーを先にまとめて非同期でコンパイルする（最初の描画で同期でコンパイルすると、そのあいだローディングのコマ送りも止まる）
+    def.scene.add(sabchan.group)
+    await renderer.compileAsync(def.scene, camera).catch(() => {})
     overviewMode = false   // JUMP で俯瞰中から来たとき
     iPos.set(def.spawn.x, 0, def.spawn.z)
     iFwd.copy(def.spawn.fwd)
     pitch = 0
-    def.scene.add(sabchan.group)
     interior = { def, door }
     applySabLightLevel()
     updateTabBtn()
   } finally {
+    loadingHold = false   // 次に描いた（中の）フレームでローディングを消す
     await fadeTo(0)
     transitioning = false
   }
@@ -1234,16 +1263,7 @@ function animate() {
   }
   renderer.render(interior ? interior.def.scene : scene, camera)
   shotFrameRendered()
-  hideLoading()
-}
-
-// 最初のフレームを描いたら、ローディング表示（index.html の #loading）を薄くして消す
-let hideLoading = () => {
-  hideLoading = () => {}
-  performance.mark('first-frame')   // 描き始めるまでの時間を測るとき用（performance.getEntriesByName('first-frame')）
-  const el = document.getElementById('loading')
-  el.classList.add('done')
-  el.addEventListener('transitionend', () => el.remove(), { once: true })
+  if (loadingShown && !loadingHold) hideLoading()
 }
 
 // 照り返しの目立たない Phong / Standard を Lambert にそろえ、初回に作るシェーダーの数を減らす（lambert.js）

@@ -293,14 +293,14 @@
     }
     #doc-viewer button:hover, #doc-viewer .dv-tabs button.active { border-color: rgba(255,255,255,0.7); color: #fff; }
     #doc-viewer .dv-prev, #doc-viewer .dv-next { flex: none; padding: 0; width: 32px; font-size: 20px; line-height: 40px; border-radius: 16px; }
-    /* ページを開いてから最初のフレームを描くまでのローディング表示（ドット絵のパラパラ漫画）。描き始めたら main.js が消す
+    /* ページを開いてから最初のフレームを描くまでと、建物に入るときのローディング表示（ドット絵のパラパラ漫画）。描き始めたら main.js が消す
        絵は scripts/import-loading.mjs で txt から書き出す。テロップ（番号のない絵）はコマの上に重ねる */
     #loading {
       position: fixed; inset: 0; z-index: 100; background: #00000a;
       display: flex; align-items: center; justify-content: center;
       transition: opacity 0.4s; pointer-events: none;
     }
-    #loading.done { opacity: 0; }
+    #loading.done { opacity: 0; visibility: hidden; transition: opacity 0.4s, visibility 0s 0.4s; }   /* 消えきったら隠して、コマ送りの描き直しを止める */
     #loading .ld-stage { position: relative; width: 192px; height: 192px; }   /* 64 ドットを 3 倍に */
     #loading .ld-stage > div { position: absolute; inset: 0; background-repeat: no-repeat; image-rendering: pixelated; }
     body.shot #loading { display: none; }
