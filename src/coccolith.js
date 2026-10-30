@@ -1278,11 +1278,11 @@ function _distToSeg(plat, plon, alat, alon, blat, blon) {
 //   emissive: テクスチャ自身の発光の強さ（省略時はパーツの既定値）。暗い場所で浮いて見えるなら下げる
 const GRASS_KIND_1 = {   // 2dgrass：細い葉の房（下部を大きく埋める形なので少し持ち上げる）
   geometry: createGrassTuftGeometry, material: createGrassMaterial,
-  scale: 2.5, lift: 0.2, seed: 'grass', emissive: 0.1, density: 2 / 3 * 2 / 3,   // 既定の 2/3 の密度（間隔は約1.22倍）
+  scale: 2.5, lift: 0.2, seed: 'grass', emissive: 0.1, density: 2 / 3 * 2 / 3 * 0.7,   // 既定の 2/3 の密度（間隔は約1.22倍）の 7 割（3 割間引く）
 }
 const GRASS_KIND_2 = {   // 2dgrass2：手描きの幅広い葉の房（旧 field01 の場所）
   geometry: createGrass2TuftGeometry, material: createGrass2Material,
-  scale: 2.5, lift: 0.0, seed: 'grass2', emissive: 0, density: 2 / 3 * 0.8 * 2 / 3,   // 前の密度（2/3 × 0.8）の 2/3
+  scale: 2.5, lift: 0.0, seed: 'grass2', emissive: 0, density: 2 / 3 * 0.8 * 2 / 3 * 0.7,   // 前の密度（2/3 × 0.8）の 2/3 の 7 割（3 割間引く）
 }
 
 const FLOWER_STEM_KIND = {   // 花の茎：途中で折れた茎（6頂点）に葉（4頂点）を2枚。テクスチャは 2dgrass と同じ（濃い緑の単色）
