@@ -388,12 +388,11 @@ const walkTop1 = {
 }
 
 export default {
-  count: 1,   // 何匹出すか
+  count: 10,   // 何匹出すか
   scale: 2,   // 大きさ（ほかの絵の何倍か）
   sink: 0.5,   // 絵の高さのこの割合だけ地面に埋める（半分から下が埋まる）
   bob: 0.1,   // 歩くあいだ、絵の高さのこの割合だけ浮き沈みする
   anywhere: true,   // 陸でも海でも出て、海に入っても向きを変えない
-  near: true,   // 見た目の確認用: スポーン地点の近くに出す
   cx: 20,
   drawnSide: 'left',
   poses: {
