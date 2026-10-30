@@ -231,7 +231,7 @@ const STOP_TIME   = [2, 6]   // 立ち止まる時間 (s)
 // 地面を測る間隔 (m)。毎フレーム測ると重いので、この距離だけ先を 1 回測り、そこまでの高さは前に測った高さとのあいだをならす
 // 海もこの距離だけ先で見つけて向きを変える
 const PROBE_STEP  = 0.5
-const BOB_HZ      = 2     // 浮き沈みの速さ（1 秒に何回）
+const BOB_HZ      = 0.8   // 浮き沈みの速さ（1 秒に何回）
 const NEAR_DIST   = [4, 10]   // near の絵をスポーン地点から離す距離 (m)
 const NEAR_SPREAD = THREE.MathUtils.degToRad(60)   // near の絵をスポーンの正面から左右にこの角度までの範囲に出す
 const rand = ([a, b]) => a + Math.random() * (b - a)
