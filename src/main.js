@@ -1062,7 +1062,7 @@ const spriteWalkers = Object.values(import.meta.glob('./pixelArt/sprites/*.js', 
   .map(art => createPixelSpriteWalkers({
     scene, art, count: art.count, dot: SPRITE_DOT * (art.scale ?? 1), speed: SPEED * 0.05, radius: R_C,
     getGround: dir => getGroundHeight(dir) - 1,
-    waterLevel: R_OCEAN + TIDE_SHIFT,
+    waterLevel: R_OCEAN + TIDE_SHIFT, spawn: { dir: pDir, fwd: pFwd },
   }))
 
 // 空を飛ぶドット絵スプライト（pixelSprite.js）: pixelArt/flyers/ の絵を全部読み込み、雲より上を count 機ずつ飛ばす

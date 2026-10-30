@@ -12,6 +12,10 @@ import * as THREE from 'three'
 //    cx: 物体の中心の列（左から）。幅の違う絵もこの列でそろえる
 //    drawnSide: 斜め前・真横・斜め後ろの絵が物体のどちら側から見た絵か（'left' / 'right'）
 //    fps: コマ送りの速さ（コマが 1 枚なら要らない）
+//    sink: 側面の絵の高さ（いちばん上のドットから足元まで）のこの割合だけ地面に埋める（なければ埋めない。main.js が使う）
+//    bob: 歩くあいだ、側面の絵の高さのこの割合だけ浮き沈みする（なければしない）
+//    anywhere: true なら陸でも海でも出て、海に入っても向きを変えない（海底を歩く）
+//    near: true なら見た目の確認用にスポーン地点の近くに出す
 //  側面: 板は縦軸まわりだけ回って常にカメラの方を向く。オブジェクトの前の向きとカメラのいる方向の角度を 45°（4 方向なら 90°）ごとに区切って絵を選ぶ
 //        反対側の 3 方向（4 方向なら真横）は描いた側の絵を左右反転して使う
 //        側面の絵でいちばん下にあるドットの行を地面に合わせる
@@ -66,11 +70,15 @@ function buildSheet(art) {
   // マスの大きさ: 中心 cx を左右の真ん中にして、どの絵もはみ出さない幅
   const cw = 2 * Math.max(...frames.map(f => Math.max(cxOf(f), f.width - cxOf(f))))
   const ch = Math.max(...frames.map(f => f.height))
-  // 足元: 側面の絵でいちばん下にあるドットの行（空を飛ぶものは使わない）
-  let foot = 0
+  // 足元: 側面の絵でいちばん下にあるドットの行（空を飛ぶものは使わない）。head: いちばん上にあるドットの行
+  let foot = 0, head = ch
   if (!flying) for (const pose of Object.values(poses)) for (const view of views) {
     if (view === 'top') continue
-    for (const f of pose.views[view]) f.grid.forEach((row, y) => { if (row.some(n => f.palette[n])) foot = Math.max(foot, y) })
+    for (const f of pose.views[view]) f.grid.forEach((row, y) => {
+      if (!row.some(n => f.palette[n])) return
+      foot = Math.max(foot, y)
+      head = Math.min(head, y)
+    })
   }
 
   // 絵と絵の間は 1 px 空けて、隣の絵のドットがにじまないようにする
@@ -110,6 +118,7 @@ function buildSheet(art) {
   })
   return {
     mat, looks, flying, aspect: cw / ch, footFrac: flying ? 0.5 : (ch - 1 - foot) / ch, cellHeight: ch,
+    bodyFrac: flying ? 1 : (foot - head + 1) / ch,
     sectorAngle: 2 * Math.PI / dirs, sectorView: dirs === 8 ? SECTOR_VIEW_8 : SECTOR_VIEW_4,
   }
 }
@@ -222,6 +231,9 @@ const STOP_TIME   = [2, 6]   // 立ち止まる時間 (s)
 // 地面を測る間隔 (m)。毎フレーム測ると重いので、この距離だけ先を 1 回測り、そこまでの高さは前に測った高さとのあいだをならす
 // 海もこの距離だけ先で見つけて向きを変える
 const PROBE_STEP  = 0.5
+const BOB_HZ      = 2     // 浮き沈みの速さ（1 秒に何回）
+const NEAR_DIST   = [4, 10]   // near の絵をスポーン地点から離す距離 (m)
+const NEAR_SPREAD = THREE.MathUtils.degToRad(60)   // near の絵をスポーンの正面から左右にこの角度までの範囲に出す
 const rand = ([a, b]) => a + Math.random() * (b - a)
 
 const _right = new THREE.Vector3()
@@ -231,27 +243,43 @@ const _m     = new THREE.Matrix4()
 
 // art: 絵のデータ / count: 数 / dot: ドット 1 つの大きさ (m) / speed: 歩く速さ (m/s) / radius: 惑星の半径 (m)
 // getGround(dir): 単位ベクトル dir の地点の地面の高さ（惑星中心から m） / waterLevel: 地面がこれより低ければ海 (m)
-export function createPixelSpriteWalkers({ scene, art, count, dot, speed, radius, getGround, waterLevel }) {
+// spawn: { dir, fwd } スポーン地点とその正面（絵が near のとき、この近くに出す）
+export function createPixelSpriteWalkers({ scene, art, count, dot, speed, radius, getGround, waterLevel, spawn }) {
   const sheet = buildSheet(art)
   const height = sheet.cellHeight * dot
+  const body = sheet.bodyFrac * height   // 側面の絵のいちばん上のドットから足元までの高さ (m)
+  const sink = (art.sink ?? 0) * body
+  const bob = (art.bob ?? 0) * body
+  const isWater = g => !art.anywhere && g < waterLevel
   const restPose = sheet.looks.sit ? 'sit' : 'walk'
   const walkers = []
 
   for (let i = 0; i < count; i++) {
-    const sprite = createSprite(sheet, height, height * 0.5)
-    // 陸に当たるまで引き直す
+    // 天面の板は地面から出ている部分のまん中あたりの高さに置く
+    const sprite = createSprite(sheet, height, sink ? sink + (body - sink) * 0.5 : height * 0.5)
     const dir = new THREE.Vector3()
     let ground
-    for (let n = 0; n < 200; n++) {
-      dir.randomDirection()
+    if (art.near && spawn) {
+      // スポーン地点の正面寄りに、NEAR_DIST 離して出す
+      const a = (Math.random() * 2 - 1) * NEAR_SPREAD
+      const toward = _next.copy(spawn.fwd).applyAxisAngle(spawn.dir, a)
+      _axis.crossVectors(spawn.dir, toward).normalize()
+      dir.copy(spawn.dir).applyAxisAngle(_axis, rand(NEAR_DIST) / radius).normalize()
       ground = getGround(dir)
-      if (ground >= waterLevel) break
+    } else {
+      // 陸に当たるまで引き直す（anywhere なら最初の地点のまま）
+      for (let n = 0; n < 200; n++) {
+        dir.randomDirection()
+        ground = getGround(dir)
+        if (!isWater(ground)) break
+      }
     }
     const fwd = new THREE.Vector3().randomDirection()
     fwd.addScaledVector(dir, -fwd.dot(dir)).normalize()
     scene.add(sprite.group)
     // ground0: 前に測った地点の高さ / ground1: PROBE_STEP 先の高さ（null ならまだ測っていない） / travel: ground0 の地点から歩いた距離 (m)
-    walkers.push({ sprite, dir, fwd, ground, ground0: ground, ground1: null, travel: 0, turn: 0, turnTarget: 0, walking: false, timer: rand(STOP_TIME), step: 0 })
+    // bobPhase: 浮き沈みの位相（0 で沈みきり。立ち止まったら 1 回ぶん浮き沈みし終えたところで止める）
+    walkers.push({ sprite, dir, fwd, ground, ground0: ground, ground1: null, travel: 0, turn: 0, turnTarget: 0, walking: false, timer: rand(STOP_TIME), step: 0, bobPhase: 0 })
   }
 
   function update(dt, camera) {
@@ -273,7 +301,7 @@ export function createPixelSpriteWalkers({ scene, art, count, dot, speed, radius
         _axis.crossVectors(w.dir, w.fwd).normalize()
         if (w.ground1 === null) {
           const ahead = getGround(_next.copy(w.dir).applyAxisAngle(_axis, PROBE_STEP / radius))
-          if (ahead < waterLevel) w.fwd.applyAxisAngle(w.dir, Math.PI * (0.6 + Math.random() * 0.8))
+          if (isWater(ahead)) w.fwd.applyAxisAngle(w.dir, Math.PI * (0.6 + Math.random() * 0.8))
           else w.ground1 = ahead
         }
         // 前へ進み、高さは測った 2 地点のあいだをならす。測った地点まで来たら次を測る
@@ -291,10 +319,18 @@ export function createPixelSpriteWalkers({ scene, art, count, dot, speed, radius
         w.fwd.addScaledVector(w.dir, -w.fwd.dot(w.dir)).normalize()
       }
 
+      // 浮き沈み: 沈みきった高さ（埋めた高さ）から bob だけ浮き上がって戻る
+      let lift = 0
+      if (bob && (w.walking || w.bobPhase > 0)) {
+        w.bobPhase += dt * BOB_HZ * 2 * Math.PI
+        if (w.bobPhase >= 2 * Math.PI) w.bobPhase = w.walking ? w.bobPhase % (2 * Math.PI) : 0
+        lift = bob * 0.5 * (1 - Math.cos(w.bobPhase))
+      }
+
       // 置く: local Y = 上、local Z = 前、原点 = 足元
       const g = w.sprite.group
       g.setRotationFromMatrix(_m.makeBasis(_right.crossVectors(w.dir, w.fwd), w.dir, w.fwd))
-      g.position.copy(w.dir).multiplyScalar(w.ground)
+      g.position.copy(w.dir).multiplyScalar(w.ground - sink + lift)
       w.sprite.face(camera, w.walking ? 'walk' : restPose, Math.floor(w.step))
     }
   }
