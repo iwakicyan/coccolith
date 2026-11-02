@@ -5,7 +5,7 @@ import { shotMode, startInOverview, applyStartPose, startWithLight, shotFrameRen
 import { vJoy, initJoysticks } from './joystick.js'
 import { createCompass, createVethIndicator } from './hud.js'
 import { initFullscreenButton } from './fullscreen.js'
-import { initSettings, showSettingsFor, handleInvert, invSign, moveSpeed } from './settings.js'
+import { initSettings, showSettingsFor, handleInvert, invSign, moveSpeed, outdoorView } from './settings.js'
 import { initVisitCounter } from './visitCounter.js'
 import { isFlowerCutOpen } from './flowerCut.js'
 import { isPixelSceneOpen, openPixelScene } from './pixelScene.js'
@@ -229,7 +229,7 @@ function applySabLightLevel() {
 function toggleSabLight() {
   sabLightOn = !sabLightOn
   applySabLightLevel()
-  sabBeam.visible    = sabLightOn && !firstPerson   // 主観中は目の前に筋が出るので隠す
+  sabBeam.visible    = sabLightOn && !sabHidden   // 主観中は目の前に筋が出るので隠す
   lightIconMat.map         = sabLightOn ? lightIconGrayTex : lightIconTex
   lightIconMat.emissiveMap = lightIconMat.map
   lightIconMat.emissive.set(sabLightOn ? 0x000000 : SAB_ICON_GLOW)
@@ -238,7 +238,7 @@ function toggleSabLight() {
 const _pointer = new THREE.Vector2()
 const _iconRay = new THREE.Raycaster()
 function hitLightIcon(e) {
-  if (!_sabHeadGroup || firstPerson) return false   // 主観中は sabちゃんが見えないので押せない
+  if (!_sabHeadGroup || sabHidden) return false   // 主観中は sabちゃんが見えないので押せない
   _pointer.set((e.clientX / window.innerWidth) * 2 - 1, -(e.clientY / window.innerHeight) * 2 + 1)
   _iconRay.setFromCamera(_pointer, camera)
   return _iconRay.intersectObject(_sabHeadGroup, true).some(h => h.object !== sabBeam)
@@ -449,7 +449,7 @@ const INTERIOR_CAM_DIST = 6    // 室内のカメラ距離 (m)
 const INTERIOR_BODY_R  = 0.6   // 室内の当たり判定半径 (m)（狭い扉を通れるよう耳より少し小さめ）
 const INTERIOR_LIFT    = 0.5   // 室内で sabちゃんを床から浮かせる高さ (m)（床にめり込んで見えないように）
 const SAB_HEIGHT       = 8.35 * SAB_SCALE
-const FP_EYE_H         = 1.5   // 室内の主観モードの目の高さ (m)
+const FP_EYE_H         = 1.5   // 主観モードの目の高さ (m)（屋外は地面から）
 const FP_PITCH_MAX     = 1.2   // 主観モードの見上げ・見下ろし上限 (rad)
 
 // 外のドア（colliders のうち userData.door を持つもの）。位置は球面上の方向で持つ
@@ -468,8 +468,10 @@ const _glowSpots = colliders.filter(o => o.userData.glowSpot).map(o => {
 const _interiorCache = {}
 let interior = null          // 室内にいる間 { def, door }
 let transitioning = false
-let firstPerson = false      // 室内だけの主観モード（sabちゃんを隠して目線カメラ）
+let firstPerson = false      // 室内の主観モード（sabちゃんを隠して目線カメラ）。屋外の主観は設定の outdoorView.fp
 let fpPitch = 0
+let outFpPitch = 0           // 屋外の主観モードの視点ピッチ (rad)
+let sabHidden = false        // 主観中で sabちゃんの体を隠しているか
 const iPos = new THREE.Vector3()
 const iFwd = new THREE.Vector3(0, 0, 1)
 const _iUp = new THREE.Vector3(0, 1, 0)
@@ -510,6 +512,7 @@ function nearDoor() {
 // obeye = 外から見る目（俯瞰へ）、subeye = sabちゃんの目（主観へ）、insab = sabちゃん入りの視点へ
 function updateTabBtn() {
   showSettingsFor({ overview: !interior && overviewMode, interior: !!interior })   // 操作設定は今の場面の視点だけ出す
+  updateSabHidden()
   const tabBtn = document.getElementById('tab-btn')
   if (!tabBtn) return
   const toSubjective = interior ? !firstPerson : overviewMode
@@ -521,11 +524,18 @@ function updateTabBtn() {
 }
 
 // 主観モード中は sabちゃんの体を隠す（ライトの光源は頭に付いたまま照らし続ける）
+// 室内は firstPerson、屋外は設定の outdoorView.fp（俯瞰中は見せる）。視点が変わるたびに updateTabBtn から呼ばれる
+function updateSabHidden() {
+  const hide = interior ? firstPerson : outdoorView.fp && !overviewMode
+  if (hide === sabHidden) return
+  sabHidden = hide
+  outFpPitch = 0
+  sabchan.group.traverse(o => { if (o.isMesh || o.isLine) o.visible = !hide })
+  sabBeam.visible = sabLightOn && !hide
+}
 function setFirstPerson(on) {
   firstPerson = on
   fpPitch = 0
-  sabchan.group.traverse(o => { if (o.isMesh || o.isLine) o.visible = !on })
-  sabBeam.visible = sabLightOn && !on
   if (on) showOccluders()
   updateTabBtn()
 }
@@ -725,7 +735,8 @@ initJoysticks()
 
 // --- HUD ----------------------------------------------------
 initFullscreenButton(document.getElementById('fs-btn'))
-initSettings(document.getElementById('settings-btn'), document.getElementById('settings'))
+initSettings(document.getElementById('settings-btn'), document.getElementById('settings'), { onOutdoorView: updateTabBtn })
+updateTabBtn()   // 前回の設定が屋外の主観なら、始めから sabちゃんを隠す
 // 訪問者数（開発サーバー・撮影モードでは数えない）
 initVisitCounter(document.getElementById('visit-count'), document.getElementById('visit-num'), { countable: !import.meta.env.DEV && !shotMode })
 const { drawCompass }       = createCompass(document.getElementById('compass'))
@@ -1158,7 +1169,7 @@ function animate() {
     // --- 通常モード: sabちゃん追従3人称 ---
     const da = (SPEED * moveSpeed.k / R_C) * dt
 
-    const backInv = handleInvert.back
+    const backInv = outdoorView.fp ? handleInvert.outFp : handleInvert.back
     const turnIn = (keys['KeyQ'] ? 1 : 0) - (keys['KeyE'] ? 1 : 0) - joyYaw * invSign(backInv.x)
     if (Math.abs(turnIn) > 0.01) { pFwd.applyAxisAngle(pDir, TURN_SPD * dt * Math.max(-1, Math.min(1, turnIn))); pFwd.normalize() }
 
@@ -1174,9 +1185,14 @@ function animate() {
     pFwd.normalize()
 
     // ↑↓ / 右ジョイスティック Y でカメラ仰角を操作
-    // ハンドルは上に倒すとカメラが下がって見上げる（↑キーとは逆向き）
-    const pitchIn = (keys['ArrowUp'] ? 1 : 0) - (keys['ArrowDown'] ? 1 : 0) + joyPitch * invSign(backInv.y)
-    if (Math.abs(pitchIn) > 0.01) pitch = Math.max(PITCH_MIN, Math.min(PITCH_MAX, pitch + PITCH_SPD * dt * Math.max(-1, Math.min(1, pitchIn))))
+    // 後ろからは、ハンドルを上に倒すとカメラが下がって見上げる（↑キーとは逆向き）。主観は室内と同じく上に倒すと見上げる
+    if (outdoorView.fp) {
+      const pitchIn = (keys['ArrowUp'] ? 1 : 0) - (keys['ArrowDown'] ? 1 : 0) - joyPitch * invSign(backInv.y)
+      if (Math.abs(pitchIn) > 0.01) outFpPitch = Math.max(-FP_PITCH_MAX, Math.min(FP_PITCH_MAX, outFpPitch + PITCH_SPD * dt * Math.max(-1, Math.min(1, pitchIn))))
+    } else {
+      const pitchIn = (keys['ArrowUp'] ? 1 : 0) - (keys['ArrowDown'] ? 1 : 0) + joyPitch * invSign(backInv.y)
+      if (Math.abs(pitchIn) > 0.01) pitch = Math.max(PITCH_MIN, Math.min(PITCH_MAX, pitch + PITCH_SPD * dt * Math.max(-1, Math.min(1, pitchIn))))
+    }
 
     // --- sabちゃん配置 ---
     // local Y → pDir (惑星法線=上)、local Z → pFwd (進行方向=前)
@@ -1196,16 +1212,24 @@ function animate() {
 
     animateSabParts(now)
 
-    // --- 3人称カメラ ---
-    // pitch を仰角オフセットとして使用（上限・下限クランプ）
-    const camAngle = Math.max(0.05, Math.min(Math.PI * 0.45, CAM_BASE_ANGLE + pitch))
-    camera.position.copy(sabPos)
-      .addScaledVector(pFwd, -CAM_DIST * Math.cos(camAngle))
-      .addScaledVector(pDir, CAM_DIST * Math.sin(camAngle))
-    camera.up.copy(pDir)
-    // 胴体あたり（頭部中心から足方向へ少し）を注視
-    camera.lookAt(_lookTarget.copy(sabPos).addScaledVector(pDir, -SAB_FOOT_OFFSET * 0.4))
-    camera.rotateX(CAM_LIFT)   // 見上げて sabちゃんを画面下寄りに
+    if (outdoorView.fp) {
+      // --- 主観カメラ: 足元の地面から FP_EYE_H の高さから前を見る ---
+      camera.position.copy(pDir).multiplyScalar(groundH + FP_EYE_H)
+      _lookTarget.copy(pFwd).multiplyScalar(Math.cos(outFpPitch)).addScaledVector(pDir, Math.sin(outFpPitch)).add(camera.position)
+      camera.up.copy(pDir)
+      camera.lookAt(_lookTarget)
+    } else {
+      // --- 3人称カメラ ---
+      // pitch を仰角オフセットとして使用（上限・下限クランプ）
+      const camAngle = Math.max(0.05, Math.min(Math.PI * 0.45, CAM_BASE_ANGLE + pitch))
+      camera.position.copy(sabPos)
+        .addScaledVector(pFwd, -CAM_DIST * Math.cos(camAngle))
+        .addScaledVector(pDir, CAM_DIST * Math.sin(camAngle))
+      camera.up.copy(pDir)
+      // 胴体あたり（頭部中心から足方向へ少し）を注視
+      camera.lookAt(_lookTarget.copy(sabPos).addScaledVector(pDir, -SAB_FOOT_OFFSET * 0.4))
+      camera.rotateX(CAM_LIFT)   // 見上げて sabちゃんを画面下寄りに
+    }
   }
 
   // 影の範囲を sabちゃんのまわりへ（俯瞰中は惑星全体、室内は太陽がないので動かさない）

@@ -6,22 +6,28 @@
 
 const STORAGE_KEY = 'coccolith.handleInvert'
 const SPEED_KEY   = 'coccolith.moveSpeed'
+const OUTVIEW_KEY = 'coccolith.outdoorFp'
 const SPEED_STEPS = [0.5, 1, 1.5]   // 移動速度の倍率の選択肢
 
 const ICON_GEAR = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M13.27 6.82 L15.14 7.07 L15.14 8.93 L13.27 9.18 L12.56 10.89 L13.71 12.39 L12.39 13.71 L10.89 12.56 L9.18 13.27 L8.93 15.14 L7.07 15.14 L6.82 13.27 L5.11 12.56 L3.61 13.71 L2.29 12.39 L3.44 10.89 L2.73 9.18 L0.86 8.93 L0.86 7.07 L2.73 6.82 L3.44 5.11 L2.29 3.61 L3.61 2.29 L5.11 3.44 L6.82 2.73 L7.07 0.86 L8.93 0.86 L9.18 2.73 L10.89 3.44 L12.39 2.29 L13.71 3.61 L12.56 5.11Z"/><circle cx="8" cy="8" r="2.2"/></svg>'
 
 // 視点ごとの反転フラグ（x = 左右、y = 上下）。main.js が毎フレーム読む
-// show: その行を出す場面（'outdoor' = 屋外にいるときだけ、'overview' = 俯瞰中だけ、'interior' = 室内にいるときだけ）
+// show: その行を出す場面（'outBack' / 'outFp' = 屋外でその視点にしているときだけ、'overview' = 俯瞰中だけ、'interior' = 室内にいるときだけ）
 const VIEWS = [
-  { id: 'back',     label: '後ろから（屋外）', show: 'outdoor' },
+  { id: 'back',     label: '後ろから（屋外）', show: 'outBack' },
+  { id: 'outFp',    label: '主観（屋外）',     show: 'outFp' },
   { id: 'overview', label: '俯瞰',             show: 'overview' },
   { id: 'inBack',   label: '後ろから（室内）', show: 'interior' },
   { id: 'fp',       label: '主観（室内）',     show: 'interior' },
 ]
 const rowOf = {}   // 視点 id → パネルの行
+const outdoorViewEls = []   // 「屋外の視点」の見出しと行（屋外にいるときだけ出す）
 export const handleInvert = Object.fromEntries(VIEWS.map(v => [v.id, { x: false, y: false }]))
 // 移動速度の倍率（屋外・室内とも）。main.js が毎フレーム読む
 export const moveSpeed = { k: 1 }
+// 屋外の視点（fp = true で主観、false で sabちゃんの後ろから）。main.js が毎フレーム読む
+export const outdoorView = { fp: false }
+let lastScene = { overview: false, interior: false }
 
 function load() {
   try {
@@ -34,18 +40,23 @@ function load() {
     const k = Number(localStorage.getItem(SPEED_KEY))
     if (SPEED_STEPS.includes(k)) moveSpeed.k = k
   } catch { /* 読めなければ 1 倍のまま */ }
+  try {
+    outdoorView.fp = localStorage.getItem(OUTVIEW_KEY) === '1'
+  } catch { /* 読めなければ後ろからのまま */ }
 }
 function save() {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(handleInvert))
     localStorage.setItem(SPEED_KEY, String(moveSpeed.k))
+    localStorage.setItem(OUTVIEW_KEY, outdoorView.fp ? '1' : '0')
   } catch { /* 保存できなくても今回は効く */ }
 }
 
 // 反転フラグ → 入力に掛ける符号
 export const invSign = on => (on ? -1 : 1)
 
-export function initSettings(btn, panel) {
+// onOutdoorView: 屋外の視点を切り替えたときに呼ぶ（main.js が sabちゃんの表示などをそろえる）
+export function initSettings(btn, panel, { onOutdoorView } = {}) {
   load()
   btn.innerHTML = ICON_GEAR
 
@@ -101,7 +112,35 @@ export function initSettings(btn, panel) {
   })
   syncSpeed()
   speedRow.append(...speedBtns)
-  panel.append(title, ...rows, speedTitle, speedRow)
+
+  // 屋外の視点（後ろから / 主観から1つ選ぶ）。室内の視点は 俯瞰ボタンで切り替えるので、屋外にいるときだけ出す
+  const viewTitle = document.createElement('div')
+  viewTitle.className = 'set-title'
+  viewTitle.textContent = '屋外の視点'
+  const viewRow = document.createElement('div')
+  viewRow.className = 'set-row'
+  outdoorViewEls.push(viewTitle, viewRow)
+  const viewBtns = [[false, '後ろから'], [true, '主観']].map(([fp, text]) => {
+    const b = document.createElement('button')
+    b.className = 'set-speed'
+    b.textContent = text
+    b.setAttribute('aria-label', `屋外の視点を${text}に`)
+    b.addEventListener('click', () => {
+      outdoorView.fp = fp
+      syncView(); save(); b.blur()
+      showSettingsFor(lastScene)
+      onOutdoorView?.()
+    })
+    return b
+  })
+  const syncView = () => viewBtns.forEach((b, i) => {
+    const on = (i === 1) === outdoorView.fp
+    b.classList.toggle('on', on)
+    b.setAttribute('aria-pressed', on)
+  })
+  syncView()
+  viewRow.append(...viewBtns)
+  panel.append(viewTitle, viewRow, title, ...rows, speedTitle, speedRow)
 
   const setOpen = open => {
     panel.classList.toggle('open', open)
@@ -117,8 +156,12 @@ export function initSettings(btn, panel) {
 
 // 今の場面に関係する視点の行だけ出す（main.js が視点・室内の切り替えのたびに呼ぶ）
 export function showSettingsFor({ overview, interior }) {
+  lastScene = { overview, interior }
   for (const v of VIEWS) {
-    const on = v.show === 'outdoor' ? !interior : v.show === 'overview' ? overview : interior
+    const on = v.show === 'outBack' ? !interior && !outdoorView.fp
+      : v.show === 'outFp' ? !interior && outdoorView.fp
+      : v.show === 'overview' ? overview : interior
     if (rowOf[v.id]) rowOf[v.id].hidden = !on
   }
+  for (const el of outdoorViewEls) el.hidden = !!interior
 }
