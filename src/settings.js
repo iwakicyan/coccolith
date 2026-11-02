@@ -4,10 +4,13 @@
 //  初期状態はどの視点も「倒した方向にあるものが見えるようになる」向き。設定は localStorage に残す
 // ============================================================
 
+import { gyro, gyroSupported, enableGyro, disableGyro } from './gyro.js'
+
 const STORAGE_KEY = 'coccolith.handleInvert'
 const SPEED_KEY   = 'coccolith.moveSpeed'
 const OUTVIEW_KEY = 'coccolith.outdoorFp'
 const SPEED_STEPS = [0.5, 1, 1.5]   // 移動速度の倍率の選択肢
+const GYRO_TITLE  = 'ジャイロ（主観のとき）'
 
 const ICON_GEAR = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M13.27 6.82 L15.14 7.07 L15.14 8.93 L13.27 9.18 L12.56 10.89 L13.71 12.39 L12.39 13.71 L10.89 12.56 L9.18 13.27 L8.93 15.14 L7.07 15.14 L6.82 13.27 L5.11 12.56 L3.61 13.71 L2.29 12.39 L3.44 10.89 L2.73 9.18 L0.86 8.93 L0.86 7.07 L2.73 6.82 L3.44 5.11 L2.29 3.61 L3.61 2.29 L5.11 3.44 L6.82 2.73 L7.07 0.86 L8.93 0.86 L9.18 2.73 L10.89 3.44 L12.39 2.29 L13.71 3.61 L12.56 5.11Z"/><circle cx="8" cy="8" r="2.2"/></svg>'
 
@@ -140,7 +143,39 @@ export function initSettings(btn, panel, { onOutdoorView } = {}) {
   })
   syncView()
   viewRow.append(...viewBtns)
-  panel.append(viewTitle, viewRow, title, ...rows, speedTitle, speedRow)
+
+  // ジャイロ（主観のとき端末の傾きで見回す）。iOS はここで押したときに許可を聞くので、開くたびに OFF から始める
+  const gyroEls = []
+  if (gyroSupported()) {
+    const gyroTitle = document.createElement('div')
+    gyroTitle.className = 'set-title'
+    gyroTitle.textContent = GYRO_TITLE
+    const gyroRow = document.createElement('div')
+    gyroRow.className = 'set-row'
+    const gyroBtns = [[false, 'OFF'], [true, 'ON']].map(([on, text]) => {
+      const b = document.createElement('button')
+      b.className = 'set-speed'
+      b.textContent = text
+      b.setAttribute('aria-label', `ジャイロを${text}に`)
+      b.addEventListener('click', async () => {
+        b.blur()
+        if (on === gyro.on) return
+        if (on) gyroTitle.textContent = await enableGyro() ? GYRO_TITLE : 'ジャイロ（使えませんでした）'
+        else disableGyro()
+        syncGyro()
+      })
+      return b
+    })
+    const syncGyro = () => gyroBtns.forEach((b, i) => {
+      const on = (i === 1) === gyro.on
+      b.classList.toggle('on', on)
+      b.setAttribute('aria-pressed', on)
+    })
+    syncGyro()
+    gyroRow.append(...gyroBtns)
+    gyroEls.push(gyroTitle, gyroRow)
+  }
+  panel.append(viewTitle, viewRow, ...gyroEls, title, ...rows, speedTitle, speedRow)
 
   const setOpen = open => {
     panel.classList.toggle('open', open)

@@ -6,6 +6,7 @@ import { vJoy, initJoysticks } from './joystick.js'
 import { createCompass, createVethIndicator } from './hud.js'
 import { initFullscreenButton } from './fullscreen.js'
 import { initSettings, showSettingsFor, handleInvert, invSign, moveSpeed, outdoorView } from './settings.js'
+import { takeGyroDelta } from './gyro.js'
 import { initVisitCounter } from './visitCounter.js'
 import { isFlowerCutOpen } from './flowerCut.js'
 import { isPixelSceneOpen, openPixelScene } from './pixelScene.js'
@@ -451,6 +452,7 @@ const INTERIOR_LIFT    = 0.5   // 室内で sabちゃんを床から浮かせる
 const SAB_HEIGHT       = 8.35 * SAB_SCALE
 const FP_EYE_H         = 1.5   // 主観モードの目の高さ (m)（屋外は地面から）
 const FP_PITCH_MAX     = 1.2   // 主観モードの見上げ・見下ろし上限 (rad)
+const GYRO_STILL       = 0.05  // ジャイロの回る速さがこれ (rad/s) 以下なら止まっているとみなす（手ぶれで絵への吸い付きが外れないように）
 
 // 外のドア（colliders のうち userData.door を持つもの）。位置は球面上の方向で持つ
 const _doors = colliders.filter(o => o.userData.door).map(o => {
@@ -994,10 +996,19 @@ function updatePicArrows(p) {
   }
 }
 
-function updateInterior(dt, now, joyYaw, joyPitch) {
+// gyroD: ジャイロの向きの変化（gyro.js の takeGyroDelta）。主観のときだけ視点に足す
+function updateInterior(dt, now, joyYaw, joyPitch, gyroD) {
   const { def } = interior
-  const turnIn = (keys['KeyQ'] ? 1 : 0) - (keys['KeyE'] ? 1 : 0) - joyYaw
+  let turnIn = (keys['KeyQ'] ? 1 : 0) - (keys['KeyE'] ? 1 : 0) - joyYaw
   if (Math.abs(turnIn) > 0.01) iFwd.applyAxisAngle(_iUp, TURN_SPD * dt * Math.max(-1, Math.min(1, turnIn)))
+  // ジャイロで見回している間は、絵への吸い付きでもそれを操作として扱う
+  let gyroPitching = false
+  if (firstPerson && !picMove) {
+    iFwd.applyAxisAngle(_iUp, gyroD.yaw)
+    fpPitch = Math.max(-FP_PITCH_MAX, Math.min(FP_PITCH_MAX, fpPitch + gyroD.pitch))
+    if (Math.abs(gyroD.yaw)   > GYRO_STILL * dt) turnIn = 1
+    gyroPitching = Math.abs(gyroD.pitch) > GYRO_STILL * dt
+  }
   _iRight.crossVectors(iFwd, _iUp)   // 画面右
   const step = INTERIOR_SPEED * moveSpeed.k * dt
   const fbIn = (keys['KeyW'] ? 1 : 0) - (keys['KeyS'] ? 1 : 0) - vJoy.ly
@@ -1007,7 +1018,7 @@ function updateInterior(dt, now, joyYaw, joyPitch) {
   const pitchIn = (keys['ArrowUp'] ? 1 : 0) - (keys['ArrowDown'] ? 1 : 0) - joyPitch
   if (!firstPerson) picMove = null
   if (picMove) movePicture(dt)   // 移っている間は操作より優先
-  picFocus = firstPerson && def.pictures && !picMove ? snapToPicture(def.pictures, dt, turnIn, pitchIn, Math.abs(fbIn) > 0.01 || Math.abs(lrIn) > 0.01) : null
+  picFocus = firstPerson && def.pictures && !picMove ? snapToPicture(def.pictures, dt, turnIn, gyroPitching ? 1 : pitchIn, Math.abs(fbIn) > 0.01 || Math.abs(lrIn) > 0.01) : null
   def.resolve(iPos, INTERIOR_BODY_R, SAB_HEIGHT)
   iPos.y = def.floorAt(iPos.x, iPos.z, iPos.y)
 
@@ -1132,10 +1143,13 @@ function animate() {
   const joyYaw   = vJoy.rx * joyRamp(JOY_RAMP_YAW,   joyYawHeld)
   const joyPitch = vJoy.ry * joyRamp(JOY_RAMP_PITCH, joyPitchHeld)
 
+  // ジャイロの向きの変化（主観のときだけ使う。使わないときも読み捨てて溜めない）
+  const gyroD = takeGyroDelta()
+
   // 視点ごとのハンドルの反転設定（HUD の歯車。settings.js）
   if (interior) {
     const inv = firstPerson ? handleInvert.fp : handleInvert.inBack
-    updateInterior(dt, now, joyYaw * invSign(inv.x), joyPitch * invSign(inv.y))
+    updateInterior(dt, now, joyYaw * invSign(inv.x), joyPitch * invSign(inv.y), gyroD)
   } else if (overviewMode) {
     // --- 俯瞰モード: A/D/Q/E で水平回転、↑↓ で仰俯角 ---
     // ハンドルの横方向は A/D キーと逆向きに回す（上下はキーと同じ向き）
@@ -1172,6 +1186,10 @@ function animate() {
     const backInv = outdoorView.fp ? handleInvert.outFp : handleInvert.back
     const turnIn = (keys['KeyQ'] ? 1 : 0) - (keys['KeyE'] ? 1 : 0) - joyYaw * invSign(backInv.x)
     if (Math.abs(turnIn) > 0.01) { pFwd.applyAxisAngle(pDir, TURN_SPD * dt * Math.max(-1, Math.min(1, turnIn))); pFwd.normalize() }
+    if (outdoorView.fp) {
+      pFwd.applyAxisAngle(pDir, gyroD.yaw)
+      outFpPitch = Math.max(-FP_PITCH_MAX, Math.min(FP_PITCH_MAX, outFpPitch + gyroD.pitch))
+    }
 
     const axisWS = _sabRight.crossVectors(pDir, pFwd)
     const fbIn = (keys['KeyW'] ? 1 : 0) - (keys['KeyS'] ? 1 : 0) - vJoy.ly
