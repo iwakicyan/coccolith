@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import { createBlobShadows, polygonShadow } from './blobShadow.js'
 
 // ============================================================
 //  8 方向スプライト — ドット絵 1 枚の板を立て、見る角度で絵を差し替える（昔の 3D ゲームのキャラクターの出し方）
@@ -16,6 +17,7 @@ import * as THREE from 'three'
 //    bob: 歩くあいだ、側面の絵の高さのこの割合だけ浮き沈みする（なければしない）
 //    anywhere: true なら陸でも海でも出て、海に入っても向きを変えない（海底を歩く）
 //    near: true なら見た目の確認用にスポーン地点の近くに出す
+//    shadow: { w, l, dz, sides } があれば足元に擬似的な影（ダークグレーの多角形の板。blobShadow.js）を置く。幅・前後の長さ・前へずらす量 (m)・角の数（なければ 8）
 //  側面: 板は縦軸まわりだけ回って常にカメラの方を向く。オブジェクトの前の向きとカメラのいる方向の角度を 45°（4 方向なら 90°）ごとに区切って絵を選ぶ
 //        反対側の 3 方向（4 方向なら真横）は描いた側の絵を左右反転して使う
 //        側面の絵でいちばん下にあるドットの行を地面に合わせる
@@ -253,6 +255,11 @@ export function createPixelSpriteWalkers({ scene, art, count, dot, speed, radius
   const isWater = g => !art.anywhere && g < waterLevel
   const restPose = sheet.looks.sit ? 'sit' : 'walk'
   const walkers = []
+  // 足元の影（絵に shadow があるときだけ。全員ぶんを 1 回で描く）
+  const sc = art.scale ?? 1
+  const shadows = art.shadow && count > 0
+    ? createBlobShadows({ scene, count, name: '影', pts: polygonShadow(art.shadow.w * sc, art.shadow.l * sc, (art.shadow.dz ?? 0) * sc, art.shadow.sides ?? 8) })
+    : null
 
   for (let i = 0; i < count; i++) {
     // 天面の板は地面から出ている部分のまん中あたりの高さに置く
@@ -284,7 +291,8 @@ export function createPixelSpriteWalkers({ scene, art, count, dot, speed, radius
 
   function update(dt, camera) {
     const da = speed / radius * dt
-    for (const w of walkers) {
+    for (let i = 0; i < walkers.length; i++) {
+      const w = walkers[i]
       w.timer -= dt
       if (w.timer <= 0) {
         w.walking = !w.walking
@@ -332,7 +340,9 @@ export function createPixelSpriteWalkers({ scene, art, count, dot, speed, radius
       g.setRotationFromMatrix(_m.makeBasis(_right.crossVectors(w.dir, w.fwd), w.dir, w.fwd))
       g.position.copy(w.dir).multiplyScalar(w.ground - sink + lift)
       w.sprite.face(camera, w.walking ? 'walk' : restPose, Math.floor(w.step))
+      if (shadows) shadows.set(i, w.dir, w.fwd, w.ground)
     }
+    if (shadows) shadows.commit()
   }
 
   return { update }

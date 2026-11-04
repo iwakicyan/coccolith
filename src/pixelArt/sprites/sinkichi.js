@@ -846,6 +846,7 @@ const sitBackSide = {
 
 export default {
   count: 1,   // 何匹出すか
+  shadow: { w: 0.55, l: 0.4 },   // 足元の擬似的な影（8 角形の幅・前後の長さ m）
   cx: 12,
   drawnSide: 'left',
   poses: {

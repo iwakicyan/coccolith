@@ -1233,6 +1233,7 @@ const sitTop1 = {
 export default {
   count: 1,   // 何匹出すか
   scale: 2,   // 大きさ（ほかの絵の何倍か）
+  shadow: { w: 1.2, l: 1.2, sides: 6 },   // 足元の擬似的な影（6 角形の幅・前後の長さ m。scale 倍される）
   cx: 17,
   drawnSide: 'left',
   poses: {

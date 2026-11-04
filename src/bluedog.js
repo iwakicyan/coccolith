@@ -1,5 +1,6 @@
 import * as THREE from 'three'
 import { createBluedog, createBluedogWalk, BLUEDOG_HEIGHT } from '../my-3d-parts/parts/bluedog.js'
+import { createBlobShadows } from './blobShadow.js'
 
 // ============================================================
 //  bluedog（my-3d-parts/parts/bluedog.js）を星の陸に出して歩き回らせる
@@ -7,7 +8,7 @@ import { createBluedog, createBluedogWalk, BLUEDOG_HEIGHT } from '../my-3d-parts
 //    歩く・立ち止まるを交互にくり返し、歩くあいだは少しずつ曲がる。PROBE_STEP 先の地面を測り、海なら向きを変える
 //  歩いているあいだは脚・体・しっぽを動かし（createBluedogWalk）、立ち止まるときはなめらかに元の形へ戻す
 //  影は太陽の影（castShadow）を使わず、体の真下の地面にダークグレーの板を置く（頭と胴の形の 2 つの五角形をつないだ 8 角形）
-//    全員ぶんを InstancedMesh 1 つで描く（何匹でも描画 1 回）。板は体の上下や脚の動きにはつられず、足元の地面に張り付く
+//    全員ぶんを 1 回で描く（blobShadow.js）。板は体の上下や脚の動きにはつられず、足元の地面に張り付く
 // ============================================================
 
 const TURN_MAX    = 1.0         // 曲がる速さの上限 (rad/s)
@@ -24,8 +25,6 @@ const STEP_RATE   = 2.0         // 脚を振る速さ（歩く速さ ÷ 高さ �
 const SHADOW_PTS   = [[0, 0.803], [0.5, 0.437], [0.355, 0], [0.5, -0.443], [0, -0.803], [-0.5, -0.443], [-0.355, 0], [-0.5, 0.437]]
 const SHADOW_W     = 2.0        // 影の幅（モデル単位。BLUEDOG_HEIGHT が全体の高さ）
 const SHADOW_Z     = -0.05      // 影の中心を前後にずらす量（モデル単位）
-const SHADOW_LIFT  = 0.02       // 影を地面から浮かせる高さ (m)
-const SHADOW_COLOR = 0x565656
 
 const rand = ([a, b]) => a + Math.random() * (b - a)
 const _right = new THREE.Vector3()
@@ -40,15 +39,10 @@ export function createBluedogWalkers({ scene, count = 1, height = 1, speed = 0.8
   const isWater = g => g < waterLevel
   const dogs = []
 
-  // 影の板（全員ぶんを 1 つの InstancedMesh で）。板は xz 平面、法線は上
+  // 影の板（全員ぶんを 1 回で描く）
   const k = height / BLUEDOG_HEIGHT
-  const shape = new THREE.Shape(SHADOW_PTS.map(([x, z]) => new THREE.Vector2(x * SHADOW_W * k, -(z * SHADOW_W + SHADOW_Z) * k)))
-  const shadowGeo = new THREE.ShapeGeometry(shape).rotateX(-Math.PI / 2)
-  const shadowMat = new THREE.MeshLambertMaterial({ color: SHADOW_COLOR, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 })
-  const shadows = new THREE.InstancedMesh(shadowGeo, shadowMat, count)
-  shadows.name = 'bluedog の影'
-  shadows.frustumCulled = false   // 星じゅうに散らばるので、まとめて描く（地平線の向こうを隠す処理からも外れる）
-  scene.add(shadows)
+  const shadows = createBlobShadows({ scene, count, name: 'bluedog の影',
+    pts: SHADOW_PTS.map(([x, z]) => [x * SHADOW_W * k, (z * SHADOW_W + SHADOW_Z) * k]) })
 
   for (let i = 0; i < count; i++) {
     const model = createBluedog({ height, merge: true })   // 動く部分ごとに 1 メッシュ＋輪郭線（1 匹で描画 12 回）
@@ -134,13 +128,10 @@ export function createBluedogWalkers({ scene, count = 1, height = 1, speed = 0.8
       d.holder.setRotationFromMatrix(_m.makeBasis(_right.crossVectors(d.dir, d.fwd), d.dir, d.fwd))
       d.holder.position.copy(d.dir).multiplyScalar(d.ground)
 
-      // 影：足元の地面に、体と同じ向きで少し浮かせて置く
-      d.holder.updateMatrix()
-      _m.copy(d.holder.matrix)
-      _m.elements[12] += d.dir.x * SHADOW_LIFT; _m.elements[13] += d.dir.y * SHADOW_LIFT; _m.elements[14] += d.dir.z * SHADOW_LIFT
-      shadows.setMatrixAt(i, _m)
+      // 影：足元の地面に、体と同じ向きで置く
+      shadows.set(i, d.dir, d.fwd, d.ground)
     }
-    shadows.instanceMatrix.needsUpdate = true
+    shadows.commit()
   }
 
   return { update, dogs }
