@@ -26,6 +26,7 @@ import { whenNightEnvReady } from './nightEnv.js'
 import { toLambert } from './lambert.js'
 import { createLightHeads } from './lightHeads.js'
 import { createPixelSpriteWalkers, createPixelSpriteFlyers } from './pixelSprite.js'
+import { createBluedogWalkers } from './bluedog.js'
 
 // ============================================================
 //  LMF — Layout Master File
@@ -1087,6 +1088,13 @@ const spriteWalkers = Object.values(import.meta.glob('./pixelArt/sprites/*.js', 
     waterLevel: R_OCEAN + TIDE_SHIFT, spawn: { dir: pDir, fwd: pFwd },
   }))
 
+// bluedog（my-3d-parts/parts/bluedog.js の 3D モデル。bluedog.js）: 高さ 1m、開くたびに陸のランダムな地点に 12 匹出して歩き回らせる
+const bluedogs = createBluedogWalkers({
+  scene, count: 12, height: 1, speed: 0.8, radius: R_C,
+  getGround: dir => getGroundHeight(dir) - 1,
+  waterLevel: R_OCEAN + TIDE_SHIFT, spawn: { dir: pDir, fwd: pFwd },
+})
+
 // 空を飛ぶドット絵スプライト（pixelSprite.js）: pixelArt/flyers/ の絵を全部読み込み、雲より上を count 機ずつ飛ばす
 // 絵を足すときは scripts/import-sprite.mjs で書き出す（名前に 真下・下方・水平・上から があれば flyers/ に入る）
 const FLYER_H = R_C + LAND_LIFT + 80   // 飛ぶ高さ（惑星中心から m。陸から 80m、雲生き物より 70m 上）
@@ -1300,6 +1308,7 @@ function animate() {
     camera.updateMatrixWorld()
     updateLedBoards(now / 1000, camera)
     for (const w of spriteWalkers) w.update(dt, camera)
+    bluedogs.update(dt)
     for (const f of spriteFlyers) f.update(dt, camera)
     horizonCull.update(camera)
   }
