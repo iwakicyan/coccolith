@@ -209,6 +209,20 @@
       position: fixed; inset: 0; z-index: 30; background: #000;
       opacity: 0; pointer-events: none; transition: opacity 0.35s;
     }
+    /* 俯瞰のズーム枠 [ ]（main.js の OV_ZOOM = 2.5 → 画面の縦横 40%）。中をタップすると枠の大きさまで寄る */
+    #ov-frame {
+      position: fixed; left: 30%; top: 30%; width: 40%; height: 40%;
+      pointer-events: none; opacity: 0; transition: opacity 0.2s;
+    }
+    #ov-frame.show { opacity: 1; }
+    #ov-frame::before, #ov-frame::after {
+      content: ''; position: absolute; top: 0; bottom: 0; width: 14px;
+      border: 2px solid rgba(255,255,255,0.7);
+      filter: drop-shadow(0 0 2px rgba(0,0,0,0.5));
+    }
+    #ov-frame::before { left: 0;  border-right: none; }
+    #ov-frame::after  { right: 0; border-left: none; }
+    body.shot #ov-frame { display: none; }
     #tab-btn:active { transform: translateX(-50%) scale(0.9); }
     /* 花の切り抜きページ（イーゼルのキャンバスをタップで開く。flowerCut.js） */
     #flower-cut {
@@ -319,6 +333,7 @@
   <canvas id="c"></canvas>
   <div id="hud"><button id="fs-btn" hidden></button><img class="hud-icon" src="/ui/obeye.png" alt="">coccolith | <img class="hud-icon" src="/ui/veth_icon.png" alt="">veth<span id="visit-count" hidden> &nbsp;|&nbsp; visitors today: <span id="visit-num"></span></span><br><span id="area-code"></span><span id="latlon"></span><span id="coin-box"><img src="/ui/coin_icon.png" alt="coin"><span id="coin-num">0</span></span><br><button id="settings-btn" aria-label="設定" aria-expanded="false"></button></div>
   <div id="settings"></div>
+  <div id="ov-frame"></div>
   <canvas id="compass" width="88" height="88"></canvas>
   <div id="jump"><button id="jump-btn" aria-expanded="false">JUMP</button><div id="jump-list"></div></div>
   <canvas id="veth-ind" width="28" height="28"></canvas>

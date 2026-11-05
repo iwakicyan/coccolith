@@ -514,6 +514,7 @@ function nearDoor() {
 // 俯瞰ボタンのアイコン: 屋外は 俯瞰⇄sabちゃん、室内は 主観⇄後ろからの視点 の切り替え
 // obeye = 外から見る目（俯瞰へ）、subeye = sabちゃんの目（主観へ）、insab = sabちゃん入りの視点へ
 function updateTabBtn() {
+  setOvZoom(overviewMode && ovZoomOn)   // 俯瞰を抜けたらズームも解く（枠の出し入れもここで）
   showSettingsFor({ overview: !interior && overviewMode, interior: !!interior })   // 操作設定は今の場面の視点だけ出す
   updateSabHidden()
   const tabBtn = document.getElementById('tab-btn')
@@ -674,6 +675,29 @@ const OVERVIEW_DIST = (R_C + LAND_LIFT) * 2.5  // 惑星全体が収まる距離
 let ovYaw   = 0
 let ovPitch = Math.PI * 0.25   // 初期は斜め上から
 let ovEnterYaw = 0, ovEnterPitch = 0   // 俯瞰に入ったときの値（回さずに戻ったら立ち位置を変えない）
+
+// 俯瞰のズーム（1 段階）: 画面の真ん中に [ ] の枠を出し、枠の中をタップすると枠の大きさまで寄る。もう一度タップで元に戻る
+// 枠は画面の縦横それぞれ 1/OV_ZOOM の大きさ（index.html の #ov-frame と合わせる）
+const OV_ZOOM = 2.5
+const OV_ZOOM_SPD = 8      // 寄る・離れる速さ（大きいほど速い）
+let ovZoomOn = false
+const ovFrameEl = document.getElementById('ov-frame')
+function setOvZoom(on) {
+  ovZoomOn = on
+  ovFrameEl.classList.toggle('show', overviewMode && !on)
+}
+{
+  // タップ（ほとんど動かさずに短く押して離す）だけを拾う。ドラッグやジョイスティックでは反応しない
+  let downX = 0, downY = 0, downT = 0
+  canvas.addEventListener('pointerdown', e => { downX = e.clientX; downY = e.clientY; downT = performance.now() })
+  canvas.addEventListener('pointerup', e => {
+    if (!overviewMode || interior || transitioning) return
+    if (Math.hypot(e.clientX - downX, e.clientY - downY) > 10 || performance.now() - downT > 400) return
+    if (ovZoomOn) { setOvZoom(false); return }
+    const r = ovFrameEl.getBoundingClientRect()
+    if (e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom) setOvZoom(true)
+  })
+}
 
 // --- 入力 ---------------------------------------------------
 const keys = {}
@@ -1154,6 +1178,16 @@ function animate() {
   // ジャイロの向きの変化（主観のときだけ使う。使わないときも読み捨てて溜めない）
   const gyroD = takeGyroDelta()
 
+  // 俯瞰のズーム: 俯瞰中は目標の倍率へなめらかに寄せ、俯瞰の外ではすぐ 1 倍に戻す
+  {
+    const zt = overviewMode && ovZoomOn ? OV_ZOOM : 1
+    if (camera.zoom !== zt) {
+      const z = overviewMode ? camera.zoom + (zt - camera.zoom) * (1 - Math.exp(-OV_ZOOM_SPD * dt)) : zt
+      camera.zoom = Math.abs(z - zt) < 0.002 ? zt : z
+      camera.updateProjectionMatrix()
+    }
+  }
+
   // 視点ごとのハンドルの反転設定（HUD の歯車。settings.js）
   if (interior) {
     const inv = firstPerson ? handleInvert.fp : handleInvert.inBack
@@ -1164,8 +1198,9 @@ function animate() {
     const ovInv = handleInvert.overview
     const ovTurnIn  = (keys['KeyA'] || keys['KeyQ'] ? 1 : 0) - (keys['KeyD'] || keys['KeyE'] ? 1 : 0) + joyYaw * invSign(ovInv.x)
     const ovPitchIn = (keys['ArrowUp'] ? 1 : 0) - (keys['ArrowDown'] ? 1 : 0) - joyPitch * invSign(ovInv.y)
-    if (Math.abs(ovTurnIn)  > 0.01) ovYaw   += OV_SPD * dt * Math.max(-1, Math.min(1, ovTurnIn))
-    if (Math.abs(ovPitchIn) > 0.01) ovPitch  = Math.max(OV_PITCH_MIN, Math.min(OV_PITCH_MAX, ovPitch + OV_SPD * dt * Math.max(-1, Math.min(1, ovPitchIn))))
+    const ovSpd = OV_SPD / camera.zoom   // 寄っているときは画面の動きが速く見えないよう、回す速さを倍率で割る
+    if (Math.abs(ovTurnIn)  > 0.01) ovYaw   += ovSpd * dt * Math.max(-1, Math.min(1, ovTurnIn))
+    if (Math.abs(ovPitchIn) > 0.01) ovPitch  = Math.max(OV_PITCH_MIN, Math.min(OV_PITCH_MAX, ovPitch + ovSpd * dt * Math.max(-1, Math.min(1, ovPitchIn))))
 
     const cx = OVERVIEW_DIST * Math.cos(ovPitch) * Math.sin(ovYaw)
     const cy = OVERVIEW_DIST * Math.sin(ovPitch)
