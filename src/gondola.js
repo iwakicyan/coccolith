@@ -101,5 +101,8 @@ export function createGondolaRide({ scene, radius, getGround, waterLevel }) {
   }
   update()
 
-  return { root, walkable: root.userData.walkable, update }
+  // reach: 中心からこの距離 (m) より離れていれば gondola の上ではない（体のいちばん遠い端＋余裕）
+  const reach = Math.hypot(hx, Math.max(hz, -tz)) + 3
+  // delta: update が返すのと同じ回転（いちばん最後のフレームのぶん）
+  return { root, walkable: root.userData.walkable, update, delta, reach }
 }

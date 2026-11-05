@@ -248,7 +248,9 @@ const _m     = new THREE.Matrix4()
 // getGround(dir): 単位ベクトル dir の地点の地面の高さ（惑星中心から m） / waterLevel: 地面がこれより低ければ海 (m)
 // spawn: { dir, fwd } スポーン地点とその正面（絵が near のとき、この近くに出す）
 // migrations: 集まる先の名前 → 時刻で集まって散らばる動き（migration.js の createMigration）。絵の migrate の名前のものを使う
-export function createPixelSpriteWalkers({ scene, art, count, dot, speed, radius, getGround, waterLevel, spawn, migrations = {} }) {
+// carrier: 上に乗れる動く台（gondola。main.js の gondolaCarrier）。乗っている子は台が回った分（delta）だけ一緒に運び、
+//          台の近く（near）では足元の高さを毎フレーム測り直す（台が下に来たら乗り、去ったら下りる）
+export function createPixelSpriteWalkers({ scene, art, count, dot, speed, radius, getGround, waterLevel, spawn, migrations = {}, carrier = null }) {
   const mig = art.migrate ? migrations[art.migrate] ?? null : null
   const sheet = buildSheet(art)
   const height = sheet.cellHeight * dot
@@ -299,13 +301,14 @@ export function createPixelSpriteWalkers({ scene, art, count, dot, speed, radius
     scene.add(sprite.group)
     // ground0: 前に測った地点の高さ / ground1: PROBE_STEP 先の高さ（null ならまだ測っていない） / travel: ground0 の地点から歩いた距離 (m)
     // bobPhase: 浮き沈みの位相（0 で沈みきり。立ち止まったら 1 回ぶん浮き沈みし終えたところで止める）
-    walkers.push({ sprite, dir, fwd, ground, ground0: ground, ground1: null, travel: 0, turn: 0, turnTarget: 0, walking: false, timer: rand(STOP_TIME), step: 0, bobPhase: 0 })
+    walkers.push({ sprite, dir, fwd, ground, ground0: ground, ground1: null, travel: 0, turn: 0, turnTarget: 0, walking: false, timer: rand(STOP_TIME), step: 0, bobPhase: 0, onCarrier: false })
   }
 
   function update(dt, camera) {
     const da = speed / radius * dt
     for (let i = 0; i < walkers.length; i++) {
       const w = walkers[i]
+      if (w.onCarrier) { w.dir.applyQuaternion(carrier.delta).normalize(); w.fwd.applyQuaternion(carrier.delta) }   // 乗っている台と一緒に動く
       w.timer -= dt
       if (w.timer <= 0) {
         w.walking = !w.walking
@@ -340,6 +343,14 @@ export function createPixelSpriteWalkers({ scene, art, count, dot, speed, radius
         }
         w.fwd.addScaledVector(w.dir, -w.fwd.dot(w.dir)).normalize()
       }
+      // 動く台の近くでは、足元を毎フレーム測り直す（次に進むときは先の地面も測り直す）
+      if (carrier && carrier.near(w.dir)) {
+        w.ground = w.ground0 = carrier.measure(w.dir)
+        w.onCarrier = carrier.on
+        w.ground1 = null
+        w.travel = 0
+        w.fwd.addScaledVector(w.dir, -w.fwd.dot(w.dir)).normalize()
+      } else w.onCarrier = false
 
       // 浮き沈み: 沈みきった高さ（埋めた高さ）から bob だけ浮き上がって戻る
       let lift = 0

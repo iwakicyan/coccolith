@@ -424,6 +424,15 @@ for (const m of gondola.walkable) {
 terrainMeshes.push(...gondola.walkable)
 const gondolaWalk = new Set(gondola.walkable)
 let onGondola = false   // sabちゃんの足元が gondola か（getSmoothGroundHeight で測ったとき）
+// 歩く生き物（pixelSprite.js）を gondola に乗せて運ぶための窓口
+//   near(dir): gondola の近くか / measure(dir): 地面の高さを測り、足元が gondola かを on に入れる / delta: このフレームに gondola が回った分
+const _gondolaUp = new THREE.Vector3()
+const gondolaCarrier = {
+  delta: gondola.delta,
+  on: false,
+  near: dir => dir.angleTo(_gondolaUp.copy(gondola.root.position).normalize()) * R_C < gondola.reach,
+  measure(dir) { const g = getGroundHeight(dir) - 1; this.on = gondolaWalk.has(_groundHitObj); return g },
+}
 
 // --- 建物の当たり判定 ---------------------------------------
 // 建物ローカルの XZ 矩形（footprint）＋余白の内側に sabちゃんの中心が入ったら、
@@ -1148,7 +1157,7 @@ const spriteWalkers = Object.values(import.meta.glob('./pixelArt/sprites/*.js', 
   .map(art => createPixelSpriteWalkers({
     scene, art, count: art.count, dot: SPRITE_DOT * (art.scale ?? 1), speed: SPEED * 0.05, radius: R_C,
     getGround: dir => getGroundHeight(dir) - 1,
-    waterLevel: R_OCEAN + TIDE_SHIFT, spawn: { dir: pDir, fwd: pFwd }, migrations,
+    waterLevel: R_OCEAN + TIDE_SHIFT, spawn: { dir: pDir, fwd: pFwd }, migrations, carrier: gondolaCarrier,
   }))
 
 // bluedog（my-3d-parts/parts/bluedog.js の 3D モデル。bluedog.js）: 高さ 1m、開くたびに陸のランダムな地点に 12 匹出して歩き回らせる
