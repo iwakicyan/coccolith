@@ -229,6 +229,9 @@
         linear-gradient(var(--c), var(--c)) right bottom / var(--w) var(--l) no-repeat;
     }
     body.shot #ov-frame { display: none; }
+    /* ズーム中（main.js の setOvZoom）は HUD を隠す。操作用のスティック・ボタンは残す */
+    body.zoomed #hud, body.zoomed #settings, body.zoomed #compass, body.zoomed #jump,
+    body.zoomed #veth-ind, body.zoomed #copyright, body.zoomed #ctrl { display: none !important; }
     #tab-btn:active { transform: translateX(-50%) scale(0.9); }
     /* 花の切り抜きページ（イーゼルのキャンバスをタップで開く。flowerCut.js） */
     #flower-cut {

@@ -700,6 +700,7 @@ const zoomable = () => !interior && (overviewMode || outdoorView.fp)   // ズー
 function setOvZoom(on) {
   ovZoomOn = on
   ovFrameEl.classList.toggle('show', zoomable() && !on)
+  document.body.classList.toggle('zoomed', on)   // ズーム中は HUD を隠す（index.html）
 }
 {
   // タップ（ほとんど動かさずに短く押して離す）だけを拾う。ドラッグやジョイスティックでは反応しない
