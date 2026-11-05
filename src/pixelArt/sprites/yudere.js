@@ -410,7 +410,7 @@ export default {
   sink: 0.5,   // 絵の高さのこの割合だけ地面に埋める（半分から下が埋まる）
   bob: 0.1,   // 歩くあいだ、絵の高さのこの割合だけ浮き沈みする
   anywhere: true,   // 陸でも海でも出て、海に入っても向きを変えない
-  migrate: true,   // 夜に五重塔へ集まって散らばる（migration.js）
+  migrate: 'gojunoto',   // 夜（0 時）に五重塔へ集まって散らばる（migration.js）
   cx: 20,
   drawnSide: 'left',
   poses: {

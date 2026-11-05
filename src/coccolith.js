@@ -138,6 +138,8 @@ function arcDistToSeg(px, py, pz, { ax, ay, az, bx, by, bz, gnx, gny, gnz }) {
 
 // 五重塔の位置（うれー・さめれー・ゆでれーが夜に集まる先にも使う。migration.js）
 export const GOJUNOTO_AT = { lat: 10.0, lon: -45.0 }
+// ケーキスタンドの位置（いぬやつたちが昼に集まる先にも使う。migration.js）
+export const CAKESTAND_AT = { lat: -62.0, lon: -131.0 }
 
 // 緯度経度（度）→ 球面上の単位ベクトル
 export function dirOf(lat, lon) {
@@ -480,7 +482,6 @@ export function createCoccolith({ renderer = null } = {}) {
   // 高さ 50m になる倍率（元は約 5.4m）。台座を地面に 0.5m めり込ませる。どの向きも同じ形なので、向きは北へそろえるだけ
   // 当たり判定は台座だけ（皿は頭上なので下をくぐれる）。影は受けない。昼の側（x > 0）なので影は落とす（landmarkShadow）
   // 草地（2dgrass2）の中に建つので、台座の下敷きになる草は生やさない
-  const CAKESTAND_AT = { lat: -62.0, lon: -131.0 }
   const cakestandWrapper = new THREE.Group()
   const cakestand = createCakestand()
   cakestandWrapper.add(cakestand)
