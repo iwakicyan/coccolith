@@ -12,7 +12,7 @@ import { dirOf } from './coccolith.js'
 
 export const GONDOLA_A = { lat: -83, lon: -133 }
 export const GONDOLA_B = { lat: -73, lon: -133 }
-const GONDOLA_SCALE = 3                 // モデル単位 → m（幅 9m・長さ 12m・高さ 4.8m）
+const GONDOLA_SCALE = 9                 // モデル単位 → m（幅 27m・長さ 36m・高さ 14.3m）
 const GONDOLA_HALF_W = 8                // 楕円の短いほうの半径 (m)。行きと帰りの道が 16m 離れる（長いほうは A〜B の約 64m）
 const GONDOLA_SINK = 0                  // 天面を地表からさらに沈める量 (m)。0 で天面と地表が同じ高さ
 const STOP_MS = 15 * 60 * 1000          // 停泊
