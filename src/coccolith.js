@@ -16,6 +16,7 @@ import { createSShall } from '../my-3d-parts/landmark/sshall.js'
 import { createDote } from '../my-3d-parts/landmark/dote.js'
 import { createLight01, createLight01Pole } from '../my-3d-parts/landmark/light01.js'
 import { createHoisun, createHoason } from '../my-3d-parts/landmark/hoisun.js'
+import { createGojunoto } from '../my-3d-parts/landmark/gojunoto.js'
 import { mergeStatic } from '../my-3d-parts/parts/mergeStatic.js'
 import { addDoorGlow, addGroundGlow, addArchDoorGlow } from './doorGlow.js'
 import { openPixelScene } from './pixelScene.js'
@@ -710,6 +711,20 @@ export function createCoccolith({ renderer = null } = {}) {
   hoisun.rotation.y = headingTo(hoisunWrapper, 66.0, 119.0)
   landmarkShadow(hoisun, hoisunWrapper)   // 影は受けない。昼の側（x > 0）なので影は落とす
   colliders.push(...hoisun.userData.colliders)
+
+  // --- ランドマーク: 五重塔 gojunoto (lat=10.0, lon=-45.0) ------------
+  // 高さ 60m になる倍率（元は約 13m）。地面に 2m めり込ませる。どの面も同じ形なので、面を北（緯度+方向）へそろえるだけ
+  // 影は受けない。夜の側（x < 0）なので影も落とさない（landmarkShadow）
+  const gojunotoWrapper = new THREE.Group()
+  const gojunoto = createGojunoto()
+  gojunotoWrapper.add(gojunoto)
+  gojunotoWrapper.scale.setScalar(60 / gojunoto.userData.height)
+  const GOJUNOTO_SINK = 2.0   // 地面にめり込ませる量 (m)
+  placeOnSurface(group, gojunotoWrapper, 10.0, -45.0, R_C + LAND_LIFT - GOJUNOTO_SINK)
+  gojunoto.rotation.y = northAngle(gojunotoWrapper)
+  landmarkShadow(gojunoto, gojunotoWrapper)
+  colliders.push(gojunoto)
+  mergeStatic(gojunoto)
 
   // --- ランドマーク: 橋 bridge01 ×2 ------------
   // 3倍で地面から6m出る、全長約44m。歩く向き（ローカル +Z）を北（緯度+方向）へ向ける
