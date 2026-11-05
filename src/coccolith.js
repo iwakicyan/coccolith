@@ -135,8 +135,11 @@ function arcDistToSeg(px, py, pz, { ax, ay, az, bx, by, bz, gnx, gny, gnz }) {
   return Math.min(dA, dB)
 }
 
+// 五重塔の位置（うれー・さめれー・ゆでれーが夜に集まる先にも使う。migration.js）
+export const GOJUNOTO_AT = { lat: 10.0, lon: -45.0 }
+
 // 緯度経度（度）→ 球面上の単位ベクトル
-function dirOf(lat, lon) {
+export function dirOf(lat, lon) {
   const phi   = (90 - lat)  * Math.PI / 180
   const theta = (lon + 180) * Math.PI / 180
   return new THREE.Vector3(Math.sin(phi) * Math.cos(theta), Math.cos(phi), Math.sin(phi) * Math.sin(theta))
@@ -455,7 +458,6 @@ export function createCoccolith({ renderer = null } = {}) {
   // 高さ 60m（原点から先端まで）になる倍率（元は約 12m。基壇は原点より下へも沈めてある）。地面に 2m めり込ませる。どの面も同じ形なので、面を北（緯度+方向）へそろえるだけ
   // 影は受けない。夜の側（x < 0）なので影も落とさない（landmarkShadow）
   // 草地の中に建つので、基壇の下敷きになる草は生やさない（草地より先に置いて、基壇の大きさを草地へ渡す）
-  const GOJUNOTO_AT = { lat: 10.0, lon: -45.0 }
   const gojunotoWrapper = new THREE.Group()
   const gojunoto = createGojunoto()
   gojunotoWrapper.add(gojunoto)

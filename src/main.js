@@ -11,7 +11,8 @@ import { initVisitCounter } from './visitCounter.js'
 import { isFlowerCutOpen } from './flowerCut.js'
 import { isPixelSceneOpen, openPixelScene } from './pixelScene.js'
 import { TREEHOUSE_PIXEL_LAYERS, TREEHOUSE_PIXEL_TEXT } from './pixelArt/treehouse.js'
-import { createCoccolith, R_OCEAN } from './coccolith.js'
+import { createCoccolith, R_OCEAN, GOJUNOTO_AT, dirOf } from './coccolith.js'
+import { createMigration } from './migration.js'
 import { createVeth } from './veth.js'
 import { createCloud1, createFlatCloud } from './cloud1.js'
 import { R_C, LAND_LIFT, ORBIT } from './constants.js'
@@ -1105,11 +1106,13 @@ const lightHeads = createLightHeads({
 // 絵を足すときは scripts/import-sprite.mjs で書き出してこのフォルダに置くだけでよい
 // ドットの大きさはどの絵も同じ（しんきちの 36 px が 1.6m）。絵に scale があればその倍にする
 const SPRITE_DOT = 1.6 / 36
+// 夜のマイグレーション: 絵に migrate: true のもの（うれー・さめれー・ゆでれー）は、21 時から五重塔へ集まり、1 時から散らばる（migration.js）
+const migration = createMigration({ target: dirOf(GOJUNOTO_AT.lat, GOJUNOTO_AT.lon), radius: R_C })
 const spriteWalkers = Object.values(import.meta.glob('./pixelArt/sprites/*.js', { eager: true, import: 'default' }))
   .map(art => createPixelSpriteWalkers({
     scene, art, count: art.count, dot: SPRITE_DOT * (art.scale ?? 1), speed: SPEED * 0.05, radius: R_C,
     getGround: dir => getGroundHeight(dir) - 1,
-    waterLevel: R_OCEAN + TIDE_SHIFT, spawn: { dir: pDir, fwd: pFwd },
+    waterLevel: R_OCEAN + TIDE_SHIFT, spawn: { dir: pDir, fwd: pFwd }, migrate: migration,
   }))
 
 // bluedog（my-3d-parts/parts/bluedog.js の 3D モデル。bluedog.js）: 高さ 1m、開くたびに陸のランダムな地点に 12 匹出して歩き回らせる
@@ -1342,6 +1345,7 @@ function animate() {
   if (!interior) {
     camera.updateMatrixWorld()
     updateLedBoards(now / 1000, camera)
+    migration.tick(dt)
     for (const w of spriteWalkers) w.update(dt, camera)
     bluedogs.update(dt)
     for (const f of spriteFlyers) f.update(dt, camera)

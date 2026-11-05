@@ -16,6 +16,7 @@ import { createBlobShadows, polygonShadow } from './blobShadow.js'
 //    sink: 側面の絵の高さ（いちばん上のドットから足元まで）のこの割合だけ地面に埋める（なければ埋めない。main.js が使う）
 //    bob: 歩くあいだ、側面の絵の高さのこの割合だけ浮き沈みする（なければしない）
 //    anywhere: true なら陸でも海でも出て、海に入っても向きを変えない（海底を歩く）
+//    migrate: true なら、夜に五重塔へ集まって散らばる（createPixelSpriteWalkers に渡す migrate。migration.js）
 //    near: true なら見た目の確認用にスポーン地点の近くに出す
 //    shadow: { w, l, dz, sides } があれば足元に擬似的な影（ダークグレーの多角形の板。blobShadow.js）を置く。幅・前後の長さ・前へずらす量 (m)・角の数（なければ 8）
 //  側面: 板は縦軸まわりだけ回って常にカメラの方を向く。オブジェクトの前の向きとカメラのいる方向の角度を 45°（4 方向なら 90°）ごとに区切って絵を選ぶ
@@ -246,7 +247,9 @@ const _m     = new THREE.Matrix4()
 // art: 絵のデータ / count: 数 / dot: ドット 1 つの大きさ (m) / speed: 歩く速さ (m/s) / radius: 惑星の半径 (m)
 // getGround(dir): 単位ベクトル dir の地点の地面の高さ（惑星中心から m） / waterLevel: 地面がこれより低ければ海 (m)
 // spawn: { dir, fwd } スポーン地点とその正面（絵が near のとき、この近くに出す）
-export function createPixelSpriteWalkers({ scene, art, count, dot, speed, radius, getGround, waterLevel, spawn }) {
+// migrate: 時刻で集まって散らばる動き（migration.js の createMigration）。絵が migrate: true のときだけ使う
+export function createPixelSpriteWalkers({ scene, art, count, dot, speed, radius, getGround, waterLevel, spawn, migrate = null }) {
+  const mig = art.migrate ? migrate : null
   const sheet = buildSheet(art)
   const height = sheet.cellHeight * dot
   const body = sheet.bodyFrac * height   // 側面の絵のいちばん上のドットから足元までの高さ (m)
@@ -280,6 +283,7 @@ export function createPixelSpriteWalkers({ scene, art, count, dot, speed, radius
         ground = getGround(dir)
         if (!isWater(ground)) break
       }
+      if (mig) { mig.placeSpawn(dir); ground = getGround(dir) }   // 開いた時刻に合わせて五重塔へ寄せる
     }
     const fwd = new THREE.Vector3().randomDirection()
     fwd.addScaledVector(dir, -fwd.dot(dir)).normalize()
@@ -304,6 +308,7 @@ export function createPixelSpriteWalkers({ scene, art, count, dot, speed, radius
         if (Math.random() < dt / TURN_CHANGE) w.turnTarget = (Math.random() * 2 - 1) * TURN_MAX
         w.turn += (w.turnTarget - w.turn) * Math.min(1, dt * 2)
         w.fwd.applyAxisAngle(w.dir, w.turn * dt)
+        if (mig) mig.steer(w.dir, w.fwd, dt)   // 時間帯によって五重塔へ寄せる・離す
 
         // PROBE_STEP 先の地面を測る。海なら進まずに後ろ寄りへ向きを変える（次のフレームで向きを変えた先を測り直す）
         _axis.crossVectors(w.dir, w.fwd).normalize()
