@@ -17,6 +17,7 @@ import { createVeth } from './veth.js'
 import { createCloud1, createFlatCloud } from './cloud1.js'
 import { R_C, LAND_LIFT, ORBIT } from './constants.js'
 import { createGondolaRide } from './gondola.js'
+import { createGondeerRide } from './gondeer.js'
 import { createKummo } from '../my-3d-parts/parts/kummo.jsx'
 import { createGummo } from '../my-3d-parts/parts/gummo.jsx'
 import { createSabchan } from '../my-3d-parts/parts/sabchan.jsx'
@@ -385,7 +386,7 @@ function getGroundHeight(dir) {
   _groundHitObj = _groundHits[0].object
   return _groundHits[0].point.length() + 1
 }
-let _groundHitObj = null   // getGroundHeight がいちばん最後に当たったメッシュ（gondola に乗っているかを見る用）
+let _groundHitObj = null   // getGroundHeight がいちばん最後に当たったメッシュ（gondola・gondeer に乗っているかを見る用）
 
 // 段差（橋のステップなど）で地面の高さが急に変わったときは、その差を少しずつ埋めて滑らかに乗り上げる。
 // 移動距離に対して STEP_SLOPE 倍より大きく高さが跳ねたら段差とみなし、跳ねた分を groundOffset に入れて STEP_TAU 秒で 0 へ戻す。
@@ -400,7 +401,7 @@ function getSmoothGroundHeight(dir, dt) {
   // 前のフレームから動いていなければ（1mm 未満）測り直さず、前の高さを使う
   const still = groundRawPrev !== null && _groundPrevDir.angleTo(dir) * groundRawPrev < 0.001
   const rawH = still ? groundRawPrev : getGroundHeight(dir)
-  if (!still) onGondola = gondolaWalk.has(_groundHitObj)
+  if (!still) rideUnder = rideOfMesh.get(_groundHitObj) ?? null
   if (groundRawPrev !== null) {
     const jump  = rawH - groundRawPrev
     const moved = _groundPrevDir.angleTo(dir) * rawH
@@ -413,25 +414,33 @@ function getSmoothGroundHeight(dir, dt) {
   return rawH + groundOffset
 }
 
-// --- gondola: A・B の停留所のあいだの細い楕円を行き来する（gondola.js）。上を歩ける ---
-// 地面の高さを軌道に沿って測ってから、自分を地形のレイキャスト対象に加える（先に加えると自分の上を測ってしまう）
-const gondola = createGondolaRide({ scene, radius: R_C + LAND_LIFT, getGround: dir => getGroundHeight(dir) - 1, waterLevel: R_OCEAN + TIDE_SHIFT })
-for (const m of gondola.walkable) {
-  m.geometry.boundsTree = new MeshBVH(m.geometry)
-  m.raycast = acceleratedRaycast
-  m.receiveShadow = true
+// --- 上に乗れる動く台（rides）: gondola・gondeer ---
+// どちらも地面の高さを軌道に沿って測ってから、自分を地形のレイキャスト対象に加える（先に加えると自分の上を測ってしまう）
+//   gondola: A・B の停留所のあいだの細い楕円を行き来する（gondola.js）
+//   gondeer: 緯度 58° の円を、sabちゃんの移動速度の 0.5 倍で東へ周遊する（gondeer.js）。体の半分を地面に埋める
+const SPEED     = 20      // sabちゃんの移動速度 (m/s)
+const rideGround = dir => getGroundHeight(dir) - 1
+const gondola = createGondolaRide({ scene, radius: R_C + LAND_LIFT, getGround: rideGround, waterLevel: R_OCEAN + TIDE_SHIFT })
+const gondeer = createGondeerRide({ scene, radius: R_C + LAND_LIFT, getGround: rideGround, waterLevel: R_OCEAN + TIDE_SHIFT, speed: SPEED * 0.5 })
+const rides = [gondola, gondeer]
+const rideOfMesh = new Map()   // 上を歩けるメッシュ → その台
+for (const ride of rides) {
+  for (const m of ride.walkable) {
+    m.geometry.boundsTree = new MeshBVH(m.geometry)
+    m.raycast = acceleratedRaycast
+    m.receiveShadow = true
+    rideOfMesh.set(m, ride)
+  }
+  terrainMeshes.push(...ride.walkable)
 }
-terrainMeshes.push(...gondola.walkable)
-const gondolaWalk = new Set(gondola.walkable)
-let onGondola = false   // sabちゃんの足元が gondola か（getSmoothGroundHeight で測ったとき）
-// 歩く生き物（pixelSprite.js）を gondola に乗せて運ぶための窓口
-//   near(dir): gondola の近くか / measure(dir): 地面の高さを測り、足元が gondola かを on に入れる / delta: このフレームに gondola が回った分
-const _gondolaUp = new THREE.Vector3()
-const gondolaCarrier = {
-  delta: gondola.delta,
-  on: false,
-  near: dir => dir.angleTo(_gondolaUp.copy(gondola.root.position).normalize()) * R_C < gondola.reach,
-  measure(dir) { const g = getGroundHeight(dir) - 1; this.on = gondolaWalk.has(_groundHitObj); return g },
+let rideUnder = null   // sabちゃんの足元の台（getSmoothGroundHeight で測ったとき。台の上でなければ null）
+// 歩く生き物（pixelSprite.js）を台に乗せて運ぶための窓口
+//   near(dir): どれかの台の近くか / measure(dir): 地面の高さを測り、足元の台が回った分（delta）を on に入れる（台の上でなければ null）
+const _rideUp = new THREE.Vector3()
+const rideCarrier = {
+  on: null,
+  near: dir => rides.some(r => dir.angleTo(_rideUp.copy(r.root.position).normalize()) * R_C < r.reach),
+  measure(dir) { const g = getGroundHeight(dir) - 1; this.on = rideOfMesh.get(_groundHitObj)?.delta ?? null; return g },
 }
 
 // --- 建物の当たり判定 ---------------------------------------
@@ -878,7 +887,6 @@ window.addEventListener('resize', () => {
 })
 
 // --- メインループ --------------------------------------------
-const SPEED     = 20      // 移動速度 (m/s)
 const TURN_SPD  = 1.5     // 旋回速度 (rad/s)
 const PITCH_SPD = 1.2     // ピッチ速度 (rad/s)
 const OV_SPD    = 1.2     // 俯瞰回転速度 (rad/s)
@@ -1157,7 +1165,7 @@ const spriteWalkers = Object.values(import.meta.glob('./pixelArt/sprites/*.js', 
   .map(art => createPixelSpriteWalkers({
     scene, art, count: art.count, dot: SPRITE_DOT * (art.scale ?? 1), speed: SPEED * 0.05, radius: R_C,
     getGround: dir => getGroundHeight(dir) - 1,
-    waterLevel: R_OCEAN + TIDE_SHIFT, spawn: { dir: pDir, fwd: pFwd }, migrations, carrier: gondolaCarrier,
+    waterLevel: R_OCEAN + TIDE_SHIFT, spawn: { dir: pDir, fwd: pFwd }, migrations, carrier: rideCarrier,
   }))
 
 // bluedog（my-3d-parts/parts/bluedog.js の 3D モデル。bluedog.js）: 高さ 1m、開くたびに陸のランダムな地点に 12 匹出して歩き回らせる
@@ -1217,8 +1225,8 @@ function animate() {
 
   lightHeads.update(dt, now)
 
-  // gondola を動かす。前のフレームからの回転（惑星中心まわり）で、乗っている sabちゃんを一緒に運ぶ（通常モードのところで当てる）
-  const gondolaDelta = gondola.update()
+  // gondola・gondeer を動かす。前のフレームからの回転（惑星中心まわり。ride.delta）で、乗っている sabちゃんを一緒に運ぶ（通常モードのところで当てる）
+  for (const ride of rides) ride.update()
 
   // ハンドル入力（入力し始めはゆっくり）
   joyYawHeld   = Math.abs(vJoy.rx) > 0.05 ? joyYawHeld   + dt : 0
@@ -1275,7 +1283,7 @@ function animate() {
     }
   } else {
     // --- 通常モード: sabちゃん追従3人称 ---
-    if (onGondola) { pDir.applyQuaternion(gondolaDelta).normalize(); pFwd.applyQuaternion(gondolaDelta).normalize() }
+    if (rideUnder) { pDir.applyQuaternion(rideUnder.delta).normalize(); pFwd.applyQuaternion(rideUnder.delta).normalize() }
     const da = (SPEED * moveSpeed.k / R_C) * dt
 
     const backInv = outdoorView.fp ? handleInvert.outFp : handleInvert.back
