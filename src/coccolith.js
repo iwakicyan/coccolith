@@ -451,6 +451,28 @@ export function createCoccolith({ renderer = null } = {}) {
     }
   }
 
+  // --- ランドマーク: 五重塔 gojunoto (lat=10.0, lon=-45.0) ------------
+  // 高さ 60m（原点から先端まで）になる倍率（元は約 12m。基壇は原点より下へも沈めてある）。地面に 2m めり込ませる。どの面も同じ形なので、面を北（緯度+方向）へそろえるだけ
+  // 影は受けない。夜の側（x < 0）なので影も落とさない（landmarkShadow）
+  // 草地の中に建つので、基壇の下敷きになる草は生やさない（草地より先に置いて、基壇の大きさを草地へ渡す）
+  const GOJUNOTO_AT = { lat: 10.0, lon: -45.0 }
+  const gojunotoWrapper = new THREE.Group()
+  const gojunoto = createGojunoto()
+  gojunotoWrapper.add(gojunoto)
+  gojunotoWrapper.scale.setScalar(60 / gojunoto.userData.height)
+  const GOJUNOTO_SINK = 2.0   // 地面にめり込ませる量 (m)
+  placeOnSurface(group, gojunotoWrapper, GOJUNOTO_AT.lat, GOJUNOTO_AT.lon, R_C + LAND_LIFT - GOJUNOTO_SINK)
+  gojunoto.rotation.y = northAngle(gojunotoWrapper)
+  landmarkShadow(gojunoto, gojunotoWrapper)
+  colliders.push(gojunoto)
+  mergeStatic(gojunoto)
+  // 草を抜く範囲（基壇の矩形に 1m の余白。面を北へそろえてあるので、東西 = halfW・南北 = halfD）
+  const gojunotoHole = {
+    ...GOJUNOTO_AT,
+    halfW: gojunoto.userData.footprint.halfW * gojunotoWrapper.scale.x + 1,
+    halfD: gojunoto.userData.footprint.halfD * gojunotoWrapper.scale.x + 1,
+  }
+
   // --- 草地フィールド ---
   const GRASS_AREAS = [
     [{lat:11.2,lon:-43.2},{lat:11.0,lon:-46.8},{lat:6.9,lon:-46.8},{lat:6.9,lon:-43.2}],
@@ -459,7 +481,7 @@ export function createCoccolith({ renderer = null } = {}) {
     [{lat:73.3,lon:7.2},{lat:42.4,lon:-33.8},{lat:42.4,lon:-16.6},{lat:56.3,lon:62.4}],
     [{lat:59.9,lon:157.6},{lat:59.9,lon:80.2},{lat:44.4,lon:117.3}],
   ]
-  for (const poly of GRASS_AREAS) group.add(createGrassField(poly, noise3D, GRASS_KIND_1))
+  for (const poly of GRASS_AREAS) group.add(createGrassField(poly, noise3D, GRASS_KIND_1, [gojunotoHole]))
 
   const FIELD01_AREAS = [
     [{lat:-60,lon:30},{lat:-37,lon:62},{lat:-43,lon:82},{lat:-60,lon:82}],
@@ -711,20 +733,6 @@ export function createCoccolith({ renderer = null } = {}) {
   hoisun.rotation.y = headingTo(hoisunWrapper, 66.0, 119.0)
   landmarkShadow(hoisun, hoisunWrapper)   // 影は受けない。昼の側（x > 0）なので影は落とす
   colliders.push(...hoisun.userData.colliders)
-
-  // --- ランドマーク: 五重塔 gojunoto (lat=10.0, lon=-45.0) ------------
-  // 高さ 60m（原点から先端まで）になる倍率（元は約 12m。基壇は原点より下へも沈めてある）。地面に 2m めり込ませる。どの面も同じ形なので、面を北（緯度+方向）へそろえるだけ
-  // 影は受けない。夜の側（x < 0）なので影も落とさない（landmarkShadow）
-  const gojunotoWrapper = new THREE.Group()
-  const gojunoto = createGojunoto()
-  gojunotoWrapper.add(gojunoto)
-  gojunotoWrapper.scale.setScalar(60 / gojunoto.userData.height)
-  const GOJUNOTO_SINK = 2.0   // 地面にめり込ませる量 (m)
-  placeOnSurface(group, gojunotoWrapper, 10.0, -45.0, R_C + LAND_LIFT - GOJUNOTO_SINK)
-  gojunoto.rotation.y = northAngle(gojunotoWrapper)
-  landmarkShadow(gojunoto, gojunotoWrapper)
-  colliders.push(gojunoto)
-  mergeStatic(gojunoto)
 
   // --- ランドマーク: 橋 bridge01 ×2 ------------
   // 3倍で地面から6m出る、全長約44m。歩く向き（ローカル +Z）を北（緯度+方向）へ向ける
@@ -1337,7 +1345,8 @@ function createFlowerStemGeometry() {
 }
 
 // ポリゴン境界をパーリンノイズでぼかして草地を配置（y軸ランダム回転・位置ランダムずらし）
-function createGrassField(poly, noise3D, kind) {
+// holes: 草を生やさない矩形 { lat, lon, halfW, halfD } の配列（中心の緯度経度と、東西・南北の半分の幅 m。建物の下敷きを除く）
+function createGrassField(poly, noise3D, kind, holes = []) {
   const DEG            = Math.PI / 180
   const GRASS_SCALE    = kind.scale
   const FOOTPRINT      = 1.6                 // 配置間隔の基準 (m)
@@ -1402,7 +1411,10 @@ function createGrassField(poly, noise3D, kind) {
         const nv = edgeNoise(nx * NOISE_FREQ, ny * NOISE_FREQ, nz * NOISE_FREQ)
         if (edgeFactor + nv * NOISE_STRENGTH <= 0) continue
       }
-      posBuf.push(lat + (jitRng() - 0.5) * dlatDeg, lon + (jitRng() - 0.5) * dlonDeg)
+      const plat = lat + (jitRng() - 0.5) * dlatDeg, plon = lon + (jitRng() - 0.5) * dlonDeg
+      if (holes.some(h => Math.abs(plat - h.lat) * DEG * R_C < h.halfD &&
+                          Math.abs(plon - h.lon) * DEG * R_C * Math.cos(h.lat * DEG) < h.halfW)) continue
+      posBuf.push(plat, plon)
     }
   }
   const count = posBuf.length / 2
