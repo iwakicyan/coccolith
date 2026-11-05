@@ -39,32 +39,35 @@ function fromStandard(s) {
 }
 
 // ============================================================
-//  太陽（DirectionalLight）の光だけを受けないようにする
-//  夜の側に置いたもので、惑星の反対側の太陽が下から当たって裏側が明るくなるのを止める
-//  環境光と、sabちゃんのライト・街灯（SpotLight / PointLight）はそのまま受ける
-//  Lambert / Phong のマテリアルを複製して差し替える（同じ設定のものは 1 つのシェーダーを共有する）
+//  太陽の光を受けないようにする（夜の側に置いたもの用）
+//  夜の側では、惑星の反対側の太陽が下から当たって、地面を向いた面が明るくなる
+//  面の向き（法線）をぜんぶ惑星の外向き（root の位置の向き）にそろえると、太陽は面の裏から当たることになって光らない
+//  シェーダーは増やさない（平らな陰影 flatShading をやめ、ほかの Lambert と同じシェーダーを使う。半透明のものは対象外）
+//  環境光と sabちゃんのライト・街灯は受ける（面ごとの陰影はつかず、近いほど明るい）
+//  root は置いたあと（行列が決まったあと）に渡す
 // ============================================================
 
-const NO_SUN_CHUNK = THREE.ShaderChunk.lights_fragment_begin
-  .replace('#if ( NUM_DIR_LIGHTS > 0 ) && defined( RE_Direct )', '#if 0')
-function noSunCompile(shader) {
-  shader.fragmentShader = shader.fragmentShader.replace('#include <lights_fragment_begin>', NO_SUN_CHUNK)
-}
-
 export function ignoreSun(root) {
-  const done = new Map()
-  const convert = (m) => {
-    if (!m || !(m.isMeshLambertMaterial || m.isMeshPhongMaterial)) return m
-    if (!done.has(m)) {
-      const c = m.clone()
-      c.onBeforeCompile = noSunCompile
-      c.customProgramCacheKey = () => 'noSun'
-      done.set(m, c)
-    }
-    return done.get(m)
-  }
+  root.updateMatrixWorld(true)
+  const up = root.getWorldPosition(new THREE.Vector3()).normalize()
+  const mats = new Map()
+  const m3 = new THREE.Matrix3()
+  const n = new THREE.Vector3()
   root.traverse(o => {
-    if (!o.isMesh) return
-    o.material = Array.isArray(o.material) ? o.material.map(convert) : convert(o.material)
+    // 半透明のものは、平らな陰影をやめるとほかと共有できないシェーダーになるので、そのままにする
+    if (!o.isMesh || [o.material].flat().some(m => m.transparent)) return
+    // 法線は M^-T で写るので、ローカルの法線を M^T・up にすると、ワールドで up を向く
+    n.copy(up).applyMatrix3(m3.setFromMatrix4(o.matrixWorld).transpose()).normalize()
+    const g = o.geometry = o.geometry.clone()
+    const count = g.attributes.position.count
+    const arr = new Float32Array(count * 3)
+    for (let i = 0; i < count; i++) arr.set([n.x, n.y, n.z], i * 3)
+    g.setAttribute('normal', new THREE.BufferAttribute(arr, 3))
+    const conv = (m) => {
+      if (!m?.flatShading) return m
+      if (!mats.has(m)) { const c = m.clone(); c.flatShading = false; mats.set(m, c) }
+      return mats.get(m)
+    }
+    o.material = Array.isArray(o.material) ? o.material.map(conv) : conv(o.material)
   })
 }
