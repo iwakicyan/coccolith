@@ -267,11 +267,14 @@ function openGlowSpot(g) {
   g.onTap()
   for (const k in keys) keys[k] = false   // 別のページを開くので押しっぱなしのキーを離す
 }
+let tapUsed = false   // 今の押し下げでドア・光るもの・ライトを使ったか（使ったらズームの切り替えはしない）
 canvas.addEventListener('pointerdown', e => {
   let g
+  tapUsed = true
   if (hitDoor(e)) useDoor()
   else if ((g = hitGlowSpot(e))) openGlowSpot(g)
   else if (hitLightIcon(e)) toggleSabLight()
+  else tapUsed = false
 })
 canvas.addEventListener('pointermove', e => {
   if (e.pointerType === 'mouse') canvas.style.cursor = hitDoor(e) || hitLightIcon(e) ? 'pointer' : ''
@@ -525,7 +528,7 @@ function nearDoor() {
 // 俯瞰ボタンのアイコン: 屋外は 俯瞰⇄sabちゃん、室内は 主観⇄後ろからの視点 の切り替え
 // obeye = 外から見る目（俯瞰へ）、subeye = sabちゃんの目（主観へ）、insab = sabちゃん入りの視点へ
 function updateTabBtn() {
-  setOvZoom(overviewMode && ovZoomOn)   // 俯瞰を抜けたらズームも解く（枠の出し入れもここで）
+  setOvZoom(false)   // 視点が変わったらズームは解く（枠の出し入れもここで）
   showSettingsFor({ overview: !interior && overviewMode, interior: !!interior })   // 操作設定は今の場面の視点だけ出す
   updateSabHidden()
   const tabBtn = document.getElementById('tab-btn')
@@ -687,22 +690,23 @@ let ovYaw   = 0
 let ovPitch = Math.PI * 0.25   // 初期は斜め上から
 let ovEnterYaw = 0, ovEnterPitch = 0   // 俯瞰に入ったときの値（回さずに戻ったら立ち位置を変えない）
 
-// 俯瞰のズーム（1 段階）: 画面の真ん中に [ ] の枠を出し、枠の中をタップすると枠の大きさまで寄る。もう一度タップで元に戻る
+// ズーム（1 段階）: 俯瞰と屋外の主観で、画面の真ん中に [ ] の枠を出し、枠の中をタップすると枠の大きさまで寄る。もう一度タップで元に戻る
 // 枠は画面の縦横それぞれ 1/OV_ZOOM の大きさ（index.html の #ov-frame と合わせる）
 const OV_ZOOM = 2.5
 const OV_ZOOM_SPD = 8      // 寄る・離れる速さ（大きいほど速い）
 let ovZoomOn = false
 const ovFrameEl = document.getElementById('ov-frame')
+const zoomable = () => !interior && (overviewMode || outdoorView.fp)   // ズームできる視点か
 function setOvZoom(on) {
   ovZoomOn = on
-  ovFrameEl.classList.toggle('show', overviewMode && !on)
+  ovFrameEl.classList.toggle('show', zoomable() && !on)
 }
 {
   // タップ（ほとんど動かさずに短く押して離す）だけを拾う。ドラッグやジョイスティックでは反応しない
   let downX = 0, downY = 0, downT = 0
   canvas.addEventListener('pointerdown', e => { downX = e.clientX; downY = e.clientY; downT = performance.now() })
   canvas.addEventListener('pointerup', e => {
-    if (!overviewMode || interior || transitioning) return
+    if (!zoomable() || transitioning || tapUsed) return
     if (Math.hypot(e.clientX - downX, e.clientY - downY) > 10 || performance.now() - downT > 400) return
     if (ovZoomOn) { setOvZoom(false); return }
     const r = ovFrameEl.getBoundingClientRect()
@@ -1196,11 +1200,11 @@ function animate() {
   // ジャイロの向きの変化（主観のときだけ使う。使わないときも読み捨てて溜めない）
   const gyroD = takeGyroDelta()
 
-  // 俯瞰のズーム: 俯瞰中は目標の倍率へなめらかに寄せ、俯瞰の外ではすぐ 1 倍に戻す
+  // ズーム: 俯瞰・屋外の主観では目標の倍率へなめらかに寄せ、それ以外ではすぐ 1 倍に戻す
   {
-    const zt = overviewMode && ovZoomOn ? OV_ZOOM : 1
+    const zt = zoomable() && ovZoomOn ? OV_ZOOM : 1
     if (camera.zoom !== zt) {
-      const z = overviewMode ? camera.zoom + (zt - camera.zoom) * (1 - Math.exp(-OV_ZOOM_SPD * dt)) : zt
+      const z = zoomable() ? camera.zoom + (zt - camera.zoom) * (1 - Math.exp(-OV_ZOOM_SPD * dt)) : zt
       camera.zoom = Math.abs(z - zt) < 0.002 ? zt : z
       camera.updateProjectionMatrix()
     }
@@ -1246,7 +1250,8 @@ function animate() {
 
     const backInv = outdoorView.fp ? handleInvert.outFp : handleInvert.back
     const turnIn = (keys['KeyQ'] ? 1 : 0) - (keys['KeyE'] ? 1 : 0) - joyYaw * invSign(backInv.x)
-    if (Math.abs(turnIn) > 0.01) { pFwd.applyAxisAngle(pDir, TURN_SPD * dt * Math.max(-1, Math.min(1, turnIn))); pFwd.normalize() }
+    const zSpd = 1 / camera.zoom   // 主観で寄っているときは回す速さを倍率で割る（後ろからは常に 1 倍）
+    if (Math.abs(turnIn) > 0.01) { pFwd.applyAxisAngle(pDir, TURN_SPD * zSpd * dt * Math.max(-1, Math.min(1, turnIn))); pFwd.normalize() }
     if (outdoorView.fp) {
       pFwd.applyAxisAngle(pDir, gyroD.yaw)
       outFpPitch = Math.max(-FP_PITCH_MAX, Math.min(FP_PITCH_MAX, outFpPitch + gyroD.pitch))
@@ -1267,7 +1272,7 @@ function animate() {
     // 後ろからは、ハンドルを上に倒すとカメラが下がって見上げる（↑キーとは逆向き）。主観は室内と同じく上に倒すと見上げる
     if (outdoorView.fp) {
       const pitchIn = (keys['ArrowUp'] ? 1 : 0) - (keys['ArrowDown'] ? 1 : 0) - joyPitch * invSign(backInv.y)
-      if (Math.abs(pitchIn) > 0.01) outFpPitch = Math.max(-FP_PITCH_MAX, Math.min(FP_PITCH_MAX, outFpPitch + PITCH_SPD * dt * Math.max(-1, Math.min(1, pitchIn))))
+      if (Math.abs(pitchIn) > 0.01) outFpPitch = Math.max(-FP_PITCH_MAX, Math.min(FP_PITCH_MAX, outFpPitch + PITCH_SPD * zSpd * dt * Math.max(-1, Math.min(1, pitchIn))))
     } else {
       const pitchIn = (keys['ArrowUp'] ? 1 : 0) - (keys['ArrowDown'] ? 1 : 0) + joyPitch * invSign(backInv.y)
       if (Math.abs(pitchIn) > 0.01) pitch = Math.max(PITCH_MIN, Math.min(PITCH_MAX, pitch + PITCH_SPD * dt * Math.max(-1, Math.min(1, pitchIn))))
