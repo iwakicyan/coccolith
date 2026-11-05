@@ -56,7 +56,7 @@ const ROAD_HALF_WIDTH = 17.5   // 道幅35m の半分 (m)
 
 // 複数の道を座標リストで定義する。各 waypoints は {lat, lon} の配列。
 // dotLat: [最小, 最大] を付けると、道沿いの dots をその緯度の範囲だけに出す（省略時は道全体）
-const ROUTES = [
+export const ROUTES = [
   {
     name: 'Route1',
     color: 0x6D7058,
