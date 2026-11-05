@@ -497,7 +497,7 @@ const walkTop2 = {
 
 export default {
   count: 5,   // 何匹出すか
-  migrate: 'cakestand',   // 昼（12 時）にケーキスタンドへ集まって散らばる（migration.js）
+  migrate: 'cakestand',   // 15 時にケーキスタンドへ集まって散らばる（migration.js）
   cx: 15,
   drawnSide: 'left',
   poses: {

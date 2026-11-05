@@ -1118,10 +1118,10 @@ const lightHeads = createLightHeads({
 const SPRITE_DOT = 1.6 / 36
 // マイグレーション: 絵の migrate に書いた名前の場所へ、時刻によって集まって散らばる（migration.js）
 //  gojunoto:  0 時に五重塔へ（21 時から集まり、1 時から散らばる）。基壇（半分の幅 約 13m）から 18m より近づかない
-//  cakestand: 12 時にケーキスタンドへ（9 時から集まり、13 時から散らばる）。台座（半径 約 11m）から 14m より近づかない
+//  cakestand: 15 時にケーキスタンドへ（12 時から集まり、16 時から散らばる）。台座（半径 約 11m）から 14m より近づかない
 const migrations = {
   gojunoto:  createMigration({ target: dirOf(GOJUNOTO_AT.lat, GOJUNOTO_AT.lon), radius: R_C, at: 0, avoid: 18 }),
-  cakestand: createMigration({ target: dirOf(CAKESTAND_AT.lat, CAKESTAND_AT.lon), radius: R_C, at: 12, avoid: 14 }),
+  cakestand: createMigration({ target: dirOf(CAKESTAND_AT.lat, CAKESTAND_AT.lon), radius: R_C, at: 15, avoid: 14 }),
 }
 const spriteWalkers = Object.values(import.meta.glob('./pixelArt/sprites/*.js', { eager: true, import: 'default' }))
   .map(art => createPixelSpriteWalkers({
