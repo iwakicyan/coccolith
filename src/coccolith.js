@@ -507,10 +507,13 @@ export function createCoccolith({ renderer = null } = {}) {
     [{lat:11.2,lon:-43.2},{lat:11.0,lon:-46.8},{lat:6.9,lon:-46.8},{lat:6.9,lon:-43.2}],
     [{lat:50,lon:-100},{lat:50,lon:-114.6},{lat:30,lon:-114.6},{lat:22.7,lon:-132},{lat:12,lon:-125},{lat:26.5,lon:-100}],
     [{lat:66,lon:-145},{lat:56,lon:-176.5},{lat:42,lon:-145},{lat:53.6,lon:-128.4}],
-    [{lat:73.3,lon:7.2},{lat:42.4,lon:-33.8},{lat:42.4,lon:-16.6},{lat:56.3,lon:62.4}],
+    [{lat:73.3,lon:7.2},{lat:42.4,lon:-33.8},{lat:42.4,lon:-16.6},{lat:56.3,lon:62.4}],   // 森 3 つのあたり（FOREST_GRASS_AREA）
     [{lat:59.9,lon:157.6},{lat:59.9,lon:80.2},{lat:44.4,lon:117.3}],
   ]
-  for (const poly of GRASS_AREAS) group.add(createGrassField(poly, noise3D, GRASS_KIND_1, [gojunotoHole]))
+  // 森 3 つのあたりの草地は、ほかより 2 割少なくする
+  const FOREST_GRASS_AREA = 3
+  const GRASS_KIND_FOREST = { ...GRASS_KIND_1, density: GRASS_KIND_1.density * 0.8 }
+  GRASS_AREAS.forEach((poly, i) => group.add(createGrassField(poly, noise3D, i === FOREST_GRASS_AREA ? GRASS_KIND_FOREST : GRASS_KIND_1, [gojunotoHole])))
 
   const FIELD01_AREAS = [
     [{lat:-60,lon:30},{lat:-37,lon:62},{lat:-43,lon:82},{lat:-60,lon:82}],
