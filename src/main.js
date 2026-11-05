@@ -16,6 +16,7 @@ import { createMigration } from './migration.js'
 import { createVeth } from './veth.js'
 import { createCloud1, createFlatCloud } from './cloud1.js'
 import { R_C, LAND_LIFT, ORBIT } from './constants.js'
+import { createGondolaRide } from './gondola.js'
 import { createKummo } from '../my-3d-parts/parts/kummo.jsx'
 import { createGummo } from '../my-3d-parts/parts/gummo.jsx'
 import { createSabchan } from '../my-3d-parts/parts/sabchan.jsx'
@@ -380,9 +381,11 @@ function getGroundHeight(dir) {
   raycaster.set(_groundOrigin, _groundRayDir.copy(dir).negate())
   _groundHits.length = 0
   raycaster.intersectObjects(terrainMeshes, false, _groundHits)
-  if (_groundHits.length === 0) return R_C + 1
+  if (_groundHits.length === 0) { _groundHitObj = null; return R_C + 1 }
+  _groundHitObj = _groundHits[0].object
   return _groundHits[0].point.length() + 1
 }
+let _groundHitObj = null   // getGroundHeight がいちばん最後に当たったメッシュ（gondola に乗っているかを見る用）
 
 // 段差（橋のステップなど）で地面の高さが急に変わったときは、その差を少しずつ埋めて滑らかに乗り上げる。
 // 移動距離に対して STEP_SLOPE 倍より大きく高さが跳ねたら段差とみなし、跳ねた分を groundOffset に入れて STEP_TAU 秒で 0 へ戻す。
@@ -397,6 +400,7 @@ function getSmoothGroundHeight(dir, dt) {
   // 前のフレームから動いていなければ（1mm 未満）測り直さず、前の高さを使う
   const still = groundRawPrev !== null && _groundPrevDir.angleTo(dir) * groundRawPrev < 0.001
   const rawH = still ? groundRawPrev : getGroundHeight(dir)
+  if (!still) onGondola = gondolaWalk.has(_groundHitObj)
   if (groundRawPrev !== null) {
     const jump  = rawH - groundRawPrev
     const moved = _groundPrevDir.angleTo(dir) * rawH
@@ -408,6 +412,18 @@ function getSmoothGroundHeight(dir, dt) {
   _groundPrevDir.copy(dir)
   return rawH + groundOffset
 }
+
+// --- gondola: A・B の停留所のあいだの細い楕円を行き来する（gondola.js）。上を歩ける ---
+// 地面の高さを軌道に沿って測ってから、自分を地形のレイキャスト対象に加える（先に加えると自分の上を測ってしまう）
+const gondola = createGondolaRide({ scene, radius: R_C + LAND_LIFT, getGround: dir => getGroundHeight(dir) - 1, waterLevel: R_OCEAN + TIDE_SHIFT })
+for (const m of gondola.walkable) {
+  m.geometry.boundsTree = new MeshBVH(m.geometry)
+  m.raycast = acceleratedRaycast
+  m.receiveShadow = true
+}
+terrainMeshes.push(...gondola.walkable)
+const gondolaWalk = new Set(gondola.walkable)
+let onGondola = false   // sabちゃんの足元が gondola か（getSmoothGroundHeight で測ったとき）
 
 // --- 建物の当たり判定 ---------------------------------------
 // 建物ローカルの XZ 矩形（footprint）＋余白の内側に sabちゃんの中心が入ったら、
@@ -1192,6 +1208,9 @@ function animate() {
 
   lightHeads.update(dt, now)
 
+  // gondola を動かす。前のフレームからの回転（惑星中心まわり）で、乗っている sabちゃんを一緒に運ぶ（通常モードのところで当てる）
+  const gondolaDelta = gondola.update()
+
   // ハンドル入力（入力し始めはゆっくり）
   joyYawHeld   = Math.abs(vJoy.rx) > 0.05 ? joyYawHeld   + dt : 0
   joyPitchHeld = Math.abs(vJoy.ry) > 0.05 ? joyPitchHeld + dt : 0
@@ -1247,6 +1266,7 @@ function animate() {
     }
   } else {
     // --- 通常モード: sabちゃん追従3人称 ---
+    if (onGondola) { pDir.applyQuaternion(gondolaDelta).normalize(); pFwd.applyQuaternion(gondolaDelta).normalize() }
     const da = (SPEED * moveSpeed.k / R_C) * dt
 
     const backInv = outdoorView.fp ? handleInvert.outFp : handleInvert.back
