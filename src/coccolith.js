@@ -332,6 +332,7 @@ export function createCoccolith({ renderer = null } = {}) {
 
   // --- ランドマーク #02〜#04: forest1 ×3 -----------------------
   // 大きく置くと端の木の下で地面が下がって根もとが浮くので、幹（細柱）を下へ 1m 伸ばす
+  // 3 つとも夜の側で、惑星の反対側の太陽が下から当たって梢の裏が明るくなるので、太陽の光は受けない（userData.noSun → main.js）
   const FOREST1_SCALE = 6.4
   const forest1Opts = { trunkExtend: 1 / FOREST1_SCALE }
 
@@ -339,6 +340,7 @@ export function createCoccolith({ renderer = null } = {}) {
   const forest1Wrapper = new THREE.Group()
   forest1Wrapper.add(createForest1(forest1Opts))
   forest1Wrapper.scale.setScalar(FOREST1_SCALE)
+  forest1Wrapper.userData.noSun = true
   placeOnSurface(group, forest1Wrapper, 45.0, -20.0, R_C + LAND_LIFT)
 
   // --- ランドマーク #03: forest1 (lat=54.6, lon=-36.6) --------
@@ -347,6 +349,7 @@ export function createCoccolith({ renderer = null } = {}) {
   forest1b.rotation.y = Math.PI
   forest1Wrapper2.add(forest1b)
   forest1Wrapper2.scale.setScalar(FOREST1_SCALE)
+  forest1Wrapper2.userData.noSun = true
   placeOnSurface(group, forest1Wrapper2, 54.6, -36.6, R_C + LAND_LIFT - 0.5)
 
   // --- ランドマーク #04: forest1 (lat=62.5, lon=5.0) ----------
@@ -355,6 +358,7 @@ export function createCoccolith({ renderer = null } = {}) {
   forest1c.rotation.y = Math.PI / 2
   forest1Wrapper3.add(forest1c)
   forest1Wrapper3.scale.setScalar(FOREST1_SCALE)
+  forest1Wrapper3.userData.noSun = true
   placeOnSurface(group, forest1Wrapper3, 62.5, 5.0, R_C + LAND_LIFT)
 
   // --- ランドマーク #05: Frame_6-4 (lat=8.6, lon=7.0) ----------

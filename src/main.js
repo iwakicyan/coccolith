@@ -24,7 +24,7 @@ import { updateLedBoards } from './ledBoard.js'
 import { createCoinIntro } from './coinIntro.js'
 import { createCoinDrop } from './coinDrop.js'
 import { whenNightEnvReady } from './nightEnv.js'
-import { toLambert } from './lambert.js'
+import { toLambert, ignoreSun } from './lambert.js'
 import { createLightHeads } from './lightHeads.js'
 import { createPixelSpriteWalkers, createPixelSpriteFlyers } from './pixelSprite.js'
 import { createBluedogWalkers } from './bluedog.js'
@@ -1383,6 +1383,7 @@ const _sabShine = new Set()
 sabchan.group.traverse(o => { if (o.material?.isMeshPhongMaterial) _sabShine.add(o.material) })
 const _toLambert = toLambert(scene, m => m.metalness >= 0.5 || _sabShine.has(m))
 for (const lamp of lamps) lamp.glow = _toLambert.get(lamp.glow) ?? lamp.glow   // ライトの頭の発光は updateLampLight で点け消しする
+scene.traverse(o => { if (o.userData.noSun) ignoreSun(o) })   // 夜の側の森は太陽の光を受けない（lambert.js）
 
 // 最初の描画で 30 近いシェーダーを 1 本ずつ同期でコンパイルすると、初回訪問のスマホでは数秒固まる
 // 先にまとめて非同期でコンパイルさせ（KHR_parallel_shader_compile があれば GPU 側で並列に進む）、そろってから描き始める
