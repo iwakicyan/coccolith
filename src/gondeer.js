@@ -6,7 +6,7 @@ import { dirOf } from './coccolith.js'
 //  gondeer（my-3d-parts/parts/gondeer.js）を、緯度 GONDEER_LAT の円の上でぐるぐる東へ周遊させる
 //    速さは GONDEER_SPEED (m/s)。main.js から sabちゃんの移動速度の 0.5 倍を渡す
 //    時刻は端末の時計（Date.now()）から決めるので、いつ開いても・だれが見ても同じ場所にいる
-//    体（体と十二面体）の高さの GONDEER_BURY（60%）を地面（海の上なら海面）に埋める。地面の高さは起動時に円に沿って測っておく
+//    体（体と十二面体）の高さの GONDEER_BURY（70%）を地面（海の上なら海面）に埋める。地面の高さは起動時に円に沿って測っておく
 //    上は歩ける（userData.walkable を地形と同じレイキャスト対象にする。main.js）。乗っているものは update が返す回転で一緒に運ぶ
 //    ティアラは通り抜けられない（userData.walls の線分を上下へ伸びた壁にして、collide で外へ押し戻す。橋の手すりと同じ考え方）
 // ============================================================
@@ -14,7 +14,7 @@ import { dirOf } from './coccolith.js'
 export const GONDEER_LAT = 58
 const GONDEER_SCALE = 9                 // モデル単位 → m（gondola と同じ）
 const SAMPLES = 1200                    // 地面の高さを測っておく点の数（円 1 周ぶん。約 1m おき）
-const GONDEER_BURY = 0.6               // 体の高さのうち地面に埋める割合（0.5 で半分、1 で全部）
+const GONDEER_BURY = 0.7               // 体の高さのうち地面に埋める割合（0.5 で半分、1 で全部）
 const SMOOTH = 6                        // 測った高さを前後この点数ずつでならす（細かいでこぼこで上下にがたつかないように）
 
 // getGround(dir): 惑星中心から地面までの距離。waterLevel: 海面の高さ（惑星中心から）。speed: 進む速さ (m/s)
@@ -39,7 +39,7 @@ export function createGondeerRide({ scene, radius, getGround, waterLevel, speed 
     fwd.addScaledVector(up, -fwd.dot(up)).normalize()
   }
 
-  // 円に沿って、真ん中と体の内側の四隅・前後の下の地面を測り、いちばん高いところに体の下から 60% の高さをそろえた原点の高さを入れておく
+  // 円に沿って、真ん中と体の内側の四隅・前後の下の地面を測り、いちばん高いところに体の下から GONDEER_BURY の高さをそろえた原点の高さを入れておく
   const raw = new Float32Array(SAMPLES)
   const _p = new THREE.Vector3(), _u = new THREE.Vector3(), _f = new THREE.Vector3()
   const groundAt = (up, fwd, x, z) => {
