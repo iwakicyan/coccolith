@@ -215,13 +215,19 @@
       pointer-events: none; opacity: 0; transition: opacity 0.2s;
     }
     #ov-frame.show { opacity: 1; }
-    #ov-frame::before, #ov-frame::after {
-      content: ''; position: absolute; top: 0; bottom: 0; width: 14px;
-      border: 2px solid rgba(255,255,255,0.7);
-      filter: drop-shadow(0 0 2px rgba(0,0,0,0.5));
+    /* 四隅のカギカッコ（白・不透明度 30%）。横棒と縦棒を背景の線で描く */
+    #ov-frame {
+      --c: rgba(255,255,255,0.3); --l: 22px; --w: 2px;
+      background:
+        linear-gradient(var(--c), var(--c)) left  top    / var(--l) var(--w) no-repeat,
+        linear-gradient(var(--c), var(--c)) left  top    / var(--w) var(--l) no-repeat,
+        linear-gradient(var(--c), var(--c)) right top    / var(--l) var(--w) no-repeat,
+        linear-gradient(var(--c), var(--c)) right top    / var(--w) var(--l) no-repeat,
+        linear-gradient(var(--c), var(--c)) left  bottom / var(--l) var(--w) no-repeat,
+        linear-gradient(var(--c), var(--c)) left  bottom / var(--w) var(--l) no-repeat,
+        linear-gradient(var(--c), var(--c)) right bottom / var(--l) var(--w) no-repeat,
+        linear-gradient(var(--c), var(--c)) right bottom / var(--w) var(--l) no-repeat;
     }
-    #ov-frame::before { left: 0;  border-right: none; }
-    #ov-frame::after  { right: 0; border-left: none; }
     body.shot #ov-frame { display: none; }
     #tab-btn:active { transform: translateX(-50%) scale(0.9); }
     /* 花の切り抜きページ（イーゼルのキャンバスをタップで開く。flowerCut.js） */
