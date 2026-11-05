@@ -869,7 +869,7 @@ export function createCoccolith({ renderer = null } = {}) {
       { lat: -33.446, lon:  54.000 },
       { lat: -27.223, lon:  54.000 },
       { lat: -21.000, lon:  54.000 },
-      // lat=51, lon=24 → lat=52, lon=87 に 7 本・約41m 間隔（大円で全長 243m を 6 等分して両端にも置く）
+      // lat=51, lon=24 → lat=52, lon=87 に 7 本・約41m 間隔（大円で全長 243m を 6 等分して両端にも置く）。終点の先にも同じ大円の上へ 1 本足す
       { lat:  51.000, lon:  24.000 },
       { lat:  53.498, lon:  33.510 },
       { lat:  55.157, lon:  43.995 },
@@ -877,6 +877,7 @@ export function createCoccolith({ renderer = null } = {}) {
       { lat:  55.528, lon:  66.340 },
       { lat:  54.208, lon:  77.109 },
       { lat:  52.000, lon:  87.000 },
+      { lat:  49.049, lon:  95.817 },
     ]
     const LIGHT01_SCALE = 1.5
     const LIGHT01_SINK = 0.1   // 斜面でも足元が浮かないよう地面にめり込ませる量 (m)
