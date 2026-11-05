@@ -17,6 +17,7 @@ import { createDote } from '../my-3d-parts/landmark/dote.js'
 import { createLight01, createLight01Pole } from '../my-3d-parts/landmark/light01.js'
 import { createHoisun, createHoason } from '../my-3d-parts/landmark/hoisun.js'
 import { createGojunoto } from '../my-3d-parts/landmark/gojunoto.js'
+import { createCakestand } from '../my-3d-parts/landmark/cakestand.js'
 import { mergeStatic } from '../my-3d-parts/parts/mergeStatic.js'
 import { addDoorGlow, addGroundGlow, addArchDoorGlow } from './doorGlow.js'
 import { openPixelScene } from './pixelScene.js'
@@ -475,6 +476,27 @@ export function createCoccolith({ renderer = null } = {}) {
     halfD: gojunoto.userData.footprint.halfD * gojunotoWrapper.scale.x + 1,
   }
 
+  // --- ランドマーク: ケーキスタンド cakestand (lat=-62.0, lon=-131.0) ------------
+  // 高さ 60m になる倍率（元は約 5.4m）。台座を地面に 0.5m めり込ませる。どの向きも同じ形なので、向きは北へそろえるだけ
+  // 当たり判定は台座だけ（皿は頭上なので下をくぐれる）。影は受けない。昼の側（x > 0）なので影は落とす（landmarkShadow）
+  // 草地（2dgrass2）の中に建つので、台座の下敷きになる草は生やさない
+  const CAKESTAND_AT = { lat: -62.0, lon: -131.0 }
+  const cakestandWrapper = new THREE.Group()
+  const cakestand = createCakestand()
+  cakestandWrapper.add(cakestand)
+  cakestandWrapper.scale.setScalar(60 / cakestand.userData.height)
+  const CAKESTAND_SINK = 0.5   // 地面にめり込ませる量 (m)
+  placeOnSurface(group, cakestandWrapper, CAKESTAND_AT.lat, CAKESTAND_AT.lon, R_C + LAND_LIFT - CAKESTAND_SINK)
+  cakestand.rotation.y = northAngle(cakestandWrapper)
+  landmarkShadow(cakestand, cakestandWrapper)
+  colliders.push(cakestand)
+  mergeStatic(cakestand)
+  const cakestandHole = {
+    ...CAKESTAND_AT,
+    halfW: cakestand.userData.footprint.halfW * cakestandWrapper.scale.x + 1,
+    halfD: cakestand.userData.footprint.halfD * cakestandWrapper.scale.x + 1,
+  }
+
   // --- 草地フィールド ---
   const GRASS_AREAS = [
     [{lat:11.2,lon:-43.2},{lat:11.0,lon:-46.8},{lat:6.9,lon:-46.8},{lat:6.9,lon:-43.2}],
@@ -490,7 +512,7 @@ export function createCoccolith({ renderer = null } = {}) {
     [{lat:-21.7,lon:23.4},{lat:-37.7,lon:15},{lat:-20.5,lon:10.6}],
     [{lat:-44,lon:-134},{lat:-67,lon:-114},{lat:-67,lon:-151.6}],
   ]
-  for (const poly of FIELD01_AREAS) group.add(createGrassField(poly, noise3D, GRASS_KIND_2))
+  for (const poly of FIELD01_AREAS) group.add(createGrassField(poly, noise3D, GRASS_KIND_2, [cakestandHole]))
 
   // --- ランドマーク: ChairTree (lat=65, lon=-180) ---------------
   const chairTreeWrapper = new THREE.Group()
