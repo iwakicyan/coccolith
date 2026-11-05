@@ -477,14 +477,14 @@ export function createCoccolith({ renderer = null } = {}) {
   }
 
   // --- ランドマーク: ケーキスタンド cakestand (lat=-62.0, lon=-131.0) ------------
-  // 高さ 60m になる倍率（元は約 5.4m）。台座を地面に 0.5m めり込ませる。どの向きも同じ形なので、向きは北へそろえるだけ
+  // 高さ 50m になる倍率（元は約 5.4m）。台座を地面に 0.5m めり込ませる。どの向きも同じ形なので、向きは北へそろえるだけ
   // 当たり判定は台座だけ（皿は頭上なので下をくぐれる）。影は受けない。昼の側（x > 0）なので影は落とす（landmarkShadow）
   // 草地（2dgrass2）の中に建つので、台座の下敷きになる草は生やさない
   const CAKESTAND_AT = { lat: -62.0, lon: -131.0 }
   const cakestandWrapper = new THREE.Group()
   const cakestand = createCakestand()
   cakestandWrapper.add(cakestand)
-  cakestandWrapper.scale.setScalar(60 / cakestand.userData.height)
+  cakestandWrapper.scale.setScalar(50 / cakestand.userData.height)
   const CAKESTAND_SINK = 0.5   // 地面にめり込ませる量 (m)
   placeOnSurface(group, cakestandWrapper, CAKESTAND_AT.lat, CAKESTAND_AT.lon, R_C + LAND_LIFT - CAKESTAND_SINK)
   cakestand.rotation.y = northAngle(cakestandWrapper)
