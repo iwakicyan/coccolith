@@ -8,6 +8,7 @@ import { dirOf } from './coccolith.js'
 //    時刻は端末の時計（Date.now()）から決めるので、いつ開いても・だれが見ても同じ場所にいる
 //    体（体と十二面体）の高さの半分を地面（海の上なら海面）に埋める。地面の高さは起動時に円に沿って測っておく
 //    上は歩ける（userData.walkable を地形と同じレイキャスト対象にする。main.js）。乗っているものは update が返す回転で一緒に運ぶ
+//    ティアラは通り抜けられない（userData.walls の線分を上下へ伸びた壁にして、collide で外へ押し戻す。橋の手すりと同じ考え方）
 // ============================================================
 
 export const GONDEER_LAT = 58
@@ -83,7 +84,33 @@ export function createGondeerRide({ scene, radius, getGround, waterLevel, speed 
   }
   update()
 
+  // ティアラの壁：dir（sabちゃんのいる向き。単位ベクトル）が壁の線分から pad (m) より近ければ、線分から pad 離れたところへ押し戻す（dir を書き換える）
+  //   判定は gondeer の原点の座標の XZ（モデル単位）で行う。線分の両端は丸く（カプセル）して、角で引っかからないようにする
+  const walls = root.userData.walls
+  const _inv = new THREE.Matrix4(), _q = new THREE.Vector3()
+  function collide(dir, pad) {
+    if (dir.angleTo(_up.copy(root.position).normalize()) * radius > reach) return false
+    _inv.copy(root.matrixWorld).invert()
+    _q.copy(dir).multiplyScalar(radius).applyMatrix4(_inv)
+    const pr = pad / GONDEER_SCALE
+    let hit = false
+    for (const [x1, z1, x2, z2] of walls) {
+      const ex = x2 - x1, ez = z2 - z1
+      const t = Math.max(0, Math.min(1, ((_q.x - x1) * ex + (_q.z - z1) * ez) / (ex * ex + ez * ez)))
+      const cx = x1 + ex * t, cz = z1 + ez * t
+      let dx = _q.x - cx, dz = _q.z - cz
+      const d = Math.hypot(dx, dz)
+      if (d >= pr) continue
+      if (d < 1e-6) { dx = -ez; dz = ex }   // 線の真上なら横へ
+      const k = pr / Math.hypot(dx, dz)
+      _q.x = cx + dx * k; _q.z = cz + dz * k
+      hit = true
+    }
+    if (hit) dir.copy(_q.applyMatrix4(root.matrixWorld)).normalize()
+    return hit
+  }
+
   // reach: 中心からこの距離 (m) より離れていれば gondeer の上ではない（体のいちばん遠い端＋余裕）
   const reach = Math.hypot(hx, Math.max(hz, -tz)) + 3
-  return { root, walkable: root.userData.walkable, update, delta, reach }
+  return { root, walkable: root.userData.walkable, update, delta, reach, collide }
 }

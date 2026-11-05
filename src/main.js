@@ -1302,6 +1302,7 @@ function animate() {
     if (Math.abs(lrIn) > 0.01) { pDir.applyAxisAngle(pFwd,   da * Math.max(-1, Math.min(1, lrIn))); pDir.normalize() }
 
     resolveColliders()
+    for (const ride of rides) ride.collide?.(pDir, COLLIDER_MARGIN + SAB_BODY_R)   // gondeer のティアラ（橋の手すりと同じ余白）
 
     pFwd.addScaledVector(pDir, -pFwd.dot(pDir))
     pFwd.normalize()
