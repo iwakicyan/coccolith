@@ -713,7 +713,7 @@ export function createCoccolith({ renderer = null } = {}) {
   colliders.push(...hoisun.userData.colliders)
 
   // --- ランドマーク: 五重塔 gojunoto (lat=10.0, lon=-45.0) ------------
-  // 高さ 60m になる倍率（元は約 13m）。地面に 2m めり込ませる。どの面も同じ形なので、面を北（緯度+方向）へそろえるだけ
+  // 高さ 60m（原点から先端まで）になる倍率（元は約 12m。基壇は原点より下へも沈めてある）。地面に 2m めり込ませる。どの面も同じ形なので、面を北（緯度+方向）へそろえるだけ
   // 影は受けない。夜の側（x < 0）なので影も落とさない（landmarkShadow）
   const gojunotoWrapper = new THREE.Group()
   const gojunoto = createGojunoto()
