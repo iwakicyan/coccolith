@@ -6,15 +6,15 @@ import { dirOf } from './coccolith.js'
 //  gondola（my-3d-parts/parts/gondola.js）を、2 つの停留所のあいだの細い楕円の上で行き来させる
 //    A（GONDOLA_A）で 15 分停泊 → 楕円の片側を 2 分で B へ → B で 15 分停泊 → もう片側を 2 分で A へ（1 周 34 分）
 //    時刻は端末の時計（Date.now()）から決めるので、いつ開いても・だれが見ても同じ場所にいる
-//    高さはずっと地面すれすれ（底が地面（海の上なら海面）から GONDOLA_CLEAR だけ浮く）。地面の高さは起動時に軌道に沿って測っておく
+//    体の下半分を地面に埋め、天面（いちばん高いところ）を地表（海の上なら海面）と同じ高さにする。地面の高さは起動時に軌道に沿って測っておく
 //    上は歩ける（userData.walkable を地形と同じレイキャスト対象にする。main.js）。乗っている sabちゃんは update が返す回転で一緒に運ぶ
 // ============================================================
 
 export const GONDOLA_A = { lat: -83, lon: -133 }
-export const GONDOLA_B = { lat: -73, lon: 133 }
+export const GONDOLA_B = { lat: -73, lon: -133 }
 const GONDOLA_SCALE = 3                 // モデル単位 → m（幅 9m・長さ 12m・高さ 4.8m）
-const GONDOLA_HALF_W = 8                // 楕円の短いほうの半径 (m)。行きと帰りの道が 16m 離れる
-const GONDOLA_CLEAR = 0.3               // 底と地面のすき間 (m)
+const GONDOLA_HALF_W = 8                // 楕円の短いほうの半径 (m)。行きと帰りの道が 16m 離れる（長いほうは A〜B の約 64m）
+const GONDOLA_SINK = 0                  // 天面を地表からさらに沈める量 (m)。0 で天面と地表が同じ高さ
 const STOP_MS = 15 * 60 * 1000          // 停泊
 const MOVE_MS = 2 * 60 * 1000           // 片道
 const PERIOD_MS = 2 * (STOP_MS + MOVE_MS)
@@ -49,7 +49,7 @@ export function createGondolaRide({ scene, radius, getGround, waterLevel }) {
 
   const root = createGondola()
   root.scale.setScalar(GONDOLA_SCALE)
-  const bottom = -GONDOLA_BOUNDS.min[1] * GONDOLA_SCALE                        // 原点から底まで (m)
+  const top = GONDOLA_BOUNDS.max[1] * GONDOLA_SCALE                           // 原点から天面まで (m)
   const hx = GONDOLA_BOUNDS.max[0] * GONDOLA_SCALE, hz = GONDOLA_BOUNDS.max[2] * GONDOLA_SCALE, tz = GONDOLA_BOUNDS.min[2] * GONDOLA_SCALE
   scene.add(root)
 
@@ -63,7 +63,7 @@ export function createGondolaRide({ scene, radius, getGround, waterLevel }) {
     fwd.addScaledVector(up, -fwd.dot(up)).normalize()
   }
 
-  // 軌道に沿って、真ん中と四隅・前後の下の地面を測り、いちばん高いところに合わせた原点の高さを入れておく
+  // 軌道に沿って、真ん中と四隅・前後の下の地面を測り、いちばん高いところに天面をそろえた原点の高さを入れておく（天面が地面より下に潜らない）
   const heights = new Float32Array(SAMPLES + 1)
   const _p = new THREE.Vector3()
   const groundAt = (up, fwd, x, z) => {
@@ -75,7 +75,7 @@ export function createGondolaRide({ scene, radius, getGround, waterLevel }) {
     frameAt((i / SAMPLES) * Math.PI * 2, _d1, _f)
     let g = groundAt(_d1, _f, 0, 0)
     for (const [x, z] of [[hx * 0.7, hz * 0.7], [-hx * 0.7, hz * 0.7], [hx * 0.7, tz * 0.7], [-hx * 0.7, tz * 0.7], [0, hz], [0, tz]]) g = Math.max(g, groundAt(_d1, _f, x, z))
-    heights[i] = g + bottom + GONDOLA_CLEAR
+    heights[i] = g - top - GONDOLA_SINK
   }
   const heightAt = (theta) => {
     const u = (((theta / (Math.PI * 2)) % 1 + 1) % 1) * SAMPLES, i = Math.floor(u)
