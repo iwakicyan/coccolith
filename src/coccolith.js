@@ -29,10 +29,6 @@ import { createForest1 } from '../my-3d-parts/parts/forest1.jsx'
 import { createFrame64 } from '../my-3d-parts/parts/Frame_6-4.jsx'
 import { createFrameM, createFrameL } from '../my-3d-parts/parts/Frame.jsx'
 import { createMateris1 } from '../my-3d-parts/parts/Materis1.jsx'
-import { createMateris2 } from '../my-3d-parts/parts/Materis2.jsx'
-import { createMateris3 } from '../my-3d-parts/parts/Materis3.jsx'
-import { createMateris4 } from '../my-3d-parts/parts/Materis4.jsx'
-import { createMateris5 } from '../my-3d-parts/parts/Materis5.jsx'
 import { createGrassTuftGeometry, createGrassMaterial } from '../my-3d-parts/parts/2dgrass.js'
 import { createGrass2TuftGeometry, createGrass2Material } from '../my-3d-parts/parts/2dgrass2.js'
 import { createEB_v87 } from '../my-3d-parts/parts/EB_v87.jsx'
@@ -438,18 +434,12 @@ export function createCoccolith({ renderer = null } = {}) {
   tofu.rotation.y = northAngle(tofuWrapper)
   colliders.push(tofu)
 
-  // --- ランドマーク: Materis 1〜5 × 各2 ---------------------
-  // 球面上の一様なランダムな場所に置く（海の中も含む）。場所はシード文字列ごとに決まるので、いつ開いても同じ
+  // --- ランドマーク: Materis1（1 つ。シード materis-1b） ---------------------
+  // 球面上の一様なランダムな場所に置く（海の中も含む）。場所はシード文字列で決まるので、いつ開いても同じ
   // gondeer の通る道（Route1・Route2・緯度 58° の円。main.js）から MATERIS_CLEAR (m) 以内に出たら、同じ乱数で引き直す（ぶつからないように）
   // 置く高さは地形と同じ式で、陸なら陸地の高さ、海なら海底の高さ（どちらも山の分を足す）＋ 5m
 
-  const materisDefs = [
-    { n: 1, seeds: ['materis-1a', 'materis-1b'] },
-    { n: 2, seeds: ['materis-2a', 'materis-2b'] },
-    { n: 3, seeds: ['materis-3a', 'materis-3b'] },
-    { n: 4, seeds: ['materis-4a', 'materis-4b'] },
-    { n: 5, seeds: ['materis-5a', 'materis-5b'] },
-  ]
+  const MATERIS_SEEDS = ['materis-1b']
   const MATERIS_CLEAR = 40
   const gondeerWayPts = []   // gondeer の道を細かく分けた点（単位ベクトル）
   for (const name of ['Route1', 'Route2']) {
@@ -458,23 +448,20 @@ export function createCoccolith({ renderer = null } = {}) {
   }
   for (let k = 0; k < 720; k++) gondeerWayPts.push(dirOf(58, k / 2 - 180))
   const nearGondeerWay = d => gondeerWayPts.some(p => p.angleTo(d) * (R_C + LAND_LIFT) < MATERIS_CLEAR)
-  const _materisCreators = [null, createMateris1, createMateris2, createMateris3, createMateris4, createMateris5]
-  for (const { n, seeds } of materisDefs) {
-    for (const seed of seeds) {
-      const rng = Alea(seed)
-      let lat, lon, d
-      do {
-        lat = Math.asin(2 * rng() - 1) * 180 / Math.PI
-        lon = rng() * 360 - 180
-        d = dirOf(lat, lon)
-      } while (nearGondeerWay(d))
-      const w = new THREE.Group()
-      w.add(_materisCreators[n]())
-      const hill = hillLiftAt(d.x, d.y, d.z)
-      const isPole = Math.abs(lat) > 90 - 50 / R_C * 180 / Math.PI
-      const isLand = (landNoise(noise3D, d.x, d.y, d.z) >= LAND_THRESHOLD && Math.abs(d.y * R_C) >= 6) || isPole || hill > 0
-      placeOnSurface(group, w, lat, lon, R_C + (isLand ? LAND_LIFT : -SEA_FLOOR_DROP) + hill + 5.0)
-    }
+  for (const seed of MATERIS_SEEDS) {
+    const rng = Alea(seed)
+    let lat, lon, d
+    do {
+      lat = Math.asin(2 * rng() - 1) * 180 / Math.PI
+      lon = rng() * 360 - 180
+      d = dirOf(lat, lon)
+    } while (nearGondeerWay(d))
+    const w = new THREE.Group()
+    w.add(createMateris1())
+    const hill = hillLiftAt(d.x, d.y, d.z)
+    const isPole = Math.abs(lat) > 90 - 50 / R_C * 180 / Math.PI
+    const isLand = (landNoise(noise3D, d.x, d.y, d.z) >= LAND_THRESHOLD && Math.abs(d.y * R_C) >= 6) || isPole || hill > 0
+    placeOnSurface(group, w, lat, lon, R_C + (isLand ? LAND_LIFT : -SEA_FLOOR_DROP) + hill + 5.0)
   }
 
   // --- ランドマーク: 五重塔 gojunoto (lat=10.0, lon=-45.0) ------------
