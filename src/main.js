@@ -1197,21 +1197,23 @@ const sneakers = createSneakerWalkers({
 
 // 杖（my-3d-parts/parts/tsue.js）: TSUE_LINES の線ごとに、始点から TSUE_GAP (m) ごとに植える
 //   線は 2 点を結ぶ大円。along: 'lat' の線は大円でなく、緯度の円に沿って経度を進める（両端の緯度は同じにする）
+//   flip: true の線は杖を上の軸まわりに 180° 回して、葉を逆の側へ向ける
 // 高さ TSUE_H (m)。地面に TSUE_SINK だけ埋め、正面（+z）を線の進む向きへそろえる。動かないので 1 本 1 メッシュ
 // 太陽の当たる側（x > 0）にあれば影を落とす。影は受けない（ランドマークと同じ）
 {
   const TSUE_LINES = [
     { from: { lat: 50, lon: -166 }, to: { lat: 30, lon: -139 } },
     { from: { lat: 61, lon:  162 }, to: { lat: 61, lon:  100 }, along: 'lat' },
-    { from: { lat: -32, lon: -136 }, to: { lat: -51, lon: -147 } },
+    { from: { lat: -32, lon: -136 }, to: { lat: -51, lon: -147 }, flip: true },
   ]
   const TSUE_GAP = 40, TSUE_H = 9, TSUE_SINK = 0.3
   const RL = R_C + LAND_LIFT   // 間隔は陸の高さで測る
   const _m = new THREE.Matrix4(), _side = new THREE.Vector3()
-  const plant = (dir, fwd, name) => {
+  const plant = (dir, fwd, name, flip) => {
     const tsue = createTsue({ height: TSUE_H })
     tsue.name = name
     fwd.addScaledVector(dir, -fwd.dot(dir)).normalize()   // 線の進む向き（地面に接する）
+    if (flip) fwd.negate()
     _side.crossVectors(dir, fwd).normalize()             // +x
     tsue.quaternion.setFromRotationMatrix(_m.makeBasis(_side, dir, fwd))
     tsue.position.copy(dir).multiplyScalar(getGroundHeight(dir) - 1 - TSUE_SINK)
@@ -1219,14 +1221,14 @@ const sneakers = createSneakerWalkers({
     scene.add(tsue)
   }
   let n = 0
-  for (const { from, to, along } of TSUE_LINES) {
+  for (const { from, to, along, flip } of TSUE_LINES) {
     if (along === 'lat') {
       const dLon = to.lon - from.lon, sign = Math.sign(dLon)
       const step = TSUE_GAP / (RL * Math.cos(from.lat * Math.PI / 180)) * 180 / Math.PI   // 40m ぶんの経度（度）
       for (let i = 0; i * step <= Math.abs(dLon); i++) {
         const lon = from.lon + sign * i * step
         const dir = dirOf(from.lat, lon)
-        plant(dir, dirOf(from.lat, lon + sign * 0.01).sub(dir), `杖 ${++n}`)
+        plant(dir, dirOf(from.lat, lon + sign * 0.01).sub(dir), `杖 ${++n}`, flip)
       }
     } else {
       const a = dirOf(from.lat, from.lon), b = dirOf(to.lat, to.lon)
@@ -1234,7 +1236,7 @@ const sneakers = createSneakerWalkers({
       const total = a.angleTo(b)
       for (let i = 0; i * TSUE_GAP / RL <= total; i++) {
         const dir = a.clone().applyAxisAngle(axis, i * TSUE_GAP / RL)
-        plant(dir, new THREE.Vector3().crossVectors(axis, dir), `杖 ${++n}`)
+        plant(dir, new THREE.Vector3().crossVectors(axis, dir), `杖 ${++n}`, flip)
       }
     }
   }
