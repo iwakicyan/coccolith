@@ -30,6 +30,7 @@ import { toLambert, ignoreSun } from './lambert.js'
 import { createLightHeads } from './lightHeads.js'
 import { createPixelSpriteWalkers, createPixelSpriteFlyers } from './pixelSprite.js'
 import { createBluedogWalkers } from './bluedog.js'
+import { createSneakerWalkers } from './sneaker.js'
 
 // ============================================================
 //  LMF — Layout Master File
@@ -1183,6 +1184,13 @@ const bluedogs = createBluedogWalkers({
   waterLevel: R_OCEAN + TIDE_SHIFT, spawn: { dir: pDir, fwd: pFwd },
 })
 
+// スニーカーの小鳥（my-3d-parts/parts/sneaker.js の 3D モデル。sneaker.js）: 高さ 1m、開くたびに陸のランダムな地点に 6 組（一足ずつ）出して、右足・左足の順に交互に飛ばす
+const sneakers = createSneakerWalkers({
+  scene, count: 6, height: 1, radius: R_C,
+  getGround: dir => getGroundHeight(dir) - 1,
+  waterLevel: R_OCEAN + TIDE_SHIFT,
+})
+
 // 空を飛ぶドット絵スプライト（pixelSprite.js）: pixelArt/flyers/ の絵を全部読み込み、雲より上を count 機ずつ飛ばす
 // 絵を足すときは scripts/import-sprite.mjs で書き出す（名前に 真下・下方・水平・上から があれば flyers/ に入る）
 const FLYER_H = R_C + LAND_LIFT + 80   // 飛ぶ高さ（惑星中心から m。陸から 80m、雲生き物より 70m 上）
@@ -1415,6 +1423,7 @@ function animate() {
     for (const k in migrations) migrations[k].tick(dt)
     for (const w of spriteWalkers) w.update(dt, camera)
     bluedogs.update(dt)
+    sneakers.update(dt)
     for (const f of spriteFlyers) f.update(dt, camera)
     horizonCull.update(camera)
   }
