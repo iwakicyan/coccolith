@@ -34,8 +34,9 @@ const tangent = (v, dir) => v.addScaledVector(dir, -v.dot(dir)).normalize()
 
 // count: 足の組の数 / height: 高さ (m) / radius: 星の半径 (m)
 // getGround(dir): その向きの地面の高さ（星の中心から m）/ waterLevel: これより低い地面は海
+// colorsOf(i): i 組目の色の差し替え（SNEAKER_COLORS のキー。例 { upper: 0x3e5f9a }）。null ならそのまま
 // spawn: { dir, fwd } スポーン地点 / near: true ならスポーン地点の正面 NEAR_DIST の所に出す（確かめる用）
-export function createSneakerWalkers({ scene, count = 1, height = 1, radius, getGround, waterLevel, spawn, near = false }) {
+export function createSneakerWalkers({ scene, count = 1, height = 1, radius, getGround, waterLevel, colorsOf = null, spawn, near = false }) {
   const isWater = g => g < waterLevel
   const k = height / SNEAKER_HEIGHT                 // モデル単位 → m
   const GAP = SNEAKER_HOP.GAP * k, LEAD = SNEAKER_HOP.LEAD * k, HOP_H = SNEAKER_HOP.HEIGHT * k
@@ -50,7 +51,7 @@ export function createSneakerWalkers({ scene, count = 1, height = 1, radius, get
     const heading = tangent(new THREE.Vector3().randomDirection(), dir)
     // 右足（-x 側。sign -1）は真ん中から右へ、左足（+x 側）は左へ GAP、さらに左足を LEAD だけ前に（右足から飛ぶ）
     const feet = [['dark', -1], ['white', 1]].map(([bird, sign]) => {
-      const model = createSneaker({ bird, height })
+      const model = createSneaker({ bird, height, colors: colorsOf ? colorsOf(i) : null })
       const holder = new THREE.Group(); holder.name = bird === 'dark' ? 'スニーカー（右）' : 'スニーカー（左）'
       holder.add(model); scene.add(holder)
       _side.crossVectors(dir, heading).normalize()

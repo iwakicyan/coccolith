@@ -1185,8 +1185,11 @@ const bluedogs = createBluedogWalkers({
 })
 
 // スニーカーの小鳥（my-3d-parts/parts/sneaker.js の 3D モデル。sneaker.js）: 高さ 1m、開くたびに陸のランダムな地点に 6 組（一足ずつ）出して、右足・左足の順に交互に飛ばす
+// そのうち 3 組は靴の赤い部分（はき口と甲）をブルーにする
+const SNEAKER_BLUE = 0x3e5f9a
 const sneakers = createSneakerWalkers({
   scene, count: 6, height: 1, radius: R_C,
+  colorsOf: i => i < 3 ? { upper: SNEAKER_BLUE } : null,
   getGround: dir => getGroundHeight(dir) - 1,
   waterLevel: R_OCEAN + TIDE_SHIFT,
 })
