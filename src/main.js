@@ -31,6 +31,7 @@ import { createLightHeads } from './lightHeads.js'
 import { createPixelSpriteWalkers, createPixelSpriteFlyers } from './pixelSprite.js'
 import { createBluedogWalkers } from './bluedog.js'
 import { createSneakerWalkers } from './sneaker.js'
+import { createTsue } from '../my-3d-parts/parts/tsue.js'
 
 // ============================================================
 //  LMF — Layout Master File
@@ -1193,6 +1194,30 @@ const sneakers = createSneakerWalkers({
   getGround: dir => getGroundHeight(dir) - 1,
   waterLevel: R_OCEAN + TIDE_SHIFT,
 })
+
+// 杖（my-3d-parts/parts/tsue.js）: (50°N, 166°W) から (30°N, 139°W) への大円の上に、始点から TSUE_GAP (m) ごとに植える
+// 高さ TSUE_H (m)。地面に TSUE_SINK だけ埋め、正面（+z）を線の進む向きへそろえる。動かないので 1 本 1 メッシュ
+// 太陽の当たる側（x > 0）にあるので影を落とす。影は受けない（ランドマークと同じ）
+{
+  const TSUE_FROM = { lat: 50, lon: -166 }, TSUE_TO = { lat: 30, lon: -139 }
+  const TSUE_GAP = 40, TSUE_H = 6, TSUE_SINK = 0.3
+  const a = dirOf(TSUE_FROM.lat, TSUE_FROM.lon), b = dirOf(TSUE_TO.lat, TSUE_TO.lon)
+  const axis = new THREE.Vector3().crossVectors(a, b).normalize()
+  const total = a.angleTo(b)
+  const _m = new THREE.Matrix4(), _fwd = new THREE.Vector3(), _side = new THREE.Vector3()
+  for (let i = 0; i * TSUE_GAP / (R_C + LAND_LIFT) <= total; i++) {   // 間隔は陸の高さで測る
+    const dir = a.clone().applyAxisAngle(axis, i * TSUE_GAP / (R_C + LAND_LIFT))
+    const r = getGroundHeight(dir) - 1 - TSUE_SINK
+    const tsue = createTsue({ height: TSUE_H })
+    tsue.name = `杖 ${i + 1}`
+    _fwd.crossVectors(axis, dir).normalize()          // 線の進む向き（地面に接する）
+    _side.crossVectors(dir, _fwd).normalize()         // +x
+    tsue.quaternion.setFromRotationMatrix(_m.makeBasis(_side, dir, _fwd))
+    tsue.position.copy(dir).multiplyScalar(r)
+    tsue.traverse(o => { if (o.isMesh) { o.castShadow = tsue.position.x > 0; o.receiveShadow = false } })
+    scene.add(tsue)
+  }
+}
 
 // 空を飛ぶドット絵スプライト（pixelSprite.js）: pixelArt/flyers/ の絵を全部読み込み、雲より上を count 機ずつ飛ばす
 // 絵を足すときは scripts/import-sprite.mjs で書き出す（名前に 真下・下方・水平・上から があれば flyers/ に入る）
