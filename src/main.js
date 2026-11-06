@@ -118,7 +118,8 @@ vethOrbitGroup.add(veth)
 // --- sabちゃん --------------------------------------------------
 // 1 unit = 0.1m スケール系のモデルを coccolith (1 unit = 1m) に合わせる
 // 足先 local y = -5.72 → SAB_SCALE 倍してグループ原点から下げ、地表に接地
-const SAB_SCALE       = 0.168  // 身長 ≈ 8.35unit（頭頂 2.63 〜 足先 -5.72）× 0.168 ≈ 1.4m
+const SAB_SCALE       = 0.144  // 身長 ≈ 8.35unit（頭頂 2.63 〜 足先 -5.72）× 0.144 ≈ 1.2m
+const SAB_HOVER       = 0.8    // 屋外で足先を地面から浮かせる高さ (m)。さらに ±0.2m ゆっくり上下する
 const SAB_FOOT_OFFSET = 5.72 * SAB_SCALE   // 足先→グループ原点（頭部中心）距離
 
 const sabchan = createSabchan(scene)
@@ -1396,9 +1397,10 @@ function animate() {
     }
 
     const groundH = getSmoothGroundHeight(pDir, dt)
-    const sabPos  = _sabPos.copy(pDir).multiplyScalar(groundH + SAB_FOOT_OFFSET)
+    // groundH は地面 +1m（getGroundHeight）なので、1m 引いて SAB_HOVER だけ浮かせる
+    const sabPos  = _sabPos.copy(pDir).multiplyScalar(groundH - 1 + SAB_HOVER + SAB_FOOT_OFFSET)
     const floatOffset = Math.sin(now * 0.00035) * 0.2
-    sabchan.group.position.copy(pDir).multiplyScalar(groundH + SAB_FOOT_OFFSET + floatOffset)
+    sabchan.group.position.copy(sabPos).addScaledVector(pDir, floatOffset)
     updateLampLight(sabPos)
 
     animateSabParts(now)
