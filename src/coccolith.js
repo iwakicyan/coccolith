@@ -439,25 +439,41 @@ export function createCoccolith({ renderer = null } = {}) {
   colliders.push(tofu)
 
   // --- ランドマーク: Materis 1〜5 × 各2 ---------------------
-  // Route1/2 ウェイポイント（陸地確定）をアンカーに、シード文字列で ±1° ジッター
+  // 球面上の一様なランダムな場所に置く（海の中も含む）。場所はシード文字列ごとに決まるので、いつ開いても同じ
+  // gondeer の通る道（Route1・Route2・緯度 58° の円。main.js）から MATERIS_CLEAR (m) 以内に出たら、同じ乱数で引き直す（ぶつからないように）
+  // 置く高さは地形と同じ式で、陸なら陸地の高さ、海なら海底の高さ（どちらも山の分を足す）＋ 5m
 
   const materisDefs = [
-    { n: 1, seeds: ['materis-1a', 'materis-1b'], anchors: [{ lat:  4.0, lon:  18.0 }, { lat: 33.5, lon:  -1.0 }] },
-    { n: 2, seeds: ['materis-2a', 'materis-2b'], anchors: [{ lat: 46.0, lon:  25.0 }, { lat: 49.4, lon:  51.4 }] },
-    { n: 3, seeds: ['materis-3a', 'materis-3b'], anchors: [{ lat: 23.5, lon:  57.0 }, { lat: 40.0, lon: 107.7 }] },
-    { n: 4, seeds: ['materis-4a', 'materis-4b'], anchors: [{ lat: 20.3, lon: 117.0 }, { lat: 27.0, lon:-143.0 }] },
-    { n: 5, seeds: ['materis-5a', 'materis-5b'], anchors: [{ lat:-13.4, lon:-137.4 }, { lat:-10.5, lon:-171.0 }] },
+    { n: 1, seeds: ['materis-1a', 'materis-1b'] },
+    { n: 2, seeds: ['materis-2a', 'materis-2b'] },
+    { n: 3, seeds: ['materis-3a', 'materis-3b'] },
+    { n: 4, seeds: ['materis-4a', 'materis-4b'] },
+    { n: 5, seeds: ['materis-5a', 'materis-5b'] },
   ]
+  const MATERIS_CLEAR = 40
+  const gondeerWayPts = []   // gondeer の道を細かく分けた点（単位ベクトル）
+  for (const name of ['Route1', 'Route2']) {
+    const ws = ROUTES.find(r => r.name === name).waypoints.map(p => dirOf(p.lat, p.lon))
+    for (let i = 0; i < ws.length - 1; i++) for (let k = 0; k <= 200; k++) gondeerWayPts.push(ws[i].clone().lerp(ws[i + 1], k / 200).normalize())
+  }
+  for (let k = 0; k < 720; k++) gondeerWayPts.push(dirOf(58, k / 2 - 180))
+  const nearGondeerWay = d => gondeerWayPts.some(p => p.angleTo(d) * (R_C + LAND_LIFT) < MATERIS_CLEAR)
   const _materisCreators = [null, createMateris1, createMateris2, createMateris3, createMateris4, createMateris5]
-  for (const { n, seeds, anchors } of materisDefs) {
-    for (let i = 0; i < 2; i++) {
-      const rng = Alea(seeds[i])
-      const lat = anchors[i].lat + (rng() - 0.5) * 2
-      const lon = anchors[i].lon + (rng() - 0.5) * 2
+  for (const { n, seeds } of materisDefs) {
+    for (const seed of seeds) {
+      const rng = Alea(seed)
+      let lat, lon, d
+      do {
+        lat = Math.asin(2 * rng() - 1) * 180 / Math.PI
+        lon = rng() * 360 - 180
+        d = dirOf(lat, lon)
+      } while (nearGondeerWay(d))
       const w = new THREE.Group()
       w.add(_materisCreators[n]())
-      const d = dirOf(lat, lon)
-      placeOnSurface(group, w, lat, lon, R_C + LAND_LIFT + hillLiftAt(d.x, d.y, d.z) + 5.0)
+      const hill = hillLiftAt(d.x, d.y, d.z)
+      const isPole = Math.abs(lat) > 90 - 50 / R_C * 180 / Math.PI
+      const isLand = (landNoise(noise3D, d.x, d.y, d.z) >= LAND_THRESHOLD && Math.abs(d.y * R_C) >= 6) || isPole || hill > 0
+      placeOnSurface(group, w, lat, lon, R_C + (isLand ? LAND_LIFT : -SEA_FLOOR_DROP) + hill + 5.0)
     }
   }
 
