@@ -1205,6 +1205,7 @@ const sneakers = createSneakerWalkers({
     { from: { lat: 50, lon: -166 }, to: { lat: 30, lon: -139 } },
     { from: { lat: 61, lon:  162 }, to: { lat: 61, lon:  100 }, along: 'lat' },
     { from: { lat: -32, lon: -136 }, to: { lat: -51, lon: -147 }, flip: true },
+    { from: { lat: -7.6, lon: 174 }, to: { lat: -7.6, lon: 141 }, along: 'lat' },
   ]
   const TSUE_GAP = 40, TSUE_H = 9, TSUE_SINK = 0.3
   const RL = R_C + LAND_LIFT   // 間隔は陸の高さで測る
