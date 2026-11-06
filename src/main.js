@@ -1200,7 +1200,7 @@ const sneakers = createSneakerWalkers({
 // 太陽の当たる側（x > 0）にあるので影を落とす。影は受けない（ランドマークと同じ）
 {
   const TSUE_FROM = { lat: 50, lon: -166 }, TSUE_TO = { lat: 30, lon: -139 }
-  const TSUE_GAP = 40, TSUE_H = 6, TSUE_SINK = 0.3
+  const TSUE_GAP = 40, TSUE_H = 9, TSUE_SINK = 0.3
   const a = dirOf(TSUE_FROM.lat, TSUE_FROM.lon), b = dirOf(TSUE_TO.lat, TSUE_TO.lon)
   const axis = new THREE.Vector3().crossVectors(a, b).normalize()
   const total = a.angleTo(b)
