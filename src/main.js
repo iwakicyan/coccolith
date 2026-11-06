@@ -11,13 +11,13 @@ import { initVisitCounter } from './visitCounter.js'
 import { isFlowerCutOpen } from './flowerCut.js'
 import { isPixelSceneOpen, openPixelScene } from './pixelScene.js'
 import { TREEHOUSE_PIXEL_LAYERS, TREEHOUSE_PIXEL_TEXT } from './pixelArt/treehouse.js'
-import { createCoccolith, R_OCEAN, GOJUNOTO_AT, CAKESTAND_AT, ROUTES, dirOf } from './coccolith.js'
+import { createCoccolith, R_OCEAN, GOJUNOTO_AT, CAKESTAND_AT, dirOf } from './coccolith.js'
 import { createMigration } from './migration.js'
 import { createVeth } from './veth.js'
 import { createCloud1, createFlatCloud } from './cloud1.js'
 import { R_C, LAND_LIFT, ORBIT } from './constants.js'
 import { createGondolaRide } from './gondola.js'
-import { createGondeerRide, gondeerLatPath } from './gondeer.js'
+import { createGondeerRide, gondeerLatPath, gondeerRandomPath } from './gondeer.js'
 import { createKummo } from '../my-3d-parts/parts/kummo.jsx'
 import { createGummo } from '../my-3d-parts/parts/gummo.jsx'
 import { createSabchan } from '../my-3d-parts/parts/sabchan.jsx'
@@ -418,17 +418,19 @@ function getSmoothGroundHeight(dir, dt) {
 // どちらも地面の高さを軌道に沿って測ってから、自分を地形のレイキャスト対象に加える（先に加えると自分の上を測ってしまう）
 //   gondola: A・B の停留所のあいだの細い楕円を行き来する（gondola.js）
 //   gondeer: GONDEER_SPEED (m/s) で道に沿って動く（gondeer.js）。体の高さの 70% を地面に埋める
-//     1 体目は緯度 58° の円を東へ周遊、2・3 体目は dots の敷かれた Route1・Route2 を往復する（端で 2 分かけて 180° 振り返る）
+//     1 体目は緯度 58° の円を東へ周遊、2・3 体目はシードから決めたランダムな場所（海の上も含む）でまっすぐな道を往復する（端で 2 分かけて 180° 振り返る）
+//     （以前は Route1・Route2 を往復していたが、道沿いに置いた Materis にぶつかるのでやめた）
 const SPEED     = 20      // sabちゃんの移動速度 (m/s)
 const rideGround = dir => getGroundHeight(dir) - 1
 const gondola = createGondolaRide({ scene, radius: R_C + LAND_LIFT, getGround: rideGround, waterLevel: R_OCEAN + TIDE_SHIFT })
 const GONDEER_SPEED = 8   // gondeer の速さ (m/s)。sabちゃんの速さ（SPEED）とは別
 const gondeerOpts = { scene, radius: R_C + LAND_LIFT, getGround: rideGround, waterLevel: R_OCEAN + TIDE_SHIFT, speed: GONDEER_SPEED }
-const routeOf = name => ROUTES.find(r => r.name === name).waypoints
+const GONDEER_WANDER = 240   // ランダムに置いた gondeer が往復する道の長さ (m)
+const wanderPath = seed => gondeerRandomPath(seed, GONDEER_WANDER, R_C + LAND_LIFT)
 const gondeers = [
   createGondeerRide({ ...gondeerOpts, path: gondeerLatPath(58), loop: true }),
-  createGondeerRide({ ...gondeerOpts, path: routeOf('Route1') }),
-  createGondeerRide({ ...gondeerOpts, path: routeOf('Route2') }),
+  createGondeerRide({ ...gondeerOpts, path: wanderPath('gondeer-1') }),
+  createGondeerRide({ ...gondeerOpts, path: wanderPath('gondeer-2') }),
 ]
 const rides = [gondola, ...gondeers]
 const rideOfMesh = new Map()   // 上を歩けるメッシュ → その台

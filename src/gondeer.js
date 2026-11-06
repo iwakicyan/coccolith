@@ -1,11 +1,12 @@
 import * as THREE from 'three'
+import Alea from 'alea'
 import { createGondeer } from '../my-3d-parts/parts/gondeer.js'
 import { dirOf } from './coccolith.js'
 
 // ============================================================
 //  gondeer（my-3d-parts/parts/gondeer.js）を、道（地点を大円で結んだ線）に沿って動かす
 //    loop: true  … 閉じた道をぐるぐる周遊する（緯度 58° の円。gondeerLatPath）
-//    loop: false … 道の端から端へ往復する。端に着くと TURN_MS（2 分）かけてその場で 180° 振り返り、来た道を戻る（Route1・Route2）
+//    loop: false … 道の端から端へ往復する。端に着くと TURN_MS（2 分）かけてその場で 180° 振り返り、来た道を戻る（gondeerRandomPath）
 //    速さは speed (m/s)。main.js から sabちゃんの移動速度の 0.5 倍を渡す
 //    時刻は端末の時計（Date.now()）から決めるので、いつ開いても・だれが見ても同じ場所にいる
 //    体（体と十二面体）の高さの GONDEER_BURY（70%）を地面（海の上なら海面）に埋める。地面の高さは起動時に道に沿って測っておく
@@ -25,6 +26,21 @@ const smooth = t => t * t * (3 - 2 * t)   // 回り始めと回り終わりは�
 // 緯度 lat の円（閉じた道。経度が増える向き = 東へ進む）
 export function gondeerLatPath(lat) {
   return Array.from({ length: 720 }, (_, i) => ({ lat, lon: i / 2 - 180 }))
+}
+
+// シード seed から決めた、まっすぐ（大円）な長さ length (m) の道。始点は球面上の一様なランダム（海の上も含む）、向きもランダム
+//   同じ seed ならいつ開いても同じ道になる
+export function gondeerRandomPath(seed, length, radius) {
+  const rng = Alea(seed)
+  const lat = THREE.MathUtils.radToDeg(Math.asin(2 * rng() - 1)), lon = rng() * 360 - 180
+  const start = dirOf(lat, lon)
+  const a = new THREE.Vector3(rng() * 2 - 1, rng() * 2 - 1, rng() * 2 - 1)
+  const ax = a.addScaledVector(start, -a.dot(start)).normalize().cross(start).normalize()   // start に直交する、ランダムな向きの回転軸
+  const ang = length / radius, K = 16
+  return Array.from({ length: K + 1 }, (_, k) => {
+    const d = start.clone().applyAxisAngle(ax, ang * k / K)
+    return { lat: 90 - THREE.MathUtils.radToDeg(Math.acos(THREE.MathUtils.clamp(d.y, -1, 1))), lon: THREE.MathUtils.euclideanModulo(THREE.MathUtils.radToDeg(Math.atan2(d.z, d.x)), 360) - 180 }
+  })
 }
 
 // path: { lat, lon } の並び（道の中心線。隣どうしを大円で結ぶ）・loop: 閉じた道を周遊するか（false なら往復）
