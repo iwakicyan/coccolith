@@ -1195,27 +1195,33 @@ const sneakers = createSneakerWalkers({
   waterLevel: R_OCEAN + TIDE_SHIFT,
 })
 
-// 杖（my-3d-parts/parts/tsue.js）: (50°N, 166°W) から (30°N, 139°W) への大円の上に、始点から TSUE_GAP (m) ごとに植える
+// 杖（my-3d-parts/parts/tsue.js）: TSUE_LINES の線（2 点を結ぶ大円）ごとに、始点から TSUE_GAP (m) ごとに植える
 // 高さ TSUE_H (m)。地面に TSUE_SINK だけ埋め、正面（+z）を線の進む向きへそろえる。動かないので 1 本 1 メッシュ
-// 太陽の当たる側（x > 0）にあるので影を落とす。影は受けない（ランドマークと同じ）
+// 太陽の当たる側（x > 0）にあれば影を落とす。影は受けない（ランドマークと同じ）
 {
-  const TSUE_FROM = { lat: 50, lon: -166 }, TSUE_TO = { lat: 30, lon: -139 }
+  const TSUE_LINES = [
+    [{ lat: 50, lon: -166 }, { lat: 30, lon: -139 }],
+    [{ lat: 61, lon:  162 }, { lat: 61, lon:  100 }],   // 大円なので、真ん中は北へふくらむ（約 64.6°N）
+  ]
   const TSUE_GAP = 40, TSUE_H = 9, TSUE_SINK = 0.3
-  const a = dirOf(TSUE_FROM.lat, TSUE_FROM.lon), b = dirOf(TSUE_TO.lat, TSUE_TO.lon)
-  const axis = new THREE.Vector3().crossVectors(a, b).normalize()
-  const total = a.angleTo(b)
   const _m = new THREE.Matrix4(), _fwd = new THREE.Vector3(), _side = new THREE.Vector3()
-  for (let i = 0; i * TSUE_GAP / (R_C + LAND_LIFT) <= total; i++) {   // 間隔は陸の高さで測る
-    const dir = a.clone().applyAxisAngle(axis, i * TSUE_GAP / (R_C + LAND_LIFT))
-    const r = getGroundHeight(dir) - 1 - TSUE_SINK
-    const tsue = createTsue({ height: TSUE_H })
-    tsue.name = `杖 ${i + 1}`
-    _fwd.crossVectors(axis, dir).normalize()          // 線の進む向き（地面に接する）
-    _side.crossVectors(dir, _fwd).normalize()         // +x
-    tsue.quaternion.setFromRotationMatrix(_m.makeBasis(_side, dir, _fwd))
-    tsue.position.copy(dir).multiplyScalar(r)
-    tsue.traverse(o => { if (o.isMesh) { o.castShadow = tsue.position.x > 0; o.receiveShadow = false } })
-    scene.add(tsue)
+  let n = 0
+  for (const [from, to] of TSUE_LINES) {
+    const a = dirOf(from.lat, from.lon), b = dirOf(to.lat, to.lon)
+    const axis = new THREE.Vector3().crossVectors(a, b).normalize()
+    const total = a.angleTo(b)
+    for (let i = 0; i * TSUE_GAP / (R_C + LAND_LIFT) <= total; i++) {   // 間隔は陸の高さで測る
+      const dir = a.clone().applyAxisAngle(axis, i * TSUE_GAP / (R_C + LAND_LIFT))
+      const r = getGroundHeight(dir) - 1 - TSUE_SINK
+      const tsue = createTsue({ height: TSUE_H })
+      tsue.name = `杖 ${++n}`
+      _fwd.crossVectors(axis, dir).normalize()          // 線の進む向き（地面に接する）
+      _side.crossVectors(dir, _fwd).normalize()         // +x
+      tsue.quaternion.setFromRotationMatrix(_m.makeBasis(_side, dir, _fwd))
+      tsue.position.copy(dir).multiplyScalar(r)
+      tsue.traverse(o => { if (o.isMesh) { o.castShadow = tsue.position.x > 0; o.receiveShadow = false } })
+      scene.add(tsue)
+    }
   }
 }
 
