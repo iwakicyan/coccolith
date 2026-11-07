@@ -6,6 +6,8 @@
 // ============================================================
 
 // 置き場所を変えるときは、ここの 2 つのパスを書き換える
+import { t } from './i18n.js'
+
 const files = import.meta.glob('/documents/**/*.{png,PNG,jpg,JPG,jpeg,JPEG,webp,gif}', { eager: true, query: '?url', import: 'default' })
 const DOC_DIR = '/documents/'
 const MISC = 'misc'
@@ -31,9 +33,9 @@ export function openDocViewer() {
   el.innerHTML = `
     <div class="dv-tabs"></div>
     <div class="dv-stage">
-      <button class="dv-prev" aria-label="前へ">‹</button>
+      <button class="dv-prev" aria-label="${t('docPrev')}">‹</button>
       <img class="dv-img" alt="">
-      <button class="dv-next" aria-label="次へ">›</button>
+      <button class="dv-next" aria-label="${t('docNext')}">›</button>
     </div>
     <div class="dv-title"></div>
     <button class="dv-close">CLOSE</button>`

@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import { t, onLangChange } from './i18n.js'   // index.html の文言を先に今の言語へ
 import { MeshBVH, acceleratedRaycast } from 'three-mesh-bvh'
 import { createHorizonCull, HIDDEN_LAYER } from './horizonCull.js'
 import { shotMode, startInOverview, applyStartPose, startWithLight, shotFrameRendered } from './shot.js'   // 画像の読み込み待ちのため先に読む
@@ -581,9 +582,14 @@ function updateTabBtn() {
   const toSubjective = interior ? !firstPerson : overviewMode
   tabBtn.classList.toggle('overview', toSubjective)
   tabBtn.classList.toggle('insab', !!interior && firstPerson)
-  tabBtn.setAttribute('aria-label', interior
-    ? (firstPerson ? '後ろからの視点' : '主観視点')
-    : (overviewMode ? '主観に戻る' : '俯瞰'))
+  updateTabBtnLabel()
+}
+// 俯瞰ボタンの読み上げ名（言語が変わったときにも呼ぶ）
+function updateTabBtnLabel() {
+  const tabBtn = document.getElementById('tab-btn')
+  tabBtn?.setAttribute('aria-label', t(interior
+    ? (firstPerson ? 'tabInBack' : 'tabInFp')
+    : (overviewMode ? 'tabBackToFp' : 'tabOverview')))
 }
 
 // 主観モード中は sabちゃんの体を隠す（ライトの光源は頭に付いたまま照らし続ける）
@@ -847,6 +853,7 @@ initJoysticks()
 // --- HUD ----------------------------------------------------
 initFullscreenButton(document.getElementById('fs-btn'))
 initSettings(document.getElementById('settings-btn'), document.getElementById('settings'), { onOutdoorView: updateTabBtn })
+onLangChange(updateTabBtnLabel)
 updateTabBtn()   // 前回の設定が屋外の主観なら、始めから sabちゃんを隠す
 // 訪問者数（開発サーバー・撮影モードでは数えない）
 initVisitCounter(document.getElementById('visit-count'), document.getElementById('visit-num'), { countable: !import.meta.env.DEV && !shotMode })

@@ -72,7 +72,7 @@
       cursor: pointer; touch-action: manipulation;
       -webkit-tap-highlight-color: transparent;
     }
-    #settings button.set-speed { flex: 1; font: 12px monospace; }   /* 倍率は矢印ほど大きくしなくてよい */
+    #settings button.set-speed { flex: 1; font: 12px monospace; white-space: nowrap; }   /* 倍率は矢印ほど大きくしなくてよい。English の長い字も折り返さずパネルを広げる */
     #settings button.on { background: rgba(186,205,216,0.85); border-color: rgba(186,205,216,1); color: #00000a; }
     .hud-icon {
       width: 22px; height: 22px; margin: -6px 0 -6px -4px;
@@ -340,22 +340,22 @@
 <body>
   <div id="loading"><div class="ld-stage"><div class="ld-frames"></div><div class="ld-telop"></div></div></div>
   <canvas id="c"></canvas>
-  <div id="hud"><button id="fs-btn" hidden></button><img class="hud-icon" src="/ui/obeye.png" alt="">coccolith | <img class="hud-icon" src="/ui/veth_icon.png" alt="">veth<span id="visit-count" hidden> &nbsp;|&nbsp; visitors today: <span id="visit-num"></span></span><br><span id="area-code"></span><span id="latlon"></span><span id="coin-box"><img src="/ui/coin_icon.png" alt="coin"><span id="coin-num">0</span></span><br><button id="settings-btn" aria-label="設定" aria-expanded="false"></button></div>
+  <div id="hud"><button id="fs-btn" hidden></button><img class="hud-icon" src="/ui/obeye.png" alt="">coccolith | <img class="hud-icon" src="/ui/veth_icon.png" alt="">veth<span id="visit-count" hidden> &nbsp;|&nbsp; visitors today: <span id="visit-num"></span></span><br><span id="area-code"></span><span id="latlon"></span><span id="coin-box"><img src="/ui/coin_icon.png" alt="coin"><span id="coin-num">0</span></span><br><button id="settings-btn" aria-label="設定" data-i18n-aria="settings" aria-expanded="false"></button></div>
   <div id="settings"></div>
   <div id="ov-frame"></div>
   <canvas id="compass" width="88" height="88"></canvas>
   <div id="jump"><button id="jump-btn" aria-expanded="false">JUMP</button><div id="jump-list"></div></div>
   <canvas id="veth-ind" width="28" height="28"></canvas>
 <footer id="copyright">© 2026 岩木しあん — <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a></footer>
-<div id="ctrl">W/S/A/D 移動 &nbsp;|&nbsp; Q/E 旋回 &nbsp;|&nbsp; ↑↓ 見上げ/見下ろし &nbsp;|&nbsp; Tab 俯瞰切替（室内: 主観） &nbsp;|&nbsp; L ライト &nbsp;|&nbsp; Enter 決定</div>
-<button id="drive-btn" aria-label="直進"></button>
+<div id="ctrl" data-i18n="ctrl">W/S/A/D 移動 &nbsp;|&nbsp; Q/E 旋回 &nbsp;|&nbsp; ↑↓ 見上げ/見下ろし &nbsp;|&nbsp; Tab 俯瞰切替（室内: 主観） &nbsp;|&nbsp; L ライト &nbsp;|&nbsp; Enter 決定</div>
+<button id="drive-btn" aria-label="直進" data-i18n-aria="drive"></button>
 <div id="joy-right" class="joy-wrap">
   <div class="joy-base"></div>
   <div class="joy-handle"></div>
 </div>
 <button id="tab-btn" aria-label="俯瞰"></button>
-<button id="pic-prev" class="pic-arrow" aria-label="前の作品" hidden>‹</button>
-<button id="pic-next" class="pic-arrow" aria-label="次の作品" hidden>›</button>
+<button id="pic-prev" class="pic-arrow" aria-label="前の作品" data-i18n-aria="picPrev" hidden>‹</button>
+<button id="pic-next" class="pic-arrow" aria-label="次の作品" data-i18n-aria="picNext" hidden>›</button>
 <div id="fade"></div>
   <script type="module" src="/src/main.js"></script>
 </body>

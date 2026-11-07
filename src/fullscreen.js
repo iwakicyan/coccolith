@@ -4,6 +4,8 @@
 //  アプリとして開いているときはボタンを出さない
 // ============================================================
 
+import { t, onLangChange } from './i18n.js'
+
 const ICON_ENTER = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 6V2h4M10 2h4v4M14 10v4h-4M6 14H2v-4"/></svg>'
 const ICON_EXIT  = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6 2v4H2M14 6h-4V2M10 14v-4h4M2 10h4v4"/></svg>'
 
@@ -18,7 +20,7 @@ export function initFullscreenButton(btn) {
   const update = () => {
     const on = !!current()
     btn.innerHTML = on ? ICON_EXIT : ICON_ENTER
-    btn.setAttribute('aria-label', on ? '全画面を終了' : '全画面')
+    btn.setAttribute('aria-label', t(on ? 'fullscreenExit' : 'fullscreen'))
   }
 
   btn.addEventListener('click', () => {
@@ -29,6 +31,6 @@ export function initFullscreenButton(btn) {
   })
   doc.addEventListener('fullscreenchange', update)
   doc.addEventListener('webkitfullscreenchange', update)
-  update()
+  onLangChange(update)   // 最初の 1 回もここで
   btn.hidden = false
 }
