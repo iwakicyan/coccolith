@@ -43,8 +43,6 @@ const TEXT = {
     invertX: view => `${view}の左右を反転`,
     moveSpeed: '移動速度',
     moveSpeedK: k => `移動速度 ${k} 倍`,
-    // 看板の帯の光る文字
-    kanbanLabel: 'UPDATE/更新',
   },
   en: {
     ctrl: 'W/S/A/D Move &nbsp;|&nbsp; Q/E Turn &nbsp;|&nbsp; ↑↓ Look up/down &nbsp;|&nbsp; Tab Overview (indoors: first-person) &nbsp;|&nbsp; L Light &nbsp;|&nbsp; Enter Select',
@@ -79,7 +77,6 @@ const TEXT = {
     invertX: view => `Invert horizontal for ${view}`,
     moveSpeed: 'Move speed',
     moveSpeedK: k => `Move speed ×${k}`,
-    kanbanLabel: 'UPDATE',
   },
 }
 

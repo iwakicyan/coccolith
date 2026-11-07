@@ -32,7 +32,6 @@ import { createMateris1 } from '../my-3d-parts/parts/Materis1.jsx'
 import { createGrassTuftGeometry, createGrassMaterial } from '../my-3d-parts/parts/2dgrass.js'
 import { createGrass2TuftGeometry, createGrass2Material } from '../my-3d-parts/parts/2dgrass2.js'
 import { createEB_v87 } from '../my-3d-parts/parts/EB_v87.jsx'
-import { t, onLangChange } from './i18n.js'
 
 // ============================================================
 //  coccolith — 惑星メッシュ
@@ -1505,9 +1504,9 @@ function createGrassField(poly, noise3D, kind, holes = []) {
 }
 
 
-// 看板の黒板の下（脚の切り欠きまでの帯）の真ん中に「UPDATE/更新」（English なら「UPDATE」）を光る文字で貼る
+// 看板の黒板の下（脚の切り欠きまでの帯）の真ん中に「UPDATE/更新」を光る文字で貼る
 // 帯は少し前へ傾いているので、看板の本体を正面から測って面の位置と傾きを合わせる（kanban のローカル座標）
-// 文字は i18n.js の kanbanLabel。言語が変わったら文字だけ描き直す
+const KANBAN_LABEL_TEXT   = 'UPDATE/更新'
 const KANBAN_LABEL_COLOR  = '#b9b4ff'   // 青紫
 const KANBAN_LABEL_GLOW   = '#7a6cff'
 const KANBAN_LABEL_FILL   = 0.62        // 文字の高さ / 帯の高さ
@@ -1531,24 +1530,13 @@ function addKanbanLabel(kanban, board) {
   const tilt = Math.atan2(z1 - z0, y1 - y0)   // 上ほど前に出ている
 
   // 文字をキャンバスに描く（にじませた影で光って見せる）
-  let mesh = null
-  onLangChange(() => {
-    if (mesh) {
-      kanban.remove(mesh)
-      mesh.geometry.dispose(); mesh.material.map.dispose(); mesh.material.dispose()
-    }
-    mesh = createKanbanLabelMesh(t('kanbanLabel'), kanban, h, yBottom, yTop, y0, y1, z0, z1, tilt)
-    kanban.add(mesh)
-  })
-}
-function createKanbanLabelMesh(text, kanban, h, yBottom, yTop, y0, y1, z0, z1, tilt) {
   const PX = 96   // 文字の大きさ (px)
   const font = `bold ${PX}px "Hiragino Sans", "Noto Sans JP", "Yu Gothic", sans-serif`
   const measure = document.createElement('canvas').getContext('2d')
   measure.font = font
   const pad = PX * 0.4
   const canvas = document.createElement('canvas')
-  canvas.width = Math.ceil(measure.measureText(text).width + pad * 2)
+  canvas.width = Math.ceil(measure.measureText(KANBAN_LABEL_TEXT).width + pad * 2)
   canvas.height = Math.ceil(PX * 1.3 + pad * 2)
   const ctx = canvas.getContext('2d')
   ctx.font = font
@@ -1558,10 +1546,10 @@ function createKanbanLabelMesh(text, kanban, h, yBottom, yTop, y0, y1, z0, z1, t
   ctx.shadowColor = KANBAN_LABEL_GLOW
   for (const blur of [PX * 0.35, PX * 0.15]) {   // 外側の広いにじみ → 内側の強いにじみ
     ctx.shadowBlur = blur
-    ctx.fillText(text, canvas.width / 2, canvas.height / 2)
+    ctx.fillText(KANBAN_LABEL_TEXT, canvas.width / 2, canvas.height / 2)
   }
   ctx.shadowBlur = 0
-  ctx.fillText(text, canvas.width / 2, canvas.height / 2)
+  ctx.fillText(KANBAN_LABEL_TEXT, canvas.width / 2, canvas.height / 2)
   const tex = new THREE.CanvasTexture(canvas)
   tex.colorSpace = THREE.SRGBColorSpace
   tex.anisotropy = 4
@@ -1577,5 +1565,5 @@ function createKanbanLabelMesh(text, kanban, h, yBottom, yTop, y0, y1, z0, z1, t
   mesh.position.set(0, yc, z0 + (z1 - z0) * (yc - y0) / (y1 - y0) + 0.002)
   mesh.rotation.x = tilt   // 板の上 (+Y) を前 (+Z) へ倒す
   mesh.renderOrder = 1
-  return mesh
+  kanban.add(mesh)
 }
