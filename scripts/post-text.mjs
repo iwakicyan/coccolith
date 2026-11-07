@@ -19,15 +19,13 @@ export async function loadMeta(args) {
   return JSON.parse(await readFile(metaPath, 'utf8'))
 }
 
-// head: 1 行目（エリアと座標）、link: 撮った地点・向き（全体の姿なら上空からの眺め）から始まるサイトへのリンク
+// head: 1 行目（エリアと座標）、link: サイトへのリンク（座標は付けず、ふつうに開いたときと同じく北極点から始まる）
 export function buildPost(meta) {
   const fmt = (v) => v.toFixed(1)
   const isVideo = meta.file.endsWith('.mp4')
   const head = `${meta.area} | lat: ${fmt(meta.lat)}°  lon: ${fmt(meta.lon)}°`
-  const params = new URLSearchParams({ lat: meta.lat, lon: meta.lon, heading: meta.heading })
-  if (!isVideo && meta.view === 'overview') params.set('view', 'overview')
   const link = {
-    url: `${SITE_URL}?${params}`,
+    url: SITE_URL,
     label: SITE_URL.replace(/^https:\/\//, '').replace(/\/$/, ''),
   }
   const alt = isVideo
