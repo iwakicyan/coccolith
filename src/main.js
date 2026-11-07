@@ -761,12 +761,14 @@ function setOvZoom(on) {
 }
 
 // --- 視点切り替えのカット ----------------------------------
-// 切り替えの前に 0.5 秒だけ、主観→俯瞰はカメラがシュッと真上へ上がり、俯瞰→主観は画面の真ん中へ 1.5 倍に寄る。最後の 0.2 秒で黒へ溶け、終わったところで切り替える
+// 切り替えの前に 0.5 秒だけ、主観→俯瞰はカメラがシュッと真上へ上がり、俯瞰→主観は画面の真ん中へ 1.5 倍に寄る。最後の 0.2 秒で黒へ溶け、終わったところで切り替えて 0.1 秒で黒から明るくする
 const VIEW_CUT_TIME = 0.5
 const VIEW_CUT_RISE = 60     // 上がる距離 (m)
 const VIEW_CUT_ZOOM = 1.5    // 寄る倍率（今の倍率に掛ける）
-const VIEW_CUT_FADE = 0.2    // 切り替わる直前に黒へ溶ける時間 (s)。切り替えた瞬間に黒は消える
+const VIEW_CUT_FADE = 0.2    // 切り替わる直前に黒へ溶ける時間 (s)
+const VIEW_CUT_FADE_OUT = 0.1   // 切り替えたあと黒から明るくなる時間 (s)
 let viewCut = null           // { toOverview, t, z0 }
+let viewFadeOutT = null      // 切り替えてからの時間 (s)。黒から明るくなっている間だけ数える
 const viewCutEase = () => { const k = Math.min(viewCut.t / VIEW_CUT_TIME, 1); return k * k }   // だんだん速く
 
 // 俯瞰 ⇄ 屋外の視点の切り替え（Tab。カットが終わったところで呼ぶ）
@@ -804,7 +806,7 @@ const keys = {}
 window.addEventListener('keydown', e => {
   if (isFlowerCutOpen() || isPixelSceneOpen()) return   // 花の切り抜き・ドット絵のページを開いている間はゲームの操作をしない
   if (e.code === 'Enter' && !e.repeat) {
-    if (viewCut) { e.preventDefault(); return }   // 視点切り替えのカット中は出入りしない
+    if (viewCut || viewFadeOutT !== null) { e.preventDefault(); return }   // 視点切り替えのカット中（明るくなりきるまで）は出入りしない
     // くぐれるドアがあれば出入り、なければ近くで光っているものを使う（キャンバス・ツリーハウスの扉は開く、コイン箱は 1 枚入れる）
     const g = activeDoorMesh() ? null : nearGlowSpot()
     if (g?.onTap) openGlowSpot(g)
@@ -822,6 +824,7 @@ window.addEventListener('keydown', e => {
     // すぐには切り替えず、0.5 秒のカット（主観→俯瞰はカメラがシュッと上へ、俯瞰→主観は真ん中へ寄る）を挟む
     if (!viewCut) {
       viewCut = { toOverview: !overviewMode, t: 0, z0: camera.zoom }
+      viewFadeOutT = null
       ovFrameEl.classList.remove('show')
       fadeEl.style.transition = 'none'   // 暗転（#fade）はカット中だけ毎フレーム直接濃くする
     }
@@ -1334,11 +1337,20 @@ function animate() {
       toggleOverview()
       camera.zoom = 1
       camera.updateProjectionMatrix()
-      fadeEl.style.opacity = 0   // 黒はすぐ消す（ドアの暗転用の transition は次のフレームで戻す）
-      requestAnimationFrame(() => { fadeEl.style.transition = '' })
+      fadeEl.style.opacity = 1   // 切り替えたフレームは真っ黒のまま。ここから VIEW_CUT_FADE_OUT 秒で明るくする
+      viewFadeOutT = 0
     } else {
       // 切り替える直前のフレーム（あと dt で終わる）でちょうど真っ黒になるように
       fadeEl.style.opacity = Math.min(1, Math.max(0, (viewCut.t - (VIEW_CUT_TIME - VIEW_CUT_FADE)) / Math.max(0.01, VIEW_CUT_FADE - dt)))
+    }
+  } else if (viewFadeOutT !== null) {
+    viewFadeOutT += dt
+    if (viewFadeOutT >= VIEW_CUT_FADE_OUT) {
+      viewFadeOutT = null
+      fadeEl.style.opacity = 0
+      requestAnimationFrame(() => { fadeEl.style.transition = '' })   // ドアの暗転用の transition は次のフレームで戻す
+    } else {
+      fadeEl.style.opacity = 1 - viewFadeOutT / VIEW_CUT_FADE_OUT
     }
   }
 
