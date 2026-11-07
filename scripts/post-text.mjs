@@ -19,17 +19,17 @@ export async function loadMeta(args) {
   return JSON.parse(await readFile(metaPath, 'utf8'))
 }
 
-// head: 1 行目（エリアと座標）、link: 動画のときだけ、撮り始めた地点・向きから始まるサイトへのリンク
+// head: 1 行目（エリアと座標）、link: 撮った地点・向き（全体の姿なら上空からの眺め）から始まるサイトへのリンク
 export function buildPost(meta) {
   const fmt = (v) => v.toFixed(1)
   const isVideo = meta.file.endsWith('.mp4')
   const head = `${meta.area} | lat: ${fmt(meta.lat)}°  lon: ${fmt(meta.lon)}°`
-  const link = isVideo
-    ? {
-        url: `${SITE_URL}?lat=${meta.lat}&lon=${meta.lon}&heading=${meta.heading}`,
-        label: SITE_URL.replace(/^https:\/\//, '').replace(/\/$/, ''),
-      }
-    : null
+  const params = new URLSearchParams({ lat: meta.lat, lon: meta.lon, heading: meta.heading })
+  if (!isVideo && meta.view === 'overview') params.set('view', 'overview')
+  const link = {
+    url: `${SITE_URL}?${params}`,
+    label: SITE_URL.replace(/^https:\/\//, '').replace(/\/$/, ''),
+  }
   const alt = isVideo
     ? `惑星 coccolith の lat ${fmt(meta.lat)}° lon ${fmt(meta.lon)}° から、方位 ${Math.round(meta.heading)}° へ ${meta.video.seconds * (meta.video.slow ?? 1)} 秒まっすぐ走った景色`
     : meta.view === 'overview'

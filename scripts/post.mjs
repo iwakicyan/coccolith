@@ -5,9 +5,8 @@
 //    npm run post -- shots/20261005-125526.json                      … 指定した 1 枚
 //    npm run post -- --dry-run                                       … 投稿せず中身だけ表示
 //
-//  本文は座標とハッシュタグ（サイトへのリンクはプロフィールに置く）
-//  JSON の file が .mp4（scripts/video.mjs で撮った動画）なら動画として投稿し、
-//  本文に撮った地点から始めるサイトへのリンクも入れる
+//  本文は座標と、撮った地点から始めるサイトへのリンクと、ハッシュタグ
+//  JSON の file が .mp4（scripts/video.mjs で撮った動画）なら動画として投稿する
 //  本文の材料と代替テキストは post-text.mjs（Mastodon への投稿 post-mastodon.mjs と同じもの）
 // ============================================================
 
@@ -33,11 +32,9 @@ function append(s, feature) {
   text += s
 }
 append(`${head}\n\n`)
-if (link) {
-  // 表示はサイトの URL だけ
-  append(link.label, { $type: 'app.bsky.richtext.facet#link', uri: link.url })
-  append('\n\n')
-}
+// 表示はサイトの URL だけ
+append(link.label, { $type: 'app.bsky.richtext.facet#link', uri: link.url })
+append('\n\n')
 hashtags.forEach((tag, i) => {
   if (i > 0) append(' ')
   append(`#${tag}`, { $type: 'app.bsky.richtext.facet#tag', tag })
