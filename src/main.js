@@ -761,10 +761,11 @@ function setOvZoom(on) {
 }
 
 // --- 視点切り替えのカット ----------------------------------
-// 切り替えの前に 0.5 秒だけ、主観→俯瞰はカメラがシュッと真上へ上がり、俯瞰→主観は画面の真ん中へ 1.5 倍に寄る。終わったところで切り替える
+// 切り替えの前に 0.5 秒だけ、主観→俯瞰はカメラがシュッと真上へ上がり、俯瞰→主観は画面の真ん中へ 1.5 倍に寄る。最後の 0.2 秒で黒へ溶け、終わったところで切り替える
 const VIEW_CUT_TIME = 0.5
 const VIEW_CUT_RISE = 60     // 上がる距離 (m)
 const VIEW_CUT_ZOOM = 1.5    // 寄る倍率（今の倍率に掛ける）
+const VIEW_CUT_FADE = 0.2    // 切り替わる直前に黒へ溶ける時間 (s)。切り替えた瞬間に黒は消える
 let viewCut = null           // { toOverview, t, z0 }
 const viewCutEase = () => { const k = Math.min(viewCut.t / VIEW_CUT_TIME, 1); return k * k }   // だんだん速く
 
@@ -822,6 +823,7 @@ window.addEventListener('keydown', e => {
     if (!viewCut) {
       viewCut = { toOverview: !overviewMode, t: 0, z0: camera.zoom }
       ovFrameEl.classList.remove('show')
+      fadeEl.style.transition = 'none'   // 暗転（#fade）はカット中だけ毎フレーム直接濃くする
     }
     e.preventDefault()
     return
@@ -1332,6 +1334,11 @@ function animate() {
       toggleOverview()
       camera.zoom = 1
       camera.updateProjectionMatrix()
+      fadeEl.style.opacity = 0   // 黒はすぐ消す（ドアの暗転用の transition は次のフレームで戻す）
+      requestAnimationFrame(() => { fadeEl.style.transition = '' })
+    } else {
+      // 切り替える直前のフレーム（あと dt で終わる）でちょうど真っ黒になるように
+      fadeEl.style.opacity = Math.min(1, Math.max(0, (viewCut.t - (VIEW_CUT_TIME - VIEW_CUT_FADE)) / Math.max(0.01, VIEW_CUT_FADE - dt)))
     }
   }
 
