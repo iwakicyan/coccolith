@@ -1201,10 +1201,10 @@ function createSakuField() {
     field.add(stairs)
     field.userData.stairsArea = [X0 - W / 2, -SW / 2, X0 + SD - W / 2, SW / 2]
 
-    // 台: 囲いの外（凹み側）、階段の正面の柵に付けて置く。コイン箱の北どなり。上から 2 段目の高さ・約1.65m 角（3.6倍時）、色と輪郭線は階段と同じ
-    const PS = 1.65 / 3.6, PH = (STEPS - 1) * h   // 一辺・高さ
-    const PX = X - RAIL_T / 2 - 0.01 - PS / 2 - W / 2   // 東の面を凹みの柵の横板にほぼ付ける
-    const pGeo = new THREE.BoxGeometry(PS, PH, PS)
+    // 台: 囲いの外（凹み側）、階段の正面の柵に付けて置く。コイン箱の北どなり。高さ 2m・横幅（南北）約2.5m・奥行き（東西）約1.65m（3.6倍時）、色と輪郭線は階段と同じ
+    const PW = 1.65 * 1.5 / 3.6, PD = 1.65 / 3.6, PH = 2 / 3.6   // 横幅（南北）・奥行き（東西）・高さ
+    const PX = X - RAIL_T / 2 - 0.01 - PD / 2 - W / 2   // 東の面を凹みの柵の横板にほぼ付ける
+    const pGeo = new THREE.BoxGeometry(PD, PH, PW)
     pGeo.translate(0, PH / 2, 0)
     const platform = new THREE.Mesh(pGeo, fenceMesh.material)
     platform.name = '階段の前の台'
@@ -1215,7 +1215,7 @@ function createSakuField() {
     field.add(platform)
     const pCol = new THREE.Object3D()   // 当たり判定（台の上には乗れない。ほかの建物と同じく押し戻す）
     pCol.position.set(PX, 0, 0)
-    pCol.userData.footprint = { halfW: PS / 2, halfD: PS / 2 }
+    pCol.userData.footprint = { halfW: PD / 2, halfD: PW / 2 }
     field.add(pCol)
   }
   return field
