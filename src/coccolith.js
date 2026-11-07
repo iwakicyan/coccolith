@@ -1229,17 +1229,20 @@ function createSakuField() {
 }
 
 // 階段の前の台に、花壇の花を 1 本（茎・葉・花ごと）置く・取る
-//   place(): 花壇で今描いている花から 1 本選び、台の上の真ん中に立てる（置いてあれば取り替える）
-//   take():  台の上の花を外して返す（なければ null）。返した花は呼んだ側が好きな所へ付ける
+//   place(): 花壇で今描いている花から 1 本選び、台の上の真ん中に横に寝かせて置く（置いてあれば取り替える）
+//   take():  台の上の花を外して、立てた向き・元の大きさ（茎の長さ 1）に戻して返す（なければ null）。返した花は呼んだ側が好きな所へ付ける
+//   size:    花の高さ (m)。台の上でも、sabちゃんが持つときもこの大きさ（花壇の 2.2m のままだと sabちゃん 1.2m には大きすぎる）
 //   onTake:  花の置いてある台を選んだとき（タップ・Enter）に呼ばれる。main.js が入れる
 // 花が置いてある間だけ、コイン箱と同じく台の接地ラインが光る（main.js の _glowSpots。enabled で切り替える）
 // platform: 台のメッシュ（原点 = 底の真ん中、地面から 0.05m 下）、col: 台の当たり判定（sakuField の子）、source(): [茎, 花]（InstancedMesh）
+const STAND_FLOWER_SIZE = 1.3
 function createFlowerStand(platform, col, source) {
   const s = platform.scale.x
   const top = platform.geometry.parameters.height   // ジオメトリは底が原点になるよう持ち上げてある
   addGroundGlow(platform, { y: 0.05 / s, pad: 0.1 / s, band: 0.12 / s })
-  let flower = null
+  let flower = null, holder = null   // holder: 花を寝かせて台の上に置くためのグループ
   const stand = {
+    size: STAND_FLOWER_SIZE,
     onTake: null,
     get hasFlower() { return !!flower },
     place() {
@@ -1257,17 +1260,28 @@ function createFlowerStand(platform, col, source) {
       rel.decompose(head.position, head.quaternion, head.scale)
       for (const m of [stem, head]) m.castShadow = true
       f.add(stem, head)
-      f.scale.setScalar(FLOWER_STEM_KIND.scale / s)
-      f.position.set(0, top, 0)
-      f.rotation.y = Math.random() * Math.PI * 2
+
+      // 茎を台の長い辺（南北 = ローカル Z）に沿わせて横に寝かせ、向き（花が北か南か）はランダム。
+      // 葉や花が台にめり込まないよう、寝かせた形の一番下を台の上面に付け、真ん中を台の真ん中に合わせる
       stand.take()?.children[1].geometry.dispose()   // 前の花は捨てる
-      platform.add(f)
+      const h = new THREE.Group()
+      h.add(f)
+      h.scale.setScalar(STAND_FLOWER_SIZE / s)
+      h.rotation.set(-Math.PI / 2, Math.random() < 0.5 ? 0 : Math.PI, 0, 'YXZ')
+      h.updateMatrixWorld(true)
+      const box = new THREE.Box3().setFromObject(h, true)
+      const c = box.getCenter(new THREE.Vector3())
+      h.position.set(-c.x, top - box.min.y, -c.z)
+      platform.add(h)
       flower = f
+      holder = h
     },
     take() {
       const f = flower
-      if (f) platform.remove(f)
-      flower = null
+      if (!f) return null
+      platform.remove(holder)
+      holder.remove(f)
+      flower = holder = null
       return f
     },
   }

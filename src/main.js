@@ -906,16 +906,18 @@ coinIntro.start(pDir, pFwd)
 const coinDrop = createCoinDrop({
   boxEl: coinBoxEl, scene, camera, renderer, slot: coinSlot,
   getCount: () => coinCount,
-  onDrop: () => { setCoinCount(coinCount - 1); setTimeout(placeStandFlower, COIN_INSERT_TIME * 1000) },
-  enabled: () => !transitioning && !overviewMode && !interior,
+  onDrop: () => { setCoinCount(coinCount - 1); coinboxUsed = true; setTimeout(placeStandFlower, COIN_INSERT_TIME * 1000) },
+  enabled: () => !coinboxUsed && !transitioning && !overviewMode && !interior,
 })
+// コイン箱は 1 枚入れたらおしまい（光らず、もう入れられない。ページを開き直すと戻る）
+let coinboxUsed = false
+_glowSpots.find(g => g.coinbox).enabled = () => !coinboxUsed
 
 // --- 階段の前の台の花 ------------------------------------------
 // コイン箱にコインを入れると、コインが回り終えたところで 0.3 秒暗転し（暗くなって明るくなるまで）、
 // 真っ暗の間に台の上へ花壇の花を 1 本置く（coccolith.js の createFlowerStand）。花のある台は接地ラインが光る
 // 光っている台を選ぶ（タップ・Enter）と、sabちゃんが台の上の花を持つ（前に持っていた花は捨てる）
 const FLOWER_FADE      = 0.3    // 暗転の長さ (s)。半分で真っ暗、残りで明るくする
-const HELD_FLOWER_SIZE = 1.3    // sabちゃんが持つ花の高さ (m)。台の上（2.2m）のままだと sabちゃん（1.2m）には大きすぎるので小さくする
 let placingFlower = false
 function placeStandFlower() {
   if (placingFlower) return
@@ -940,7 +942,7 @@ flowerStand.onTake = () => {
   if (!f) return
   if (heldFlower) { sabchan.group.remove(heldFlower); heldFlower.children[1].geometry.dispose() }
   // 体の前の右寄りで、少し外へ傾けて持つ（sabちゃんのローカル: +z が前、+y が上、単位は sabchan.group の拡大前）
-  f.scale.setScalar(HELD_FLOWER_SIZE / sabchan.group.scale.x)
+  f.scale.setScalar(flowerStand.size / sabchan.group.scale.x)   // 台の上と同じ大きさ
   f.position.set(1.3, -4.4, 3.5)   // 襟（半径 3.75）の前に根元を付ける
   f.rotation.set(0.2, 0, -0.2)
   f.traverse(o => { if (o.isMesh) o.visible = !sabHidden })   // 主観で体を隠しているときは一緒に隠す
