@@ -752,12 +752,49 @@ function setOvZoom(on) {
   let downX = 0, downY = 0, downT = 0
   canvas.addEventListener('pointerdown', e => { downX = e.clientX; downY = e.clientY; downT = performance.now() })
   canvas.addEventListener('pointerup', e => {
-    if (!zoomable() || transitioning || tapUsed) return
+    if (!zoomable() || transitioning || tapUsed || viewCut) return
     if (Math.hypot(e.clientX - downX, e.clientY - downY) > 10 || performance.now() - downT > 400) return
     if (ovZoomOn) { setOvZoom(false); return }
     const r = ovFrameEl.getBoundingClientRect()
     if (e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom) setOvZoom(true)
   })
+}
+
+// --- 視点切り替えのカット ----------------------------------
+// 切り替えの前に 0.5 秒だけ、主観→俯瞰はカメラがシュッと真上へ上がり、俯瞰→主観は画面の真ん中へ 1.5 倍に寄る。終わったところで切り替える
+const VIEW_CUT_TIME = 0.5
+const VIEW_CUT_RISE = 60     // 上がる距離 (m)
+const VIEW_CUT_ZOOM = 1.5    // 寄る倍率（今の倍率に掛ける）
+let viewCut = null           // { toOverview, t, z0 }
+const viewCutEase = () => { const k = Math.min(viewCut.t / VIEW_CUT_TIME, 1); return k * k }   // だんだん速く
+
+// 俯瞰 ⇄ 屋外の視点の切り替え（Tab。カットが終わったところで呼ぶ）
+function toggleOverview() {
+  overviewMode = !overviewMode
+  updateTabBtn()
+
+  if (overviewMode) {
+    lookDownOnSab()
+  } else if (ovYaw !== ovEnterYaw || ovPitch !== ovEnterPitch) {
+    // 🔴 が指していた地表点（カメラ→原点方向のレイ）を新しい立ち位置にする
+    const rayDir = camera.position.clone().negate().normalize()
+    raycaster.set(camera.position.clone(), rayDir)
+    const hits = raycaster.intersectObjects(terrainMeshes, false)
+    if (hits.length > 0) {
+      pDir = hits[0].point.clone().normalize()
+      // pFwd を新しい pDir に直交する成分に投影して更新
+      pFwd.addScaledVector(pDir, -pFwd.dot(pDir))
+      if (pFwd.lengthSq() < 1e-6) {
+        // pFwd と pDir がほぼ平行な場合は別軸から作り直す
+        const alt = Math.abs(pDir.x) < 0.9
+          ? new THREE.Vector3(1, 0, 0)
+          : new THREE.Vector3(0, 1, 0)
+        pFwd = alt.addScaledVector(pDir, -alt.dot(pDir))
+      }
+      pFwd.normalize()
+      pitch = 0
+    }
+  }
 }
 
 // --- 入力 ---------------------------------------------------
@@ -766,6 +803,7 @@ const keys = {}
 window.addEventListener('keydown', e => {
   if (isFlowerCutOpen() || isPixelSceneOpen()) return   // 花の切り抜き・ドット絵のページを開いている間はゲームの操作をしない
   if (e.code === 'Enter' && !e.repeat) {
+    if (viewCut) { e.preventDefault(); return }   // 視点切り替えのカット中は出入りしない
     // くぐれるドアがあれば出入り、なければ近くで光っているものを使う（キャンバス・ツリーハウスの扉は開く、コイン箱は 1 枚入れる）
     const g = activeDoorMesh() ? null : nearGlowSpot()
     if (g?.onTap) openGlowSpot(g)
@@ -780,30 +818,10 @@ window.addEventListener('keydown', e => {
     return
   }
   if (e.code === 'Tab') {
-    overviewMode = !overviewMode
-    updateTabBtn()
-
-    if (overviewMode) {
-      lookDownOnSab()
-    } else if (ovYaw !== ovEnterYaw || ovPitch !== ovEnterPitch) {
-      // 🔴 が指していた地表点（カメラ→原点方向のレイ）を新しい立ち位置にする
-      const rayDir = camera.position.clone().negate().normalize()
-      raycaster.set(camera.position.clone(), rayDir)
-      const hits = raycaster.intersectObjects(terrainMeshes, false)
-      if (hits.length > 0) {
-        pDir = hits[0].point.clone().normalize()
-        // pFwd を新しい pDir に直交する成分に投影して更新
-        pFwd.addScaledVector(pDir, -pFwd.dot(pDir))
-        if (pFwd.lengthSq() < 1e-6) {
-          // pFwd と pDir がほぼ平行な場合は別軸から作り直す
-          const alt = Math.abs(pDir.x) < 0.9
-            ? new THREE.Vector3(1, 0, 0)
-            : new THREE.Vector3(0, 1, 0)
-          pFwd = alt.addScaledVector(pDir, -alt.dot(pDir))
-        }
-        pFwd.normalize()
-        pitch = 0
-      }
+    // すぐには切り替えず、0.5 秒のカット（主観→俯瞰はカメラがシュッと上へ、俯瞰→主観は真ん中へ寄る）を挟む
+    if (!viewCut) {
+      viewCut = { toOverview: !overviewMode, t: 0, z0: camera.zoom }
+      ovFrameEl.classList.remove('show')
     }
     e.preventDefault()
     return
@@ -1306,8 +1324,23 @@ function animate() {
   // ジャイロの向きの変化（主観のときだけ使う。使わないときも読み捨てて溜めない）
   const gyroD = takeGyroDelta()
 
+  // 視点切り替えのカットが終わったら切り替える（倍率は切り替え先の 1 倍から）
+  if (viewCut) {
+    viewCut.t += dt
+    if (viewCut.t >= VIEW_CUT_TIME) {
+      viewCut = null
+      toggleOverview()
+      camera.zoom = 1
+      camera.updateProjectionMatrix()
+    }
+  }
+
   // ズーム: 俯瞰・屋外の主観では目標の倍率へなめらかに寄せ、それ以外ではすぐ 1 倍に戻す
-  {
+  // 俯瞰→主観のカット中は、カットを始めたときの倍率から真ん中へ寄る
+  if (viewCut && !viewCut.toOverview) {
+    camera.zoom = viewCut.z0 * (1 + (VIEW_CUT_ZOOM - 1) * viewCutEase())
+    camera.updateProjectionMatrix()
+  } else {
     const zt = zoomable() && ovZoomOn ? OV_ZOOM : 1
     if (camera.zoom !== zt) {
       const z = zoomable() ? camera.zoom + (zt - camera.zoom) * (1 - Math.exp(-OV_ZOOM_SPD * dt)) : zt
@@ -1424,6 +1457,9 @@ function animate() {
       camera.rotateX(CAM_LIFT)   // 見上げて sabちゃんを画面下寄りに
     }
   }
+
+  // 主観→俯瞰のカット中は、いつもの位置からカメラを真上（惑星の外向き）へ上げる。向きはそのまま
+  if (viewCut?.toOverview) camera.position.addScaledVector(pDir, VIEW_CUT_RISE * viewCutEase())
 
   // 影の範囲を sabちゃんのまわりへ（俯瞰中は惑星全体、室内は太陽がないので動かさない）
   if (overviewMode) updateSunShadow(0, 0, SHADOW_HALF_OVERVIEW)
