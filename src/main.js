@@ -25,7 +25,7 @@ import { createSabchan } from '../my-3d-parts/parts/sabchan.jsx'
 import { setDoorGlow } from './doorGlow.js'
 import { updateLedBoards } from './ledBoard.js'
 import { createCoinIntro } from './coinIntro.js'
-import { createCoinDrop } from './coinDrop.js'
+import { createCoinDrop, INSERT_TIME as COIN_INSERT_TIME } from './coinDrop.js'
 import { whenNightEnvReady } from './nightEnv.js'
 import { toLambert, ignoreSun } from './lambert.js'
 import { createLightHeads } from './lightHeads.js'
@@ -94,7 +94,7 @@ scene.add(new THREE.AmbientLight(0x334455, 1.0))
 
 
 // --- 天体 ---------------------------------------------------
-const { group: coccolith, terrainMeshes, oceanMesh, colliders, lamps, coinSlot } = createCoccolith({ renderer })
+const { group: coccolith, terrainMeshes, oceanMesh, colliders, lamps, coinSlot, flowerStand } = createCoccolith({ renderer })
 terrainMeshes.forEach(m => m.receiveShadow = true)
 // 地形に当たり判定の索引（BVH。three-mesh-bvh）をつけ、地面を測るレイキャストで三角形を総当たりしないようにする
 // （1 回 0.4ms → 0.008ms。索引を作るのは起動時に 6ms ほど）
@@ -702,10 +702,16 @@ function activeDoorMesh() {
 }
 
 // 屋外で近くにある「光るだけのもの」（なければ null）。onTap があれば光っている間タップできる
+// 届くものがいくつかあるとき（コイン箱と花の台など）は、いちばん近いものにする。enabled が false のものは光らない
 function nearGlowSpot() {
   if (transitioning || overviewMode || interior) return null
-  for (const g of _glowSpots) if (R_C * pDir.angleTo(g.dir) < g.reach) return g
-  return null
+  let best = null, bestD = Infinity
+  for (const g of _glowSpots) {
+    if (g.enabled && !g.enabled()) continue
+    const d = R_C * pDir.angleTo(g.dir)
+    if (d < g.reach && d < bestD) { best = g; bestD = d }
+  }
+  return best
 }
 const nearGlowSpotMesh = () => nearGlowSpot()?.mesh ?? null
 
@@ -900,9 +906,47 @@ coinIntro.start(pDir, pFwd)
 const coinDrop = createCoinDrop({
   boxEl: coinBoxEl, scene, camera, renderer, slot: coinSlot,
   getCount: () => coinCount,
-  onDrop: () => setCoinCount(coinCount - 1),
+  onDrop: () => { setCoinCount(coinCount - 1); setTimeout(placeStandFlower, COIN_INSERT_TIME * 1000) },
   enabled: () => !transitioning && !overviewMode && !interior,
 })
+
+// --- 階段の前の台の花 ------------------------------------------
+// コイン箱にコインを入れると、コインが回り終えたところで 0.3 秒暗転し（暗くなって明るくなるまで）、
+// 真っ暗の間に台の上へ花壇の花を 1 本置く（coccolith.js の createFlowerStand）。花のある台は接地ラインが光る
+// 光っている台を選ぶ（タップ・Enter）と、sabちゃんが台の上の花を持つ（前に持っていた花は捨てる）
+const FLOWER_FADE      = 0.3    // 暗転の長さ (s)。半分で真っ暗、残りで明るくする
+const HELD_FLOWER_SIZE = 1.3    // sabちゃんが持つ花の高さ (m)。台の上（2.2m）のままだと sabちゃん（1.2m）には大きすぎるので小さくする
+let placingFlower = false
+function placeStandFlower() {
+  if (placingFlower) return
+  placingFlower = true
+  transitioning = true
+  const half = FLOWER_FADE / 2 * 1000
+  fadeEl.style.transition = `opacity ${half}ms`
+  fadeEl.style.opacity = 1
+  setTimeout(() => {
+    flowerStand.place()
+    fadeEl.style.opacity = 0
+    setTimeout(() => {
+      fadeEl.style.transition = ''
+      transitioning = false
+      placingFlower = false
+    }, half)
+  }, half)
+}
+let heldFlower = null
+flowerStand.onTake = () => {
+  const f = flowerStand.take()
+  if (!f) return
+  if (heldFlower) { sabchan.group.remove(heldFlower); heldFlower.children[1].geometry.dispose() }
+  // 体の前の右寄りで、少し外へ傾けて持つ（sabちゃんのローカル: +z が前、+y が上、単位は sabchan.group の拡大前）
+  f.scale.setScalar(HELD_FLOWER_SIZE / sabchan.group.scale.x)
+  f.position.set(1.3, -4.4, 3.5)   // 襟（半径 3.75）の前に根元を付ける
+  f.rotation.set(0.2, 0, -0.2)
+  f.traverse(o => { if (o.isMesh) o.visible = !sabHidden })   // 主観で体を隠しているときは一緒に隠す
+  sabchan.group.add(f)
+  heldFlower = f
+}
 
 // 正規化済み球面法線から緯度経度（度）を返す。lon は -180〜180
 function latLonOf(dir) {

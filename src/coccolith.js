@@ -592,6 +592,8 @@ export function createCoccolith({ renderer = null } = {}) {
 
   // --- ランドマーク: 柵 saku_1 (lat=-5.6, lon=100.0) ----------------
   let sakuFlowerStems   // 囲いの中の花の茎（InstancedMesh）。イーゼルのところで茎の先に花を咲かせる
+  let sakuFlowerHeads   // その茎の先の花（InstancedMesh。イーゼルのところで作る）
+  let flowerStand       // 階段の前の台に花を 1 本置く・取る窓口（main.js）
   // 3.6倍で高さ約4m（地面に 0.7m めり込ませる）。上から見て左がコの字に凹んだ囲い（約42m × 31m）を、直線と角のピースで組む
   // 図の上（ローカル -Z）を北（緯度+方向）へ向ける。囲いの中には入れない（外側の凹みには入れる）
   {
@@ -619,8 +621,10 @@ export function createCoccolith({ renderer = null } = {}) {
       piece.scale.copy(_s)
       sakuPieces.add(piece)   // 球面に直接置く（sakuField には当たり判定の矩形だけ残る）
     }
-    mergeStatic(sakuPieces)
+    const platform = sakuField.userData.platform
+    mergeStatic(sakuPieces, { keep: o => o === platform })   // 台は光る接地ラインと上の花を付けるので残す
     colliders.push(...sakuField.children)
+    flowerStand = createFlowerStand(platform, sakuField.userData.platformCol, () => [sakuFlowerStems, sakuFlowerHeads])
     group.add(createSakuGrass(sakuWrapper, sakuField, { ...GRASS_KIND_1, density: 2 / 3 * 0.5 }))   // 草地の半分の量
     sakuFlowerStems = createSakuGrass(sakuWrapper, sakuField, FLOWER_STEM_KIND)
     group.add(sakuFlowerStems)
@@ -679,6 +683,7 @@ export function createCoccolith({ renderer = null } = {}) {
     flowers.frustumCulled = false
     flowers.castShadow = true
     group.add(flowers)
+    sakuFlowerHeads = flowers
     easel.userData.glowSpot.onTap = () => openFlowerCut(tex.image.src, () => {
       flowers.geometry.dispose()
       flowers.geometry = createFlowerGeometry(FLOWER_STEM_TIP)
@@ -977,7 +982,7 @@ export function createCoccolith({ renderer = null } = {}) {
   ebWrapper.setRotationFromMatrix(new THREE.Matrix4().makeBasis(ebRight, ebN, ebFwd))
   group.add(ebWrapper)
 
-  return { group, terrainMeshes, oceanMesh, colliders, lamps, coinSlot: coinbox.userData.slot }
+  return { group, terrainMeshes, oceanMesh, colliders, lamps, coinSlot: coinbox.userData.slot, flowerStand }
 }
 
 // 島[GF] (lat 0-36°N, lon 72-108°E) に岩を InstancedMesh で散布
@@ -1217,8 +1222,57 @@ function createSakuField() {
     pCol.position.set(PX, 0, 0)
     pCol.userData.footprint = { halfW: PD / 2, halfD: PW / 2 }
     field.add(pCol)
+    field.userData.platform = platform      // 花を置く台（createFlowerStand）
+    field.userData.platformCol = pCol
   }
   return field
+}
+
+// 階段の前の台に、花壇の花を 1 本（茎・葉・花ごと）置く・取る
+//   place(): 花壇で今描いている花から 1 本選び、台の上の真ん中に立てる（置いてあれば取り替える）
+//   take():  台の上の花を外して返す（なければ null）。返した花は呼んだ側が好きな所へ付ける
+//   onTake:  花の置いてある台を選んだとき（タップ・Enter）に呼ばれる。main.js が入れる
+// 花が置いてある間だけ、コイン箱と同じく台の接地ラインが光る（main.js の _glowSpots。enabled で切り替える）
+// platform: 台のメッシュ（原点 = 底の真ん中、地面から 0.05m 下）、col: 台の当たり判定（sakuField の子）、source(): [茎, 花]（InstancedMesh）
+function createFlowerStand(platform, col, source) {
+  const s = platform.scale.x
+  const top = platform.geometry.parameters.height   // ジオメトリは底が原点になるよう持ち上げてある
+  addGroundGlow(platform, { y: 0.05 / s, pad: 0.1 / s, band: 0.12 / s })
+  let flower = null
+  const stand = {
+    onTake: null,
+    get hasFlower() { return !!flower },
+    place() {
+      const [stems, heads] = source()
+      const i = Math.floor(Math.random() * stems.count)
+      const stemM = new THREE.Matrix4(), headM = new THREE.Matrix4()
+      stems.getMatrixAt(i, stemM)
+      heads.getMatrixAt(i, headM)
+      // 茎から見た花の向き（花壇で咲いているのと同じ傾き・向き）
+      const rel = stemM.clone().invert().multiply(headM)
+      const f = new THREE.Group()
+      f.name = '台の上の花'
+      const stem = new THREE.Mesh(stems.geometry, stems.material)
+      const head = new THREE.Mesh(heads.geometry.clone(), heads.material)   // 花の形は切り抜きで作り直されるので、今の形を写しておく
+      rel.decompose(head.position, head.quaternion, head.scale)
+      for (const m of [stem, head]) m.castShadow = true
+      f.add(stem, head)
+      f.scale.setScalar(FLOWER_STEM_KIND.scale / s)
+      f.position.set(0, top, 0)
+      f.rotation.y = Math.random() * Math.PI * 2
+      stand.take()?.children[1].geometry.dispose()   // 前の花は捨てる
+      platform.add(f)
+      flower = f
+    },
+    take() {
+      const f = flower
+      if (f) platform.remove(f)
+      flower = null
+      return f
+    },
+  }
+  col.userData.glowSpot = { mesh: platform, local: new THREE.Vector3(), reach: 4, enabled: () => !!flower, onTap: () => stand.onTake?.() }
+  return stand
 }
 
 // 柵の囲いの中に草（kind）を生やす。囲いの矩形から柵の際と階段の下を除いた範囲に、ずらした格子で並べる

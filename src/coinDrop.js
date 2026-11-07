@@ -22,6 +22,7 @@ import { COIN_RADIUS, POP_TIME, POP_HEIGHT, SPIN_IDLE } from './coinIntro.js'
 const REACH       = 14     // カメラからこの距離までの投入口に入れられる (m)。カメラは sabちゃんの 8m 後ろ
 const FRONT       = COIN_RADIUS + 0.15   // コインが現れる投入口の前の距離 (m)
 const SPIN_TIME   = 0.35   // 飛び出したあと、その場で回ってから消えるまで (s)
+export const INSERT_TIME = POP_TIME + SPIN_TIME   // 入れてからコインが消えるまで (s)
 const SPIN_SPEED  = SPIN_IDLE * 2   // 回転速度（起動演出の待機中の倍）(rad/s)
 const BACK_TIME   = 200    // 外したとき HUD へ戻るまで (ms)
 
