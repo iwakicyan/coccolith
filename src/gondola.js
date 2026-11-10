@@ -108,18 +108,19 @@ export function createGondolaRide({ scene, radius, getGround, waterLevel }) {
 }
 
 // ============================================================
-//  2 台目からの gondola：閉じた道（地点を大円で結んだ線。最後の地点から最初の地点へも戻る）を speed (m/s) で周遊する
+//  2 台目からの gondola：道（地点を大円で結んだ線）を speed (m/s) で始点から終点まで進み、終点で TOUR_TURN_MS かけてその場で 180° 振り返って
+//    同じ道を始点まで戻る。始点でもまた振り返る（gondeer の往復と同じ）
 //    高さの決め方（天面を地表・海面から GONDOLA_LIFT 上にする）は上の往復するのと同じ。道の曲がり角では前後 TOUR_TURN 点ぶんを結んだ向きを前にする
 // ============================================================
 
 const TOUR_STEP = 1                     // 道に沿って向きと地面の高さを持っておく間隔 (m)
 const TOUR_TURN = 12                    // 曲がり角で向きを急に変えないよう、前後この点数ぶんを結んだ向きを前にする
 const TOUR_SMOOTH = 6                   // 測った高さを前後この点数ずつでならす
+const TOUR_TURN_MS = 2 * 60 * 1000      // 道の端で 180° 振り返るのにかける時間
 
 export function createGondolaTourRide({ scene, radius, getGround, waterLevel, speed, path }) {
-  // 道を TOUR_STEP (m) おきの点に分ける（閉じた道。pts[i] は単位ベクトル）
+  // 道を TOUR_STEP (m) おきの点に分ける（pts[i] は単位ベクトル）
   const ways = path.map(p => dirOf(p.lat, p.lon))
-  ways.push(ways[0].clone())
   const pts = []
   for (let i = 0; i < ways.length - 1; i++) {
     const a = ways[i], b = ways[i + 1], ang = a.angleTo(b)
@@ -129,11 +130,12 @@ export function createGondolaTourRide({ scene, radius, getGround, waterLevel, sp
       pts.push(new THREE.Vector3().addScaledVector(a, Math.sin((1 - t) * ang)).addScaledVector(b, Math.sin(t * ang)).divideScalar(Math.sin(ang)))   // 大円の上
     }
   }
+  pts.push(ways[ways.length - 1].clone())
   const N = pts.length
-  const idx = i => ((i % N) + N) % N
-  const seg = new Float32Array(N), cum = new Float32Array(N + 1)
-  for (let i = 0; i < N; i++) { seg[i] = pts[i].angleTo(pts[idx(i + 1)]) * radius; cum[i + 1] = cum[i] + seg[i] }
-  const L = cum[N]
+  const idx = i => Math.max(0, Math.min(N - 1, i))
+  const seg = new Float32Array(N), cum = new Float32Array(N)
+  for (let i = 0; i < N - 1; i++) { seg[i] = pts[i].angleTo(pts[i + 1]) * radius; cum[i + 1] = cum[i] + seg[i] }
+  const L = cum[N - 1]
   const fwds = pts.map((p, i) => {
     const f = new THREE.Vector3().subVectors(pts[idx(i + TOUR_TURN)], pts[idx(i - TOUR_TURN)])
     return f.addScaledVector(p, -f.dot(p)).normalize()
@@ -152,17 +154,26 @@ export function createGondolaTourRide({ scene, radius, getGround, waterLevel, sp
     _p.copy(up).multiplyScalar(radius).addScaledVector(_r, x).addScaledVector(fwd, z).normalize()
     return Math.max(getGround(_p), waterLevel)
   }
+  //   道の端（振り返るところ）では、回っていく途中の向きでも測っておく
+  const FOOT = [[0, 0], [hx * 0.7, hz * 0.7], [-hx * 0.7, hz * 0.7], [hx * 0.7, tz * 0.7], [-hx * 0.7, tz * 0.7], [0, hz], [0, tz]]
+  const footMax = (up, fwd) => { let g = -Infinity; for (const [x, z] of FOOT) g = Math.max(g, groundAt(up, fwd, x, z)); return g }
+  const _f = new THREE.Vector3()
   const raw = new Float32Array(N)
   for (let i = 0; i < N; i++) {
-    let g = groundAt(pts[i], fwds[i], 0, 0)
-    for (const [x, z] of [[hx * 0.7, hz * 0.7], [-hx * 0.7, hz * 0.7], [hx * 0.7, tz * 0.7], [-hx * 0.7, tz * 0.7], [0, hz], [0, tz]]) g = Math.max(g, groundAt(pts[i], fwds[i], x, z))
+    let g = footMax(pts[i], fwds[i])
+    if (i === 0 || i === N - 1) for (const deg of [45, 90, 135]) g = Math.max(g, footMax(pts[i], _f.copy(fwds[i]).applyAxisAngle(pts[i], THREE.MathUtils.degToRad(deg))))
     raw[i] = g - top + GONDOLA_LIFT
   }
-  const heights = new Float32Array(N)
+  const top2 = new Float32Array(N), heights = new Float32Array(N)
   for (let i = 0; i < N; i++) {
-    let m = -Infinity                                                          // ならすときも天面が地面に潜らないよう、前後の最大を取る
-    for (let k = -TOUR_SMOOTH; k <= TOUR_SMOOTH; k++) m = Math.max(m, raw[idx(i + k)])
-    heights[i] = m
+    let m = -Infinity                                                          // 天面が地面に潜らないよう、まず前後の最大を取り
+    for (let k = -2 * TOUR_SMOOTH; k <= 2 * TOUR_SMOOTH; k++) m = Math.max(m, raw[idx(i + k)])
+    top2[i] = m
+  }
+  for (let i = 0; i < N; i++) {
+    let sum = 0                                                                // それを前後でならして、段差をなだらかな坂にする
+    for (let k = -TOUR_SMOOTH; k <= TOUR_SMOOTH; k++) sum += top2[idx(i + k)]
+    heights[i] = sum / (2 * TOUR_SMOOTH + 1)
   }
 
   // 道のり s (m) → 位置の向き up・前 fwd・原点の高さ
@@ -176,7 +187,16 @@ export function createGondolaTourRide({ scene, radius, getGround, waterLevel, sp
     return heights[lo] + (heights[j] - heights[lo]) * t
   }
 
-  const periodMs = L / speed * 1000
+  // 時刻 → 道のり s と、道の進む向きから回した角度 yaw（戻り道は π。端では TOUR_TURN_MS かけて回る）
+  const moveMs = L / speed * 1000
+  const periodMs = 2 * (moveMs + TOUR_TURN_MS)
+  function stateAt(ms) {
+    const u = ((ms % periodMs) + periodMs) % periodMs
+    if (u < moveMs) return { s: L * u / moveMs, yaw: 0 }                                                   // 行き
+    if (u < moveMs + TOUR_TURN_MS) return { s: L, yaw: Math.PI * smooth((u - moveMs) / TOUR_TURN_MS) }     // 終点で振り返る
+    if (u < 2 * moveMs + TOUR_TURN_MS) return { s: L * (1 - (u - moveMs - TOUR_TURN_MS) / moveMs), yaw: Math.PI } // 帰り
+    return { s: 0, yaw: Math.PI * (1 + smooth((u - 2 * moveMs - TOUR_TURN_MS) / TOUR_TURN_MS)) }       // 始点で振り返る
+  }
   const prevQuat = new THREE.Quaternion()
   const delta = new THREE.Quaternion()
   const _up = new THREE.Vector3(), _fw = new THREE.Vector3(), _m = new THREE.Matrix4()
@@ -184,8 +204,9 @@ export function createGondolaTourRide({ scene, radius, getGround, waterLevel, sp
 
   // 毎フレーム呼ぶ。前のフレームからの回転（惑星中心まわり。乗っているものを一緒に運ぶ用）を返す
   function update(nowMs = Date.now()) {
-    const u = ((nowMs % periodMs) + periodMs) % periodMs
-    const h = frameAt(L * u / periodMs, _up, _fw)
+    const { s, yaw } = stateAt(nowMs)
+    const h = frameAt(Math.min(s, L), _up, _fw)
+    if (yaw) _fw.applyAxisAngle(_up, yaw)
     _m.makeBasis(_r.crossVectors(_up, _fw), _up, _fw)                         // +x=右、+y=上（惑星の法線）、+z=前（顔の向き）
     root.quaternion.setFromRotationMatrix(_m)
     root.position.copy(_up).multiplyScalar(h)
