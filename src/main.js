@@ -421,7 +421,7 @@ function getSmoothGroundHeight(dir, dt) {
 // --- 上に乗れる動く台（rides）: gondola・gondeer ---
 // どちらも地面の高さを軌道に沿って測ってから、自分を地形のレイキャスト対象に加える（先に加えると自分の上を測ってしまう）
 //   gondola: A・B の停留所のあいだの細い楕円を行き来する（gondola.js）
-//     2 台目は GONDOLA_TOUR の地点を結んだ道を GONDEER_SPEED で往復する（端で 2 分かけて 180° 振り返る。createGondolaTourRide）
+//     2・3 台目は GONDOLA_TOURS の地点を結んだ道を GONDEER_SPEED で往復する（端で 2 分かけて 180° 振り返る。createGondolaTourRide）
 //   gondeer: GONDEER_SPEED (m/s) で道に沿って動く（gondeer.js）。体の高さの 70% を地面に埋める
 //     1 体目は緯度 58° の円を東へ周遊、2・3 体目は dots の敷かれた Route1・Route2 を往復する（端で 2 分かけて 180° 振り返る）
 const SPEED     = 20      // sabちゃんの移動速度 (m/s)
@@ -435,12 +435,18 @@ const gondeers = [
   createGondeerRide({ ...gondeerOpts, path: routeOf('Route1') }),
   createGondeerRide({ ...gondeerOpts, path: routeOf('Route2') }),
 ]
-const GONDOLA_TOUR = [
-  { lat: -9.4, lon: 28.0 }, { lat: -9.4, lon: 74.0 }, { lat: 20.0, lon: 79.0 }, { lat: 35.4, lon: 68.0 },
-  { lat: 35.4, lon: 51.4 }, { lat: 29.0, lon: 19.3 }, { lat: 30.0, lon: 3.6 },
+const GONDOLA_TOURS = [
+  [
+    { lat: -9.4, lon: 28.0 }, { lat: -9.4, lon: 74.0 }, { lat: 20.0, lon: 79.0 }, { lat: 35.4, lon: 68.0 },
+    { lat: 35.4, lon: 51.4 }, { lat: 29.0, lon: 19.3 }, { lat: 30.0, lon: 3.6 },
+  ],
+  [
+    { lat: 9.3, lon: 179.0 }, { lat: 9.3, lon: 168.0 }, { lat: 36.0, lon: 179.0 }, { lat: 17.6, lon: -166.6 },
+    { lat: 17.6, lon: -155.5 }, { lat: -33.7, lon: -155.5 }, { lat: -45.7, lon: -172.0 },
+  ],
 ]
-const gondolaTour = createGondolaTourRide({ ...gondeerOpts, path: GONDOLA_TOUR })
-const rides = [gondola, gondolaTour, ...gondeers]
+const gondolaTours = GONDOLA_TOURS.map(path => createGondolaTourRide({ ...gondeerOpts, path }))
+const rides = [gondola, ...gondolaTours, ...gondeers]
 const rideOfMesh = new Map()   // 上を歩けるメッシュ → その台
 for (const ride of rides) {
   for (const m of ride.walkable) {
