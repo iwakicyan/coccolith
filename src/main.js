@@ -17,7 +17,7 @@ import { createMigration } from './migration.js'
 import { createVeth } from './veth.js'
 import { createCloud1, createFlatCloud } from './cloud1.js'
 import { R_C, LAND_LIFT, ORBIT } from './constants.js'
-import { createGondolaRide } from './gondola.js'
+import { createGondolaRide, createGondolaTourRide } from './gondola.js'
 import { createGondeerRide, gondeerLatPath } from './gondeer.js'
 import { createKummo } from '../my-3d-parts/parts/kummo.jsx'
 import { createGummo } from '../my-3d-parts/parts/gummo.jsx'
@@ -421,6 +421,7 @@ function getSmoothGroundHeight(dir, dt) {
 // --- 上に乗れる動く台（rides）: gondola・gondeer ---
 // どちらも地面の高さを軌道に沿って測ってから、自分を地形のレイキャスト対象に加える（先に加えると自分の上を測ってしまう）
 //   gondola: A・B の停留所のあいだの細い楕円を行き来する（gondola.js）
+//     2 台目は GONDOLA_TOUR の地点を順にめぐって最初の地点へ戻る道を、GONDEER_SPEED で周遊する（createGondolaTourRide）
 //   gondeer: GONDEER_SPEED (m/s) で道に沿って動く（gondeer.js）。体の高さの 70% を地面に埋める
 //     1 体目は緯度 58° の円を東へ周遊、2・3 体目は dots の敷かれた Route1・Route2 を往復する（端で 2 分かけて 180° 振り返る）
 const SPEED     = 20      // sabちゃんの移動速度 (m/s)
@@ -434,7 +435,12 @@ const gondeers = [
   createGondeerRide({ ...gondeerOpts, path: routeOf('Route1') }),
   createGondeerRide({ ...gondeerOpts, path: routeOf('Route2') }),
 ]
-const rides = [gondola, ...gondeers]
+const GONDOLA_TOUR = [
+  { lat: -9.4, lon: 28.0 }, { lat: -9.4, lon: 74.0 }, { lat: 20.0, lon: 79.0 }, { lat: 35.4, lon: 68.0 },
+  { lat: 35.4, lon: 51.4 }, { lat: 29.0, lon: 19.3 }, { lat: 30.0, lon: 3.6 },
+]
+const gondolaTour = createGondolaTourRide({ ...gondeerOpts, path: GONDOLA_TOUR })
+const rides = [gondola, gondolaTour, ...gondeers]
 const rideOfMesh = new Map()   // 上を歩けるメッシュ → その台
 for (const ride of rides) {
   for (const m of ride.walkable) {

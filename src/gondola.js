@@ -106,3 +106,97 @@ export function createGondolaRide({ scene, radius, getGround, waterLevel }) {
   // delta: update が返すのと同じ回転（いちばん最後のフレームのぶん）
   return { root, walkable: root.userData.walkable, update, delta, reach }
 }
+
+// ============================================================
+//  2 台目からの gondola：閉じた道（地点を大円で結んだ線。最後の地点から最初の地点へも戻る）を speed (m/s) で周遊する
+//    高さの決め方（天面を地表・海面から GONDOLA_LIFT 上にする）は上の往復するのと同じ。道の曲がり角では前後 TOUR_TURN 点ぶんを結んだ向きを前にする
+// ============================================================
+
+const TOUR_STEP = 1                     // 道に沿って向きと地面の高さを持っておく間隔 (m)
+const TOUR_TURN = 12                    // 曲がり角で向きを急に変えないよう、前後この点数ぶんを結んだ向きを前にする
+const TOUR_SMOOTH = 6                   // 測った高さを前後この点数ずつでならす
+
+export function createGondolaTourRide({ scene, radius, getGround, waterLevel, speed, path }) {
+  // 道を TOUR_STEP (m) おきの点に分ける（閉じた道。pts[i] は単位ベクトル）
+  const ways = path.map(p => dirOf(p.lat, p.lon))
+  ways.push(ways[0].clone())
+  const pts = []
+  for (let i = 0; i < ways.length - 1; i++) {
+    const a = ways[i], b = ways[i + 1], ang = a.angleTo(b)
+    const n = Math.max(1, Math.round(ang * radius / TOUR_STEP))
+    for (let k = 0; k < n; k++) {
+      const t = k / n
+      pts.push(new THREE.Vector3().addScaledVector(a, Math.sin((1 - t) * ang)).addScaledVector(b, Math.sin(t * ang)).divideScalar(Math.sin(ang)))   // 大円の上
+    }
+  }
+  const N = pts.length
+  const idx = i => ((i % N) + N) % N
+  const seg = new Float32Array(N), cum = new Float32Array(N + 1)
+  for (let i = 0; i < N; i++) { seg[i] = pts[i].angleTo(pts[idx(i + 1)]) * radius; cum[i + 1] = cum[i] + seg[i] }
+  const L = cum[N]
+  const fwds = pts.map((p, i) => {
+    const f = new THREE.Vector3().subVectors(pts[idx(i + TOUR_TURN)], pts[idx(i - TOUR_TURN)])
+    return f.addScaledVector(p, -f.dot(p)).normalize()
+  })
+
+  const root = createGondola()
+  root.scale.setScalar(GONDOLA_SCALE)
+  const top = GONDOLA_BOUNDS.max[1] * GONDOLA_SCALE
+  const hx = GONDOLA_BOUNDS.max[0] * GONDOLA_SCALE, hz = GONDOLA_BOUNDS.max[2] * GONDOLA_SCALE, tz = GONDOLA_BOUNDS.min[2] * GONDOLA_SCALE
+  scene.add(root)
+
+  // 道に沿って、真ん中と四隅・前後の下の地面を測り、いちばん高いところに天面をそろえた原点の高さを入れておく
+  const _r = new THREE.Vector3(), _p = new THREE.Vector3()
+  const groundAt = (up, fwd, x, z) => {
+    _r.crossVectors(up, fwd)
+    _p.copy(up).multiplyScalar(radius).addScaledVector(_r, x).addScaledVector(fwd, z).normalize()
+    return Math.max(getGround(_p), waterLevel)
+  }
+  const raw = new Float32Array(N)
+  for (let i = 0; i < N; i++) {
+    let g = groundAt(pts[i], fwds[i], 0, 0)
+    for (const [x, z] of [[hx * 0.7, hz * 0.7], [-hx * 0.7, hz * 0.7], [hx * 0.7, tz * 0.7], [-hx * 0.7, tz * 0.7], [0, hz], [0, tz]]) g = Math.max(g, groundAt(pts[i], fwds[i], x, z))
+    raw[i] = g - top + GONDOLA_LIFT
+  }
+  const heights = new Float32Array(N)
+  for (let i = 0; i < N; i++) {
+    let m = -Infinity                                                          // ならすときも天面が地面に潜らないよう、前後の最大を取る
+    for (let k = -TOUR_SMOOTH; k <= TOUR_SMOOTH; k++) m = Math.max(m, raw[idx(i + k)])
+    heights[i] = m
+  }
+
+  // 道のり s (m) → 位置の向き up・前 fwd・原点の高さ
+  function frameAt(s, up, fwd) {
+    let lo = 0, hi = N - 1
+    while (lo < hi) { const m = (lo + hi + 1) >> 1; if (cum[m] <= s) lo = m; else hi = m - 1 }
+    const j = idx(lo + 1), t = seg[lo] > 0 ? Math.min(1, (s - cum[lo]) / seg[lo]) : 0
+    up.copy(pts[lo]).lerp(pts[j], t).normalize()
+    fwd.copy(fwds[lo]).lerp(fwds[j], t)
+    fwd.addScaledVector(up, -fwd.dot(up)).normalize()
+    return heights[lo] + (heights[j] - heights[lo]) * t
+  }
+
+  const periodMs = L / speed * 1000
+  const prevQuat = new THREE.Quaternion()
+  const delta = new THREE.Quaternion()
+  const _up = new THREE.Vector3(), _fw = new THREE.Vector3(), _m = new THREE.Matrix4()
+  let first = true
+
+  // 毎フレーム呼ぶ。前のフレームからの回転（惑星中心まわり。乗っているものを一緒に運ぶ用）を返す
+  function update(nowMs = Date.now()) {
+    const u = ((nowMs % periodMs) + periodMs) % periodMs
+    const h = frameAt(L * u / periodMs, _up, _fw)
+    _m.makeBasis(_r.crossVectors(_up, _fw), _up, _fw)                         // +x=右、+y=上（惑星の法線）、+z=前（顔の向き）
+    root.quaternion.setFromRotationMatrix(_m)
+    root.position.copy(_up).multiplyScalar(h)
+    root.updateMatrixWorld(true)
+    if (first) { delta.identity(); first = false }
+    else delta.copy(root.quaternion).multiply(prevQuat.invert())
+    prevQuat.copy(root.quaternion)
+    return delta
+  }
+  update()
+
+  const reach = Math.hypot(hx, Math.max(hz, -tz)) + 3
+  return { root, walkable: root.userData.walkable, update, delta, reach, length: L }
+}
