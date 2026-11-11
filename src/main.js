@@ -471,28 +471,32 @@ const rideCarrier = {
   measure(dir) { const g = getGroundHeight(dir) - 1; this.on = rideOfMesh.get(_groundHitObj)?.delta ?? null; return g },
 }
 
-// 板（my-3d-parts/parts/ita.js）: lat 53.7・lon -150 のまわり 30m 四方に、横幅 ITA_W (m) の板を 5 枚、地面に刺す
+// 板（my-3d-parts/parts/ita.js）: lat 53.7・lon -150 のまわり 30m 四方に 5 枚と、ほかの 3 か所に 1 枚ずつ、横幅 ITA_W (m) の板を地面に刺す
 //   sabちゃんは板を通り抜けられない（colliders に足す。footprint は createIta が入れる板の外形の箱）。当たり判定を作る前に置く
 //   板ごとにだれでも書き込める（boardNotes.js）。表に新しい書き込みを字で出し、近づくと輪郭が光ってタップ（Enter）で書き込みのページを開く
-//   ITA_SPOTS は中心から東へ e (m)・北へ n (m)、向き yaw（度。0 で正面が北）、傾き tilt（度。前後へ）
+//   ITA_SPOTS は at（lat・lon）から東へ e (m)・北へ n (m)、向き yaw（度。0 で正面が北）、傾き tilt（度。前後へ）
+//   板の番号は ITA_SPOTS の順に 1〜。書き込みは板の番号ごとに残るので、並びを変えたり途中に足したりしない（足すのは後ろへ。counter/worker.js の NOTE_BOARDS も合わせる）
 //   地面に ITA_SINK だけ埋める。太陽の当たる側（x > 0）にあれば影を落とす。影は受けない（杖と同じ）
 {
-  const ITA_CENTER = { lat: 53.7, lon: -150 }
+  const FIELD = { lat: 53.7, lon: -150 }   // 5 枚を刺す 30m 四方の真ん中
   const ITA_SPOTS = [
-    { e: -11, n:   8, yaw:  20, tilt:  4 },
-    { e:   3, n:  12, yaw: -35, tilt: -6 },
-    { e:  12, n:  -2, yaw:  75, tilt:  3 },
-    { e:  -4, n:  -6, yaw: 160, tilt: -4 },
-    { e: -13, n: -12, yaw: -100, tilt: 7 },
+    { at: FIELD, e: -11, n:   8, yaw:  20, tilt:  4 },
+    { at: FIELD, e:   3, n:  12, yaw: -35, tilt: -6 },
+    { at: FIELD, e:  12, n:  -2, yaw:  75, tilt:  3 },
+    { at: FIELD, e:  -4, n:  -6, yaw: 160, tilt: -4 },
+    { at: FIELD, e: -13, n: -12, yaw: -100, tilt: 7 },
+    { at: { lat: 25.7, lon:   61   }, e: 0, n: 0, yaw:  15, tilt:  3 },
+    { at: { lat: 18.7, lon:  113.7 }, e: 0, n: 0, yaw: -30, tilt: -4 },
+    { at: { lat: 12,   lon: -130   }, e: 0, n: 0, yaw:  50, tilt:  5 },
   ]
   const ITA_W = 6, ITA_SINK = 0.8
   const ITA_PAPER_ABOVE = 0.4   // 紙の下の端の地面からの高さの下限 (m)。傾きや地面のでこぼこでも埋まらないように
   const RL = R_C + LAND_LIFT
-  const c = dirOf(ITA_CENTER.lat, ITA_CENTER.lon)
-  const north = new THREE.Vector3(0, 1, 0).addScaledVector(c, -c.y).normalize()
-  const east = new THREE.Vector3().crossVectors(c, north).normalize()
   const _m = new THREE.Matrix4(), _q = new THREE.Quaternion()
-  ITA_SPOTS.forEach(({ e, n, yaw, tilt }, i) => {
+  ITA_SPOTS.forEach(({ at, e, n, yaw, tilt }, i) => {
+    const c = dirOf(at.lat, at.lon)
+    const north = new THREE.Vector3(0, 1, 0).addScaledVector(c, -c.y).normalize()
+    const east = new THREE.Vector3().crossVectors(c, north).normalize()
     const dir = c.clone().addScaledVector(east, e / RL).addScaledVector(north, n / RL).normalize()
     const fwd = north.clone().applyAxisAngle(c, -yaw * Math.PI / 180)
     fwd.addScaledVector(dir, -fwd.dot(dir)).normalize()

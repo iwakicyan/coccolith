@@ -14,7 +14,7 @@
 
 const ALLOWED_ORIGINS = ['https://iwakicyan.github.io']
 const NOTE_ORIGINS = [...ALLOWED_ORIGINS, /^http:\/\/localhost:\d+$/]   // 書き込めるページ（開発サーバーからも試せるように）
-const NOTE_BOARDS = 5      // 板の数
+const NOTE_BOARDS = 8      // 板の数（src/main.js の ITA_SPOTS の数）
 const NOTE_MAX    = 60     // 1 回に書ける文字数
 const NOTE_GAP    = 30     // 同じ IP が次に書けるまでの秒数
 const NOTE_LIST   = 12     // GET で返す件数（板の表にも書き込みのページの一覧にもこれだけ出す）
