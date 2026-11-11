@@ -17,7 +17,7 @@ const NOTE_ORIGINS = [...ALLOWED_ORIGINS, /^http:\/\/localhost:\d+$/]   // 書�
 const NOTE_BOARDS = 5      // 板の数
 const NOTE_MAX    = 60     // 1 回に書ける文字数
 const NOTE_GAP    = 30     // 同じ IP が次に書けるまでの秒数
-const NOTE_LIST   = 50     // GET で返す件数
+const NOTE_LIST   = 12     // GET で返す件数（板の表にも書き込みのページの一覧にもこれだけ出す）
 const NOTE_PINS   = ['red', 'blue', 'yellow', 'green']   // ピンの色
 // URL らしいもの（http・www.・ドメインっぽい「英数.英字2文字以上」）。全角の英数・記号は半角に寄せてから見る
 const URL_RE = /(https?:|www\.|[a-z0-9-]+\s*[.．。]\s*(com|net|org|jp|io|me|ly|co|app|dev|xyz|info|link|site|gg|tv|to|cc|be|us)\b|\/\/)/i

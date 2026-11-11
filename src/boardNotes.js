@@ -11,7 +11,7 @@ import { ITA_FACE } from '../my-3d-parts/parts/ita.js'
 // ============================================================
 
 const NOTES_URL = COUNTER_URL ? COUNTER_URL + '/notes' : ''
-export const NOTES_ON_BOARD = 5   // 板の表に出す件数（新しい順）
+export const NOTES_ON_BOARD = 12   // 板の表に出す件数（新しい順。書き込みのページの一覧の件数は counter/worker.js の NOTE_LIST）
 const PIN_KEY = 'coccolith.notePin'   // 前に選んだピンの色（localStorage）
 const NOTE_MAX = 60               // 1 回に書ける文字数（counter/worker.js と同じ）
 const INK = '#4a3626'             // 紙の字と縁の色（板の輪郭線と同じ濃い茶）
@@ -50,13 +50,13 @@ const PAPER_SIZES = [   // max: この文字数未満ならこの大きさ（板
 ]
 const PX_PER_UNIT = 480   // 紙のキャンバスの、モデル単位あたりの画素
 const FONT = 0.07         // 字の大きさ（モデル単位）
-const LAYER = 0.03        // 紙を重ねる間隔（モデル単位）
+const LAYER = 0.012       // 紙を重ねる間隔（モデル単位）。12 枚重ねても板から浮きすぎないように
 const PLACE_TRIES = 32    // 貼る場所の候補の数
 const paperSize = text => PAPER_SIZES.find(s => [...text].length < s.max)
 // ピンの色（書く人が選ぶ。counter/worker.js の NOTE_PINS と同じ名前）
 const PINS = { red: '#ff3b30', blue: '#0a5cff', yellow: '#ffc21a', green: '#2fb84f' }
 const pinMats = Object.fromEntries(Object.entries(PINS).map(([k, c]) => [k, new THREE.MeshLambertMaterial({ color: c, emissive: c, emissiveIntensity: 0.45 })]))
-const pinGeo = new THREE.SphereGeometry(0.035, 10, 6).scale(1, 1, 0.5)
+const pinGeo = new THREE.SphereGeometry(0.035, 10, 6).scale(1, 1, 0.25)   // 平たくして、紙から出る厚み（0.002 + 0.009）を LAYER より薄くする
 const paperGeo = new THREE.PlaneGeometry(1, 1)   // 紙の大きさは scale で
 // id から 0〜1 の決まった値を出す（k で別の値）
 const hash = (id, k) => { const x = Math.sin(id * 12.9898 + k * 78.233) * 43758.5453; return x - Math.floor(x) }
@@ -132,7 +132,7 @@ export function addBoardNotes(ita, board, { minY = -Infinity } = {}) {
       const paper = new THREE.Mesh(paperGeo, new THREE.MeshLambertMaterial({ map: tex, emissive: 0xffffff, emissiveMap: tex, emissiveIntensity: 0.45 }))
       paper.scale.set(w, h, 1)
       const pin = new THREE.Mesh(pinGeo, pinMats[n.pin] ?? pinMats.red)
-      pin.position.set(0, h / 2 - 0.07, 0.005)
+      pin.position.set(0, h / 2 - 0.07, 0.002)
       g.add(paper, pin)
       const { x, y } = placed.get(n.id)
       g.position.set(x, y, F.z + (shown.length - i) * LAYER)   // 新しいもの（i が小さい）ほど手前
