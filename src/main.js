@@ -33,7 +33,7 @@ import { createPixelSpriteWalkers, createPixelSpriteFlyers } from './pixelSprite
 import { createBluedogWalkers } from './bluedog.js'
 import { createSneakerWalkers } from './sneaker.js'
 import { createTsue } from '../my-3d-parts/parts/tsue.js'
-import { createIta, itaInflatedGeometry, itaEdgesGeometry, ITA_FACE } from '../my-3d-parts/parts/ita.js'
+import { createIta, itaInflatedGeometry, itaEdgesGeometry, ITA_FACE, ITA_WIDTH } from '../my-3d-parts/parts/ita.js'
 import { addBoardNotes, openBoardNotes, isBoardNotesOpen } from './boardNotes.js'
 import { addShapeGlow } from './doorGlow.js'
 
@@ -486,6 +486,7 @@ const rideCarrier = {
     { e: -13, n: -12, yaw: -100, tilt: 7 },
   ]
   const ITA_W = 6, ITA_SINK = 0.8
+  const ITA_PAPER_ABOVE = 0.4   // 紙の下の端の地面からの高さの下限 (m)。傾きや地面のでこぼこでも埋まらないように
   const RL = R_C + LAND_LIFT
   const c = dirOf(ITA_CENTER.lat, ITA_CENTER.lon)
   const north = new THREE.Vector3(0, 1, 0).addScaledVector(c, -c.y).normalize()
@@ -505,7 +506,7 @@ const rideCarrier = {
     scene.add(ita)
     colliders.push(ita)
     const board = i + 1, mesh = ita.getObjectByName('板')
-    addBoardNotes(ita, board)
+    addBoardNotes(ita, board, { minY: (ITA_SINK + ITA_PAPER_ABOVE) * ITA_WIDTH / ITA_W })   // 紙は地面から ITA_PAPER_ABOVE (m) より上に貼る
     addShapeGlow(mesh, itaInflatedGeometry(0.1), itaEdgesGeometry())   // 光は板の外へ 0.1（モデル単位。約 15cm）はみ出す
     const center = new THREE.Vector3(0, (ITA_FACE.y0 + ITA_FACE.y1) / 2, 0)   // 板の真ん中（ita のローカル）
     ita.userData.glowSpot = { mesh, local: center, reach: ITA_W / 2 + 2.5, onTap: () => openBoardNotes(board) }

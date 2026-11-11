@@ -11,6 +11,7 @@ import { ITA_FACE } from '../my-3d-parts/parts/ita.js'
 
 const NOTES_URL = COUNTER_URL ? COUNTER_URL + '/notes' : ''
 export const NOTES_ON_BOARD = 5   // 板の表に出す件数（新しい順）
+const PIN_KEY = 'coccolith.notePin'   // 前に選んだピンの色（localStorage）
 const NOTE_MAX = 60               // 1 回に書ける文字数（counter/worker.js と同じ）
 const INK = '#4a3626'             // 紙の字と縁の色（板の輪郭線と同じ濃い茶）
 const FONT = '"Hiragino Maru Gothic ProN", "Hiragino Sans", "Yu Gothic", sans-serif'
@@ -41,14 +42,17 @@ function wrap(ctx, text, maxW) {
 const PAPER_W = 1.2, PAPER_H = 0.95   // 紙の大きさ（板のモデル単位。板の横幅は約 3.9）
 const PAPER_PX = 512                  // 紙のキャンバスの横の画素
 const FONT_PX = 44                    // 字の大きさ（紙のキャンバスの画素）。入りきらないときは小さくする
-// 紙を貼る場所（字を書ける範囲 ITA_FACE の中の割合。u: 左 0〜右 1、v: 上 0〜下 1）とピンの色。新しい順
+// 紙を貼る場所（字を書ける範囲 ITA_FACE の中の割合。u: 左 0〜右 1、v: 上 0〜下 1）。新しい順
 const PAPER_SLOTS = [
-  { u: 0.24, v: 0.26, pin: '#ff3b30' },
-  { u: 0.74, v: 0.34, pin: '#0a5cff' },
-  { u: 0.46, v: 0.70, pin: '#ffc21a' },
-  { u: 0.86, v: 0.80, pin: '#2fb84f' },
-  { u: 0.14, v: 0.76, pin: '#ff3b30' },
+  { u: 0.24, v: 0.26 },
+  { u: 0.74, v: 0.34 },
+  { u: 0.46, v: 0.70 },
+  { u: 0.86, v: 0.80 },
+  { u: 0.14, v: 0.76 },
 ]
+// ピンの色（書く人が選ぶ。counter/worker.js の NOTE_PINS と同じ名前）
+const PINS = { red: '#ff3b30', blue: '#0a5cff', yellow: '#ffc21a', green: '#2fb84f' }
+const pinMats = Object.fromEntries(Object.entries(PINS).map(([k, c]) => [k, new THREE.MeshLambertMaterial({ color: c, emissive: c, emissiveIntensity: 0.45 })]))
 const paperMat = tex => new THREE.MeshLambertMaterial({ map: tex, emissive: 0xffffff, emissiveMap: tex, emissiveIntensity: 0.45 })
 const pinGeo = new THREE.SphereGeometry(0.045, 10, 6).scale(1, 1, 0.5)
 const tilt = (board, i) => { const x = Math.sin(board * 12.9898 + i * 78.233) * 43758.5453; return (x - Math.floor(x) - 0.5) * 0.12 }   // ±3.4°
@@ -72,7 +76,8 @@ function drawPaper(ctx, text) {
   lines.forEach((l, k) => ctx.fillText(l, pad, pad * 1.6 + k * size * 1.35))   // 上はピンの分あける
 }
 
-export function addBoardNotes(ita, board) {
+// minY: 紙の下の端をこれより下にしない（ita のローカルの高さ。地面に埋まっている分をよけるのに使う）
+export function addBoardNotes(ita, board, { minY = -Infinity } = {}) {
   const F = ITA_FACE
   const papers = PAPER_SLOTS.slice(0, NOTES_ON_BOARD).map((slot, i) => {
     const canvas = document.createElement('canvas')
@@ -85,16 +90,16 @@ export function addBoardNotes(ita, board) {
     paper.name = `板の紙 ${i + 1}`
     // 字を書ける範囲からはみ出さないよう、紙の中心を寄せる
     const x = THREE.MathUtils.clamp(F.x0 + slot.u * (F.x1 - F.x0), F.x0 + PAPER_W / 2, F.x1 - PAPER_W / 2)
-    const y = THREE.MathUtils.clamp(F.y1 - slot.v * (F.y1 - F.y0), F.y0 + PAPER_H / 2, F.y1 - PAPER_H / 2)
+    const y = THREE.MathUtils.clamp(F.y1 - slot.v * (F.y1 - F.y0), Math.max(F.y0, minY) + PAPER_H / 2, F.y1 - PAPER_H / 2)
     paper.position.set(x, y, F.z + (PAPER_SLOTS.length - i) * 0.004)   // 新しいものほど手前
     paper.rotation.z = tilt(board, i)
-    const pin = new THREE.Mesh(pinGeo, new THREE.MeshLambertMaterial({ color: slot.pin, emissive: slot.pin, emissiveIntensity: 0.45 }))
+    const pin = new THREE.Mesh(pinGeo, pinMats.red)
     pin.name = 'ピン'
     pin.position.set(0, PAPER_H / 2 - 0.1, 0.01)
     paper.add(pin)
     paper.visible = false
     ita.add(paper)
-    return { paper, ctx: canvas.getContext('2d'), tex }
+    return { paper, pin, ctx: canvas.getContext('2d'), tex }
   })
 
   const draw = notes => {
@@ -103,6 +108,7 @@ export function addBoardNotes(ita, board) {
       p.paper.visible = !!n
       if (!n) return
       drawPaper(p.ctx, n.text)
+      p.pin.material = pinMats[n.pin] ?? pinMats.red
       p.tex.needsUpdate = true
     })
   }
@@ -133,10 +139,11 @@ export function openBoardNotes(board) {
     <ul class="bn-list"></ul>
     <form class="bn-form">
       <textarea rows="2" maxlength="${NOTE_MAX}" placeholder="ここに書き残す（${NOTE_MAX} 文字まで・名前は出ません）"></textarea>
-      <div class="bn-row"><span class="bn-msg"></span><span class="bn-count">0/${NOTE_MAX}</span></div>
+      <div class="bn-row"><span class="bn-pins">${Object.entries(PINS).map(([k, c]) => `<button type="button" class="bn-pin" data-pin="${k}" style="--pin:${c}" aria-label="${k}"></button>`).join('')}</span><span class="bn-count">0/${NOTE_MAX}</span></div>
+      <div class="bn-msg"></div>
       <div class="bn-buttons">
         <button type="button" class="bn-close">CLOSE</button>
-        <button type="submit" class="bn-ok">WRITE</button>
+        <button type="submit" class="bn-ok">POST</button>
       </div>
     </form>`
   const list = el.querySelector('.bn-list')
@@ -144,6 +151,17 @@ export function openBoardNotes(board) {
   const msg = el.querySelector('.bn-msg')
   const count = el.querySelector('.bn-count')
   const ok = el.querySelector('.bn-ok')
+  // ピンの色を選ぶ（前に選んだ色を覚えておく）
+  let pin = 'red'
+  try { if (PINS[localStorage.getItem(PIN_KEY)]) pin = localStorage.getItem(PIN_KEY) } catch { /* 覚えられなくてもよい */ }
+  const pinBtns = [...el.querySelectorAll('.bn-pin')]
+  const setPin = k => {
+    pin = k
+    pinBtns.forEach(b => b.classList.toggle('on', b.dataset.pin === k))
+    try { localStorage.setItem(PIN_KEY, k) } catch { /* 覚えられなくてもよい */ }
+  }
+  pinBtns.forEach(b => b.addEventListener('click', () => setPin(b.dataset.pin)))
+  setPin(pin)
 
   const fmt = at => {
     const d = new Date(at)
@@ -181,7 +199,7 @@ export function openBoardNotes(board) {
     if (!text) { msg.textContent = ERRORS.empty; return }
     ok.disabled = true
     try {
-      const r = await fetch(NOTES_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ board, text }) })
+      const r = await fetch(NOTES_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ board, text, pin }) })
       const res = await r.json()
       if (res.note) {
         input.value = ''

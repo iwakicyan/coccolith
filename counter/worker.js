@@ -7,8 +7,8 @@
 //  （数を読むのは誰でもよいので、CORS はどこからでも通す）
 //
 //  板の書き込み（/notes）。名前なし・承認なしで、書いたらすぐ出る
-//  GET    /notes?board=1          その板の新しい順 NOTES_LIST 件 → { notes: [{ id, text, at }] }
-//  POST   /notes  { board, text } 書き込む（公開ページか開発サーバーから）。NOTE_MAX 文字まで・URL は不可・同じ IP は NOTE_GAP 秒あける
+//  GET    /notes?board=1          その板の新しい順 NOTES_LIST 件 → { notes: [{ id, text, at, pin }] }
+//  POST   /notes  { board, text, pin } 書き込む（pin: ピンの色 NOTE_PINS のどれか。なければ red）（公開ページか開発サーバーから）。NOTE_MAX 文字まで・URL は不可・同じ IP は NOTE_GAP 秒あける
 //  DELETE /notes?id=12&key=...    消す（key は wrangler secret の ADMIN_KEY）
 // ============================================================
 
@@ -18,6 +18,7 @@ const NOTE_BOARDS = 5      // 板の数
 const NOTE_MAX    = 60     // 1 回に書ける文字数
 const NOTE_GAP    = 30     // 同じ IP が次に書けるまでの秒数
 const NOTE_LIST   = 50     // GET で返す件数
+const NOTE_PINS   = ['red', 'blue', 'yellow', 'green']   // ピンの色
 // URL らしいもの（http・www.・ドメインっぽい「英数.英字2文字以上」）。全角の英数・記号は半角に寄せてから見る
 const URL_RE = /(https?:|www\.|[a-z0-9-]+\s*[.．。]\s*(com|net|org|jp|io|me|ly|co|app|dev|xyz|info|link|site|gg|tv|to|cc|be|us)\b|\/\/)/i
 const halfWidth = t => t.replace(/[！-～]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0))
@@ -53,7 +54,7 @@ async function notes(req, env, url, origin, headers) {
   if (req.method === 'GET') {
     const board = parseInt(url.searchParams.get('board'), 10)
     if (!(board >= 1 && board <= NOTE_BOARDS)) return json({ error: 'board' }, 400)
-    const { results } = await env.DB.prepare('SELECT id, text, at FROM notes WHERE board = ?1 ORDER BY id DESC LIMIT ?2').bind(board, NOTE_LIST).all()
+    const { results } = await env.DB.prepare('SELECT id, text, at, pin FROM notes WHERE board = ?1 ORDER BY id DESC LIMIT ?2').bind(board, NOTE_LIST).all()
     return json({ notes: results })
   }
   if (req.method === 'DELETE') {
@@ -72,11 +73,12 @@ async function notes(req, env, url, origin, headers) {
     if (!text) return json({ error: 'empty' }, 400)
     if ([...text].length > NOTE_MAX) return json({ error: 'long' }, 400)
     if (URL_RE.test(halfWidth(text))) return json({ error: 'url' }, 400)
+    const pin = NOTE_PINS.includes(body?.pin) ? body.pin : 'red'
     const ip = await sha256((req.headers.get('CF-Connecting-IP') || '') + (env.ADMIN_KEY || ''))
     const now = Date.now()
     const last = await env.DB.prepare('SELECT at FROM notes WHERE ip = ?1 ORDER BY at DESC LIMIT 1').bind(ip).first()
     if (last && now - last.at < NOTE_GAP * 1000) return json({ error: 'wait', wait: Math.ceil((NOTE_GAP * 1000 - (now - last.at)) / 1000) }, 429)
-    const row = await env.DB.prepare('INSERT INTO notes (board, text, at, ip) VALUES (?1, ?2, ?3, ?4) RETURNING id, text, at').bind(board, text, now, ip).first()
+    const row = await env.DB.prepare('INSERT INTO notes (board, text, at, ip, pin) VALUES (?1, ?2, ?3, ?4, ?5) RETURNING id, text, at, pin').bind(board, text, now, ip, pin).first()
     return json({ note: row })
   }
   return json({ error: 'method' }, 405)
