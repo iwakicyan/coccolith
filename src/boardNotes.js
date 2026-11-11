@@ -1,5 +1,6 @@
 import * as THREE from 'three'
 import { COUNTER_URL } from './visitCounter.js'
+import { t } from './i18n.js'
 import { ITA_FACE } from '../my-3d-parts/parts/ita.js'
 
 // ============================================================
@@ -39,7 +40,8 @@ function wrap(ctx, text, maxW) {
 
 // 板の表に、書き込みを 1 件ずつ白い紙に書いてピンで留めたように貼る。ita: createIta の root、board: 板の番号（1〜）
 //   紙の大きさは文字数で 3 段階（PAPER_SIZES）。字の大きさはどの紙でも同じ（入りきらないときだけ小さくする）
-//   貼る場所と傾きは書き込みの id で決める（新しい書き込みが来ても、ほかの紙は動かない）
+//   貼る場所はなるべく散らす：古いものから順に、id で決まる候補 PLACE_TRIES か所のうち、もう貼った紙からいちばん離れた所に貼る
+//   一度貼った紙の場所は覚えておき、新しい書き込みが来ても動かさない（読み込み直すと古いものから決め直す）。傾きは id で決める
 //   新しいものほど手前に重ねる。重ねる間隔 LAYER はピンの厚みより大きくして、下の紙のピンが上の紙を突き抜けないようにする
 const PAPER_SIZES = [   // max: この文字数未満ならこの大きさ（板のモデル単位。板の横幅は約 3.9）
   { max: 20, w: 0.62, h: 0.5 },
@@ -49,6 +51,7 @@ const PAPER_SIZES = [   // max: この文字数未満ならこの大きさ（板
 const PX_PER_UNIT = 480   // 紙のキャンバスの、モデル単位あたりの画素
 const FONT = 0.07         // 字の大きさ（モデル単位）
 const LAYER = 0.03        // 紙を重ねる間隔（モデル単位）
+const PLACE_TRIES = 32    // 貼る場所の候補の数
 const paperSize = text => PAPER_SIZES.find(s => [...text].length < s.max)
 // ピンの色（書く人が選ぶ。counter/worker.js の NOTE_PINS と同じ名前）
 const PINS = { red: '#ff3b30', blue: '#0a5cff', yellow: '#ffc21a', green: '#2fb84f' }
@@ -89,6 +92,24 @@ export function addBoardNotes(ita, board, { minY = -Infinity } = {}) {
   const layer = new THREE.Group()
   layer.name = '板の紙'
   ita.add(layer)
+  const placed = new Map()   // id → { x, y, w, h }（一度決めた場所）
+  const y0 = Math.max(F.y0, minY)
+  // ほかの紙との間（重なっていれば負）。紙の縁どうしの、x と y の離れ具合の大きいほう
+  const gap = (a, b) => Math.max(Math.abs(a.x - b.x) - (a.w + b.w) / 2, Math.abs(a.y - b.y) - (a.h + b.h) / 2)
+  const place = (n, others) => {
+    const { w, h } = paperSize(n.text)
+    let best = null, bestScore = -Infinity
+    for (let k = 0; k < PLACE_TRIES; k++) {
+      const c = {
+        x: THREE.MathUtils.lerp(F.x0 + w / 2, F.x1 - w / 2, hash(n.id, 10 + k * 2)),
+        y: THREE.MathUtils.lerp(y0 + h / 2, F.y1 - h / 2, hash(n.id, 11 + k * 2)),
+        w, h,
+      }
+      const score = others.length ? Math.min(...others.map(o => gap(c, o))) : 0
+      if (score > bestScore) { best = c; bestScore = score }
+    }
+    return best
+  }
 
   const draw = notes => {
     for (const c of [...layer.children]) {
@@ -97,6 +118,10 @@ export function addBoardNotes(ita, board, { minY = -Infinity } = {}) {
       layer.remove(c)
     }
     const shown = notes.slice(0, NOTES_ON_BOARD)
+    // 場所を決める（まだ決めていないものだけ、古いものから）。外れた紙の場所は忘れる
+    const ids = new Set(shown.map(n => n.id))
+    for (const id of placed.keys()) if (!ids.has(id)) placed.delete(id)
+    for (const n of [...shown].reverse()) if (!placed.has(n.id)) placed.set(n.id, place(n, [...placed.values()]))
     shown.forEach((n, i) => {
       const { w, h } = paperSize(n.text)
       const tex = new THREE.CanvasTexture(paperCanvas(n.text, w, h))
@@ -109,13 +134,8 @@ export function addBoardNotes(ita, board, { minY = -Infinity } = {}) {
       const pin = new THREE.Mesh(pinGeo, pinMats[n.pin] ?? pinMats.red)
       pin.position.set(0, h / 2 - 0.07, 0.005)
       g.add(paper, pin)
-      // 場所は字を書ける範囲（下は minY まで）からはみ出さない中で、id で決める
-      const y0 = Math.max(F.y0, minY)
-      g.position.set(
-        THREE.MathUtils.lerp(F.x0 + w / 2, F.x1 - w / 2, hash(n.id, 1)),
-        THREE.MathUtils.lerp(y0 + h / 2, F.y1 - h / 2, hash(n.id, 2)),
-        F.z + (shown.length - i) * LAYER,   // 新しいもの（i が小さい）ほど手前
-      )
+      const { x, y } = placed.get(n.id)
+      g.position.set(x, y, F.z + (shown.length - i) * LAYER)   // 新しいもの（i が小さい）ほど手前
       g.rotation.z = (hash(n.id, 3) - 0.5) * 0.12   // ±3.4°
       layer.add(g)
     })
@@ -130,11 +150,11 @@ export function addBoardNotes(ita, board, { minY = -Infinity } = {}) {
 let pageEl = null
 export const isBoardNotesOpen = () => !!pageEl
 
-const ERRORS = {
-  url: 'URL は書けません',
-  long: `${NOTE_MAX} 文字までです`,
-  empty: '何か書いてください',
-  origin: 'ここからは書けません',
+const ERRORS = {   // Worker の error → 文言（i18n.js）
+  url: () => t('noteErrUrl'),
+  long: () => t('noteErrLong', NOTE_MAX),
+  empty: () => t('noteErrEmpty'),
+  origin: () => t('noteErrOrigin'),
 }
 
 export function openBoardNotes(board) {
@@ -146,7 +166,7 @@ export function openBoardNotes(board) {
     <div class="bn-title">BOARD ${board}</div>
     <ul class="bn-list"></ul>
     <form class="bn-form">
-      <textarea rows="2" maxlength="${NOTE_MAX}" placeholder="ここに書き残す（${NOTE_MAX} 文字まで・名前は出ません）"></textarea>
+      <textarea rows="2" maxlength="${NOTE_MAX}" placeholder="${t('notePlaceholder')}"></textarea>
       <div class="bn-row"><span class="bn-pins">${Object.entries(PINS).map(([k, c]) => `<button type="button" class="bn-pin" data-pin="${k}" style="--pin:${c}" aria-label="${k}"></button>`).join('')}</span><span class="bn-count">0/${NOTE_MAX}</span></div>
       <div class="bn-msg"></div>
       <div class="bn-buttons">
@@ -178,7 +198,7 @@ export function openBoardNotes(board) {
   const render = notes => {
     list.replaceChildren(...(notes.length ? notes : [null]).map(n => {
       const li = document.createElement('li')
-      if (!n) { li.className = 'bn-empty'; li.textContent = 'まだ何も書かれていません' }
+      if (!n) { li.className = 'bn-empty'; li.textContent = t('noteEmptyList') }
       else {
         const t = document.createElement('span'); t.textContent = n.text
         const d = document.createElement('time'); d.textContent = fmt(n.at)
@@ -193,7 +213,7 @@ export function openBoardNotes(board) {
     for (const d of entry.draws) d(notes)
   }
   render(entry.notes)
-  fetchNotes(board).then(refresh).catch(() => { msg.textContent = '読み込めませんでした' })
+  fetchNotes(board).then(refresh).catch(() => { msg.textContent = t('noteLoadFailed') })
 
   input.addEventListener('input', () => { count.textContent = `${[...input.value].length}/${NOTE_MAX}`; msg.textContent = '' })
   // Enter で書き込む（Shift+Enter と変換中の Enter は除く）
@@ -204,7 +224,7 @@ export function openBoardNotes(board) {
   el.querySelector('form').addEventListener('submit', async e => {
     e.preventDefault()
     const text = input.value.trim()
-    if (!text) { msg.textContent = ERRORS.empty; return }
+    if (!text) { msg.textContent = ERRORS.empty(); return }
     ok.disabled = true
     try {
       const r = await fetch(NOTES_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ board, text, pin }) })
@@ -212,12 +232,12 @@ export function openBoardNotes(board) {
       if (res.note) {
         input.value = ''
         count.textContent = `0/${NOTE_MAX}`
-        msg.textContent = '書きました'
+        msg.textContent = t('notePosted')
         refresh([res.note, ...entry.notes])
-      } else if (res.error === 'wait') msg.textContent = `あと ${res.wait} 秒まってください`
-      else msg.textContent = ERRORS[res.error] ?? '書けませんでした'
+      } else if (res.error === 'wait') msg.textContent = t('noteWait', res.wait)
+      else msg.textContent = ERRORS[res.error]?.() ?? t('noteFailed')
     } catch {
-      msg.textContent = '書けませんでした'
+      msg.textContent = t('noteFailed')
     }
     ok.disabled = false
   })
