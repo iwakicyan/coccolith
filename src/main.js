@@ -485,7 +485,7 @@ const rideCarrier = {
     { at: FIELD, e:  12, n:  -2, yaw:  75, tilt:  3 },
     { at: FIELD, e:  -4, n:  -6, yaw: 160, tilt: -4 },
     { at: FIELD, e: -13, n: -12, yaw: -100, tilt: 7 },
-    { at: { lat: 25.7, lon:   61   }, e: 0, n: 0, yaw:  15, tilt:  3 },
+    { at: { lat: 25.7, lon:   61   }, e: 0, n: 0, yaw: 195, tilt:  3 },
     { at: { lat: 18.7, lon:  113.7 }, e: 0, n: 0, yaw: -30, tilt: -4 },
     { at: { lat: 12,   lon: -130   }, e: 0, n: 0, yaw:  50, tilt:  5 },
   ]
