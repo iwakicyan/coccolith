@@ -516,6 +516,14 @@ const INTERIORS = {
   tofu: () => import('./interiors/tofu.js').then(m => m.createTofuInterior()),
   sshall: () => import('./interiors/sshall.js').then(m => m.createSShallInterior()),
 }
+// 室内の明るさ（建物ごとのモジュールで決めた光の強さに掛ける）。明るい壁の上でも HUD の白い字が読めるよう少し落とす
+// 絵・窓の外（MeshBasicMaterial）は光を受けないので、明るさはそのまま
+const INTERIOR_BRIGHTNESS = 0.8
+async function loadInterior(id) {
+  const def = await INTERIORS[id]()
+  def.scene.traverse(o => { if (o.isLight) o.intensity *= INTERIOR_BRIGHTNESS })
+  return def
+}
 const DOOR_REACH       = 3.5   // ドアからこの距離 (m) 以内で輪郭が光り、出入りできる
 const DOOR_EXIT_DIST   = 8.5   // 外に出たときのドアからの距離 (m)
 const INTERIOR_SPEED   = 2     // 室内の移動速度 (m/s)
@@ -627,7 +635,7 @@ async function enterInterior(door) {
   showLoading()
   await fadeTo(1)
   try {
-    const def = _interiorCache[door.id] ??= await INTERIORS[door.id]()
+    const def = _interiorCache[door.id] ??= await loadInterior(door.id)
     // 中のシェーダーを先にまとめて非同期でコンパイルする（最初の描画で同期でコンパイルすると、そのあいだローディングのコマ送りも止まる）
     def.scene.add(sabchan.group)
     await renderer.compileAsync(def.scene, camera).catch(() => {})
@@ -638,6 +646,7 @@ async function enterInterior(door) {
     interior = { def, door }
     applySabLightLevel()
     updateTabBtn()
+    updateJumpList()
   } finally {
     loadingHold = false   // 次に描いた（中の）フレームでローディングを消す
     await fadeTo(0)
@@ -656,6 +665,7 @@ async function exitInterior() {
   interior = null
   applySabLightLevel()
   setFirstPerson(false)
+  updateJumpList()
   // ドアの外側に、ドアから離れる向きで立たせる
   pDir.copy(door.spawnDir)
   pFwd.copy(door.out).addScaledVector(pDir, -door.out.dot(pDir)).normalize()
@@ -673,6 +683,8 @@ function useDoor() {
 // --- JUMP: HUD 右上の一覧から施設内へワープ -------------------
 // 行き先は外のドアの id。施設が増えたらここに足す
 // 一覧の一番下はいつも CREDIT（ツリーハウスの扉と同じドット絵のページ＝作者表記を開く）。項目は addJumpItem で CREDIT の上に足す
+// 室内にいる間は、一番上に EXIT（外へ。出口まで歩かなくても出られる）を出し、今いる施設の行は隠す（updateJumpList）
+// label は室内にいる間の HUD の施設名にも使う
 const JUMP_SPOTS = [
   { id: 'tofu', label: 'TOFU-HOUSE' },
   { id: 'sshall', label: 'SS-HALL' },
@@ -698,11 +710,22 @@ jumpListEl.append(jumpCreditBtn)
 function addJumpItem(label, onClick) {
   jumpListEl.insertBefore(createJumpButton(label, onClick), jumpCreditBtn)
 }
+const jumpSpotBtns = {}   // 施設 id → 一覧の行
 for (const { id, label } of JUMP_SPOTS) {
   const door = _doors.find(d => d.id === id)
   if (!door) continue
   addJumpItem(label, () => { if (!transitioning) enterInterior(door) })
+  jumpSpotBtns[id] = jumpCreditBtn.previousSibling
 }
+const jumpExitBtn = createJumpButton('EXIT', () => { if (interior && !transitioning) exitInterior() })
+jumpListEl.prepend(jumpExitBtn)
+// 室内に入った・出たときに呼ぶ
+function updateJumpList() {
+  jumpExitBtn.hidden = !interior
+  for (const id in jumpSpotBtns) jumpSpotBtns[id].hidden = interior?.door.id === id
+}
+updateJumpList()
+const facilityName = id => JUMP_SPOTS.find(s => s.id === id)?.label ?? id.toUpperCase()
 jumpBtn.addEventListener('click', () => setJumpOpen(!jumpEl.classList.contains('open')))
 document.addEventListener('pointerdown', e => { if (!jumpEl.contains(e.target)) setJumpOpen(false) })
 
@@ -875,7 +898,8 @@ onLangChange(updateTabBtnLabel)
 updateTabBtn()   // 前回の設定が屋外の主観なら、始めから sabちゃんを隠す
 // 訪問者数（開発サーバー・撮影モードでは数えない）
 initVisitCounter(document.getElementById('visit-count'), document.getElementById('visit-num'), { countable: !import.meta.env.DEV && !shotMode })
-const { drawCompass }       = createCompass(document.getElementById('compass'))
+const compassEl = document.getElementById('compass')
+const { drawCompass }       = createCompass(compassEl)
 const { drawVethIndicator } = createVethIndicator(document.getElementById('veth-ind'))
 const areaEl   = document.getElementById('area-code')
 const latlonEl = document.getElementById('latlon')
@@ -886,10 +910,17 @@ const latlonEl = document.getElementById('latlon')
 const coinBoxEl = document.getElementById('coin-box')
 const _hudDir = new THREE.Vector3()
 const coinNumEl = document.getElementById('coin-num')
+// 持っている枚数は localStorage に残し、次に開いたときもそこから数える（撮影モードでは読まず、残さない）
+const COIN_KEY = 'coccolith.coins'
 let coinCount = 0
+if (!shotMode) {
+  try { coinCount = Math.max(0, Math.floor(Number(localStorage.getItem(COIN_KEY)) || 0)) } catch { /* 読めなければ 0 から */ }
+}
+coinNumEl.textContent = coinCount
 function setCoinCount(n) {
   coinCount = n
   coinNumEl.textContent = coinCount
+  if (!shotMode) try { localStorage.setItem(COIN_KEY, String(coinCount)) } catch { /* 残せなくても今回は数える */ }
   coinNumEl.classList.add('bump')
   setTimeout(() => coinNumEl.classList.remove('bump'), 120)
 }
@@ -1575,14 +1606,21 @@ function animate() {
     hudUp  = _hudUp.setFromMatrixColumn(camera.matrixWorld, 1)
     hudFwd = _hudFwd.setFromMatrixColumn(camera.matrixWorld, 2).negate()
   }
-  drawCompass(hudUp, hudFwd)
+  // コンパスは「地面の法線」と「向いている方向」で方角を出す。俯瞰中は画面の真ん中の地点で、画面の上を向いている方向
+  // 室内は方角がないので隠す
+  compassEl.hidden = !!interior
+  if (!interior) {
+    if (overviewMode) drawCompass(_hudDir.copy(camera.position).normalize(), hudUp)
+    else drawCompass(pDir, pFwd)
+  }
   drawVethIndicator(hudCamPos, hudUp, hudFwd, _vethWorldPos)
   {
     // 俯瞰中は画面の中心（カメラの真下 = 俯瞰を抜けたときに立つ地点）の座標を出す
     // 文字は変わったときだけ書き換える（毎フレーム書くとページのレイアウトをやり直す）
     const { lat, lon } = latLonOf(overviewMode ? _hudDir.copy(camera.position).normalize() : pDir)
-    const area   = getAreaCode(lat, lon)
-    const latlon = `  |  lat: ${lat.toFixed(1)}°  lon: ${lon.toFixed(1)}°`
+    // 室内にいる間は、エリアコードと緯度経度の代わりに施設名を出す
+    const area   = interior ? facilityName(interior.door.id) : getAreaCode(lat, lon)
+    const latlon = interior ? '' : `  |  lat: ${lat.toFixed(1)}°  lon: ${lon.toFixed(1)}°`
     if (areaEl.textContent !== area) areaEl.textContent = area
     if (latlonEl.textContent !== latlon) latlonEl.textContent = latlon
     if (!hudReady) { coinBoxEl.classList.add('ready'); hudReady = true }

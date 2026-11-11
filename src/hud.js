@@ -4,56 +4,93 @@ import * as THREE from 'three'
 //  HUD — コンパス & vethインジケーター
 // ============================================================
 
-const AXES = [
-  { dir: new THREE.Vector3(1, 0, 0), color: '#ff5555', label: 'X' },
-  { dir: new THREE.Vector3(0, 1, 0), color: '#55dd77', label: 'Y' },
-  { dir: new THREE.Vector3(0, 0, 1), color: '#5599ff', label: 'Z' },
-]
-
 const _right  = new THREE.Vector3()
 const _toVeth = new THREE.Vector3()
+const _north  = new THREE.Vector3()
+const _east   = new THREE.Vector3()
+
+// ============================================================
+//  方位磁針 — 向いている方向がいつも上。N/E/S/W の文字盤が回る
+//  北 = 北極（+Y、HUD の lat が増える向き）、東 = HUD の lon が増える向き
+//  上の ▲ が今向いている方向、真ん中にその方角（N, NE, …）を出す
+// ============================================================
+const CARDINALS = [['N', 0], ['E', 90], ['S', 180], ['W', 270]]
+const POINTS8 = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW']
+const NORTH_COLOR = '#ff6b6b'
+const MARK_COLOR  = 'rgba(186,205,216,1)'   // veth の矢印と同じ色
 
 export function createCompass(canvas) {
+  const SIZE = 88
+  const dpr = Math.min(window.devicePixelRatio || 1, 3)   // 文字がにじまないよう画面の解像度で描く
+  canvas.width = canvas.height = Math.round(SIZE * dpr)
+  canvas.style.width = canvas.style.height = SIZE + 'px'
   const ctx = canvas.getContext('2d')
-  const cx = 44, cy = 44, len = 30
-  const projected = AXES.map(a => ({ ...a, px: 0, py: 0, pz: 0 }))   // 毎フレーム使い回す
+  const cx = SIZE / 2, cy = SIZE / 2, R = 40
+  let lastDeg = NaN
 
-  function drawCompass(pDir, pFwd) {
-    ctx.clearRect(0, 0, 88, 88)
+  // up: 立っている地点の外向きの法線、fwd: 向いている方向（地面に沿っていなくてよい）
+  function drawCompass(up, fwd) {
+    // 北: 北極（+Y）の方向を地面に沿わせたもの。極の真上では決まらないので、経度 -180° の線から極へ来たときの北にする
+    _north.set(0, 1, 0).addScaledVector(up, -up.y)
+    if (_north.lengthSq() < 1e-8) _north.set(up.y > 0 ? -1 : 1, 0, 0)
+    _north.normalize()
+    _east.crossVectors(up, _north)   // 上 × 北 = 東（lon が増える向き）
+    const heading = Math.atan2(fwd.dot(_east), fwd.dot(_north))   // 北から東回りの角度 (rad)
+    let deg = THREE.MathUtils.radToDeg(heading)
+    if (deg < 0) deg += 360
+    if (Math.abs(deg - lastDeg) < 0.2) return   // ほとんど回っていなければ描き直さない
+    lastDeg = deg
+
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+    ctx.clearRect(0, 0, SIZE, SIZE)
 
     ctx.beginPath()
-    ctx.arc(cx, cy, 40, 0, Math.PI * 2)
+    ctx.arc(cx, cy, R, 0, Math.PI * 2)
     ctx.fillStyle = 'rgba(0,0,0,0.45)'
     ctx.fill()
-    ctx.strokeStyle = 'rgba(255,255,255,0.15)'
-    ctx.lineWidth = 0.5
+    ctx.strokeStyle = 'rgba(255,255,255,0.25)'
+    ctx.lineWidth = 1
     ctx.stroke()
 
-    const right = _right.crossVectors(pFwd, pDir).normalize()
-
-    for (const a of projected) {
-      a.px = a.dir.dot(right)
-      a.py = a.dir.dot(pDir)
-      a.pz = a.dir.dot(pFwd)
+    // 目盛り（30° ごと）。向いている方向が上に来るよう、文字盤を -heading 回す
+    const at = (bearingDeg, r) => {
+      const a = THREE.MathUtils.degToRad(bearingDeg) - heading - Math.PI / 2
+      return [cx + Math.cos(a) * r, cy + Math.sin(a) * r]
     }
-    projected.sort((a, b) => a.pz - b.pz)
+    ctx.lineCap = 'round'
+    for (let b = 0; b < 360; b += 30) {
+      if (b % 90 === 0) continue   // 東西南北は文字を置く
+      const [x0, y0] = at(b, R - 3), [x1, y1] = at(b, R - 7)
+      ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1)
+      ctx.strokeStyle = 'rgba(255,255,255,0.35)'; ctx.lineWidth = 1; ctx.stroke()
+    }
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    for (const [label, b] of CARDINALS) {
+      const [x, y] = at(b, R - 10)
+      ctx.font = b === 0 ? 'bold 12px monospace' : '10px monospace'
+      ctx.fillStyle = b === 0 ? NORTH_COLOR : 'rgba(255,255,255,0.75)'
+      ctx.fillText(label, x, y + 0.5)
+    }
+    // 北を指す細い針（文字盤と一緒に回る）
+    {
+      const [nx, ny] = at(0, R - 18)
+      ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(nx, ny)
+      ctx.strokeStyle = NORTH_COLOR; ctx.globalAlpha = 0.6; ctx.lineWidth = 1.5; ctx.stroke()
+      ctx.globalAlpha = 1
+    }
 
-    projected.forEach(a => {
-      const ex = cx + a.px * len
-      const ey = cy - a.py * len
-      ctx.globalAlpha = a.pz < 0 ? 0.35 : 1.0
-      ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(ex, ey)
-      ctx.strokeStyle = a.color; ctx.lineWidth = 1.5; ctx.stroke()
-      const angle = Math.atan2(ey - cy, ex - cx)
-      ctx.beginPath()
-      ctx.moveTo(ex, ey)
-      ctx.lineTo(ex - 6 * Math.cos(angle - 0.4), ey - 6 * Math.sin(angle - 0.4))
-      ctx.lineTo(ex - 6 * Math.cos(angle + 0.4), ey - 6 * Math.sin(angle + 0.4))
-      ctx.closePath(); ctx.fillStyle = a.color; ctx.fill()
-      ctx.font = 'bold 10px monospace'; ctx.fillStyle = a.color
-      ctx.fillText(a.label, ex + 4 * Math.cos(angle) - 3, ey + 4 * Math.sin(angle) + 4)
-    })
-    ctx.globalAlpha = 1
+    // 上の ▲（今向いている方向。回らない）
+    ctx.beginPath()
+    ctx.moveTo(cx, cy - R + 1); ctx.lineTo(cx - 4, cy - R + 7); ctx.lineTo(cx + 4, cy - R + 7)
+    ctx.closePath(); ctx.fillStyle = MARK_COLOR; ctx.fill()
+
+    // 真ん中に、向いている方角
+    ctx.beginPath(); ctx.arc(cx, cy, 11, 0, Math.PI * 2)
+    ctx.fillStyle = 'rgba(0,0,0,0.55)'; ctx.fill()
+    ctx.font = 'bold 10px monospace'
+    ctx.fillStyle = MARK_COLOR
+    ctx.fillText(POINTS8[Math.round(deg / 45) % 8], cx, cy + 0.5)
   }
 
   return { drawCompass }
