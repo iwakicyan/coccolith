@@ -33,9 +33,9 @@ import { createPixelSpriteWalkers, createPixelSpriteFlyers } from './pixelSprite
 import { createBluedogWalkers } from './bluedog.js'
 import { createSneakerWalkers } from './sneaker.js'
 import { createTsue } from '../my-3d-parts/parts/tsue.js'
-import { createIta, itaInflatedGeometry, itaEdgesGeometry, ITA_FACE, ITA_WIDTH } from '../my-3d-parts/parts/ita.js'
+import { createIta, ITA_FACE, ITA_WIDTH } from '../my-3d-parts/parts/ita.js'
 import { addBoardNotes, openBoardNotes, isBoardNotesOpen, noteCoinTarget } from './boardNotes.js'
-import { addShapeGlow } from './doorGlow.js'
+import { addGroundGlow } from './doorGlow.js'
 
 // ============================================================
 //  LMF — Layout Master File
@@ -473,7 +473,7 @@ const rideCarrier = {
 
 // 板（my-3d-parts/parts/ita.js）: lat 53.7・lon -150 のまわり 30m 四方に 5 枚と、ほかの 3 か所に 1 枚ずつ、横幅 ITA_W (m) の板を地面に刺す
 //   sabちゃんは板を通り抜けられない（colliders に足す。footprint は createIta が入れる板の外形の箱）。当たり判定を作る前に置く
-//   板ごとにだれでも書き込める（boardNotes.js）。表に新しい書き込みを字で出し、近づくと輪郭が光ってタップ（Enter）で書き込みのページを開く
+//   板ごとにだれでも書き込める（boardNotes.js）。表に新しい書き込みを字で出し、近づくと地面に刺さるところ（接地ライン）がコイン箱のように光ってタップ（Enter）で書き込みのページを開く
 //   ITA_SPOTS は at（lat・lon）から東へ e (m)・北へ n (m)、向き yaw（度。0 で正面が北）、傾き tilt（度。前後へ）
 //   板の番号は ITA_SPOTS の順に 1〜。書き込みは板の番号ごとに残るので、並びを変えたり途中に足したりしない（足すのは後ろへ。counter/worker.js の NOTE_BOARDS も合わせる）
 //   地面に ITA_SINK だけ埋める。太陽の当たる側（x > 0）にあれば影を落とす。影は受けない（杖と同じ）
@@ -511,7 +511,10 @@ const rideCarrier = {
     colliders.push(ita)
     const board = i + 1, mesh = ita.getObjectByName('板')
     addBoardNotes(ita, board, { minY: (ITA_SINK + ITA_PAPER_ABOVE) * ITA_WIDTH / ITA_W })   // 紙は地面から ITA_PAPER_ABOVE (m) より上に貼る
-    addShapeGlow(mesh, itaInflatedGeometry(0.1), itaEdgesGeometry())   // 光は板の外へ 0.1（モデル単位。約 15cm）はみ出す
+    // 接地ライン：地面の高さ（板の下の辺から ITA_SINK）で板を切った四角。その高さの板の左右の端はスケッチの画素で x = 150〜1105（ita.js の OUTLINE_PTS）
+    //   傾き（tilt）と地面のでこぼこは見ない（光の帯の高さ band で埋める）
+    const s = ITA_W / ITA_WIDTH, PX = 0.004   // s: m／モデル単位、PX: スケッチの画素 → モデル単位（ita.js の S）
+    addGroundGlow(mesh, { y: ITA_SINK / s, pad: 0.1 / s, band: 0.12 / s, width: (1105 - 150) * PX, depth: 36 * PX, x: ((150 + 1105) / 2 - 630) * PX })
     const center = new THREE.Vector3(0, (ITA_FACE.y0 + ITA_FACE.y1) / 2, 0)   // 板の真ん中（ita のローカル）
     ita.userData.glowSpot = { mesh, local: center, reach: ITA_W / 2 + 2.5, onTap: () => openBoardNotes(board) }
   })
