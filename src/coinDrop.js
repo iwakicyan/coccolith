@@ -71,7 +71,7 @@ export function createCoinDrop({ boxEl, scene, camera, renderer, slot, getCount,
     boxEl.classList.add('grabbing')
     ghost = document.createElement('img')
     ghost.id = 'coin-ghost'
-    ghost.src = boxEl.querySelector('img').src
+    ghost.src = `${import.meta.env.BASE_URL}ui/coin_icon_large.png`   // HUD の 40px のアイコンだと大きく出したときにぼやけるので、握ったときは大きい画像（180px）を使う
     ghost.alt = ''
     document.body.append(ghost)
     moveGhost(e)
