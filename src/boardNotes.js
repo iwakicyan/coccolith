@@ -14,7 +14,7 @@ export const NOTES_ON_BOARD = 5   // 板の表に出す件数（新しい順）
 const PIN_KEY = 'coccolith.notePin'   // 前に選んだピンの色（localStorage）
 const NOTE_MAX = 60               // 1 回に書ける文字数（counter/worker.js と同じ）
 const INK = '#4a3626'             // 紙の字と縁の色（板の輪郭線と同じ濃い茶）
-const FONT = '"Hiragino Maru Gothic ProN", "Hiragino Sans", "Yu Gothic", sans-serif'
+const FONT_FAMILY = '"Hiragino Maru Gothic ProN", "Hiragino Sans", "Yu Gothic", sans-serif'
 
 const boards = {}   // board → { notes, draw }。書き込んだら同じ板の表も描き直す
 
@@ -38,78 +38,86 @@ function wrap(ctx, text, maxW) {
 }
 
 // 板の表に、書き込みを 1 件ずつ白い紙に書いてピンで留めたように貼る。ita: createIta の root、board: 板の番号（1〜）
-//   紙は PAPER_SLOTS の場所に新しい順に貼り、新しいものほど手前に重ねる。傾きは板と場所ごとに決まった小さな角度
-const PAPER_W = 1.2, PAPER_H = 0.95   // 紙の大きさ（板のモデル単位。板の横幅は約 3.9）
-const PAPER_PX = 512                  // 紙のキャンバスの横の画素
-const FONT_PX = 44                    // 字の大きさ（紙のキャンバスの画素）。入りきらないときは小さくする
-// 紙を貼る場所（字を書ける範囲 ITA_FACE の中の割合。u: 左 0〜右 1、v: 上 0〜下 1）。新しい順
-const PAPER_SLOTS = [
-  { u: 0.24, v: 0.26 },
-  { u: 0.74, v: 0.34 },
-  { u: 0.46, v: 0.70 },
-  { u: 0.86, v: 0.80 },
-  { u: 0.14, v: 0.76 },
+//   紙の大きさは文字数で 3 段階（PAPER_SIZES）。字の大きさはどの紙でも同じ（入りきらないときだけ小さくする）
+//   貼る場所と傾きは書き込みの id で決める（新しい書き込みが来ても、ほかの紙は動かない）
+//   新しいものほど手前に重ねる。重ねる間隔 LAYER はピンの厚みより大きくして、下の紙のピンが上の紙を突き抜けないようにする
+const PAPER_SIZES = [   // max: この文字数未満ならこの大きさ（板のモデル単位。板の横幅は約 3.9）
+  { max: 20, w: 0.62, h: 0.5 },
+  { max: 40, w: 0.84, h: 0.68 },
+  { max: Infinity, w: 1.0, h: 0.84 },
 ]
+const PX_PER_UNIT = 480   // 紙のキャンバスの、モデル単位あたりの画素
+const FONT = 0.07         // 字の大きさ（モデル単位）
+const LAYER = 0.03        // 紙を重ねる間隔（モデル単位）
+const paperSize = text => PAPER_SIZES.find(s => [...text].length < s.max)
 // ピンの色（書く人が選ぶ。counter/worker.js の NOTE_PINS と同じ名前）
 const PINS = { red: '#ff3b30', blue: '#0a5cff', yellow: '#ffc21a', green: '#2fb84f' }
 const pinMats = Object.fromEntries(Object.entries(PINS).map(([k, c]) => [k, new THREE.MeshLambertMaterial({ color: c, emissive: c, emissiveIntensity: 0.45 })]))
-const paperMat = tex => new THREE.MeshLambertMaterial({ map: tex, emissive: 0xffffff, emissiveMap: tex, emissiveIntensity: 0.45 })
-const pinGeo = new THREE.SphereGeometry(0.045, 10, 6).scale(1, 1, 0.5)
-const tilt = (board, i) => { const x = Math.sin(board * 12.9898 + i * 78.233) * 43758.5453; return (x - Math.floor(x) - 0.5) * 0.12 }   // ±3.4°
+const pinGeo = new THREE.SphereGeometry(0.035, 10, 6).scale(1, 1, 0.5)
+const paperGeo = new THREE.PlaneGeometry(1, 1)   // 紙の大きさは scale で
+// id から 0〜1 の決まった値を出す（k で別の値）
+const hash = (id, k) => { const x = Math.sin(id * 12.9898 + k * 78.233) * 43758.5453; return x - Math.floor(x) }
 
-function drawPaper(ctx, text) {
-  const W = ctx.canvas.width, H = ctx.canvas.height, pad = W * 0.08
+// 紙のキャンバスを描く。上はピンの分あける
+function paperCanvas(text, w, h) {
+  const canvas = document.createElement('canvas')
+  canvas.width = Math.round(w * PX_PER_UNIT)
+  canvas.height = Math.round(h * PX_PER_UNIT)
+  const ctx = canvas.getContext('2d')
+  const W = canvas.width, H = canvas.height, pad = 0.06 * PX_PER_UNIT, top = 0.12 * PX_PER_UNIT
   ctx.fillStyle = '#fff'
   ctx.fillRect(0, 0, W, H)
   ctx.strokeStyle = INK
-  ctx.lineWidth = W * 0.012
+  ctx.lineWidth = 0.008 * PX_PER_UNIT
   ctx.strokeRect(ctx.lineWidth / 2, ctx.lineWidth / 2, W - ctx.lineWidth, H - ctx.lineWidth)
-  let size = FONT_PX, lines
+  let size = Math.round(FONT * PX_PER_UNIT), lines
   for (;;) {
-    ctx.font = `bold ${size}px ${FONT}`
+    ctx.font = `bold ${size}px ${FONT_FAMILY}`
     lines = wrap(ctx, text, W - pad * 2)
-    if (lines.length * size * 1.35 <= H - pad * 2.6 || size <= 14) break
+    if (lines.length * size * 1.35 <= H - top - pad || size <= 12) break
     size -= 2
   }
   ctx.fillStyle = INK
   ctx.textBaseline = 'top'
-  lines.forEach((l, k) => ctx.fillText(l, pad, pad * 1.6 + k * size * 1.35))   // 上はピンの分あける
+  lines.forEach((l, k) => ctx.fillText(l, pad, top + k * size * 1.35))
+  return canvas
 }
 
 // minY: 紙の下の端をこれより下にしない（ita のローカルの高さ。地面に埋まっている分をよけるのに使う）
 export function addBoardNotes(ita, board, { minY = -Infinity } = {}) {
   const F = ITA_FACE
-  const papers = PAPER_SLOTS.slice(0, NOTES_ON_BOARD).map((slot, i) => {
-    const canvas = document.createElement('canvas')
-    canvas.width = PAPER_PX
-    canvas.height = Math.round(PAPER_PX * PAPER_H / PAPER_W)
-    const tex = new THREE.CanvasTexture(canvas)
-    tex.colorSpace = THREE.SRGBColorSpace
-    tex.anisotropy = 4
-    const paper = new THREE.Mesh(new THREE.PlaneGeometry(PAPER_W, PAPER_H), paperMat(tex))
-    paper.name = `板の紙 ${i + 1}`
-    // 字を書ける範囲からはみ出さないよう、紙の中心を寄せる
-    const x = THREE.MathUtils.clamp(F.x0 + slot.u * (F.x1 - F.x0), F.x0 + PAPER_W / 2, F.x1 - PAPER_W / 2)
-    const y = THREE.MathUtils.clamp(F.y1 - slot.v * (F.y1 - F.y0), Math.max(F.y0, minY) + PAPER_H / 2, F.y1 - PAPER_H / 2)
-    paper.position.set(x, y, F.z + (PAPER_SLOTS.length - i) * 0.004)   // 新しいものほど手前
-    paper.rotation.z = tilt(board, i)
-    const pin = new THREE.Mesh(pinGeo, pinMats.red)
-    pin.name = 'ピン'
-    pin.position.set(0, PAPER_H / 2 - 0.1, 0.01)
-    paper.add(pin)
-    paper.visible = false
-    ita.add(paper)
-    return { paper, pin, ctx: canvas.getContext('2d'), tex }
-  })
+  const layer = new THREE.Group()
+  layer.name = '板の紙'
+  ita.add(layer)
 
   const draw = notes => {
-    papers.forEach((p, i) => {
-      const n = notes[i]
-      p.paper.visible = !!n
-      if (!n) return
-      drawPaper(p.ctx, n.text)
-      p.pin.material = pinMats[n.pin] ?? pinMats.red
-      p.tex.needsUpdate = true
+    for (const c of [...layer.children]) {
+      c.children[0].material.map.dispose()
+      c.children[0].material.dispose()
+      layer.remove(c)
+    }
+    const shown = notes.slice(0, NOTES_ON_BOARD)
+    shown.forEach((n, i) => {
+      const { w, h } = paperSize(n.text)
+      const tex = new THREE.CanvasTexture(paperCanvas(n.text, w, h))
+      tex.colorSpace = THREE.SRGBColorSpace
+      tex.anisotropy = 4
+      const g = new THREE.Group()
+      g.name = `紙 ${n.id}`
+      const paper = new THREE.Mesh(paperGeo, new THREE.MeshLambertMaterial({ map: tex, emissive: 0xffffff, emissiveMap: tex, emissiveIntensity: 0.45 }))
+      paper.scale.set(w, h, 1)
+      const pin = new THREE.Mesh(pinGeo, pinMats[n.pin] ?? pinMats.red)
+      pin.position.set(0, h / 2 - 0.07, 0.005)
+      g.add(paper, pin)
+      // 場所は字を書ける範囲（下は minY まで）からはみ出さない中で、id で決める
+      const y0 = Math.max(F.y0, minY)
+      g.position.set(
+        THREE.MathUtils.lerp(F.x0 + w / 2, F.x1 - w / 2, hash(n.id, 1)),
+        THREE.MathUtils.lerp(y0 + h / 2, F.y1 - h / 2, hash(n.id, 2)),
+        F.z + (shown.length - i) * LAYER,   // 新しいもの（i が小さい）ほど手前
+      )
+      g.rotation.z = (hash(n.id, 3) - 0.5) * 0.12   // ±3.4°
+      layer.add(g)
     })
   }
 
