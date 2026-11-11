@@ -9,6 +9,7 @@
 //  showOnTap: レイヤー を持つレイヤーはふだんは出さず、そのレイヤーの色のあるドットをタップするたびに出す・消すを切り替える（人物をタップで吹き出し）
 //  onTap: 関数 を持つレイヤーは、その色のあるドットをタップすると関数を呼ぶ（バインダーをタップで開発資料を開く）
 //  hoverLabel: 文字 を持つレイヤーは、カーソルを合わせると周り 1 ドットを白く縁取り、上にその文字を出す
+//    指（タッチ・ペン）では合わせられないので、1 回目のタップで縁取りと文字を出し、出ているときにもう一度タップすると onTap を呼ぶ
 //  絵と CLOSE の間にテキストウィンドウを置く（横幅は背景の表示幅の TEXT_W 倍。text で中身を渡す。改行はそのまま、[表示する文字](URL) はリンクにする）
 //  閉じる: 外側のタップ・CLOSE・Esc
 // ============================================================
@@ -121,8 +122,16 @@ export function openPixelScene(layers, { text = '' } = {}) {
     for (const [target, area] of hitArea) if (area.has(key)) return target
     return null
   }
+  let pointerType = 'mouse'   // いま押しているのがマウスか指か（click には入っていないブラウザがあるので pointerdown で覚える）
+  cv.addEventListener('pointerdown', e => { pointerType = e.pointerType })
   cv.addEventListener('click', e => {
     const target = hitTarget(e)
+    if (pointerType !== 'mouse') {
+      // 指: hoverLabel のあるものは、1 回目は縁取りと文字を出すだけ。出ているものをもう一度押すと開く。ほかを押すと文字は消す
+      const first = target?.hoverLabel && target.onTap && hovered !== target
+      setHovered(first ? target : null)
+      if (first) return
+    }
     if (!target) return
     if (target.onTap) { target.onTap(); return }
     for (const l of tapLayers) {
@@ -148,12 +157,14 @@ export function openPixelScene(layers, { text = '' } = {}) {
     labelEl.style.left = `${r.left + ((x0 + x1) / 2 - minX) * s}px`
     labelEl.style.top = `${r.top + (y0 - 2 - minY) * s}px`
   }
-  cv.addEventListener('mousemove', e => {
+  // 指で押したときもブラウザは mousemove を出すので、マウスのときだけ見る
+  cv.addEventListener('pointermove', e => {
+    if (e.pointerType !== 'mouse') return
     const target = hitTarget(e)
     cv.style.cursor = target && (target.onTap || tapLayers.some(l => l.showOnTap === target)) ? 'pointer' : ''
     setHovered(target?.hoverLabel ? target : null)
   })
-  cv.addEventListener('mouseleave', () => setHovered(null))
+  cv.addEventListener('pointerleave', e => { if (e.pointerType === 'mouse') setHovered(null) })
 
   // 瞬き: 目を閉じた目元を一瞬だけ重ね、元の絵に戻す
   let blinkTimer = null
