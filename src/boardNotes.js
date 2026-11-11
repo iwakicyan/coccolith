@@ -15,7 +15,6 @@ import { ITA_FACE } from '../my-3d-parts/parts/ita.js'
 const NOTES_URL = COUNTER_URL ? COUNTER_URL + '/notes' : ''
 export const NOTES_ON_BOARD = 12   // 板の表に出す件数（新しい順。書き込みのページの一覧の件数は counter/worker.js の NOTE_LIST）
 const PIN_KEY = 'coccolith.notePin'   // 前に選んだピンの色（localStorage）
-const COIN_ICON = document.querySelector('#coin-box img')?.src ?? ''   // 一覧のコインの絵（HUD のコインと同じ）
 const NOTE_MAX = 60               // 1 回に書ける文字数（counter/worker.js と同じ）
 const INK = '#4a3626'             // 紙の字と縁の色（板の輪郭線と同じ濃い茶）
 const FONT_FAMILY = '"Hiragino Maru Gothic ProN", "Hiragino Sans", "Yu Gothic", sans-serif'
@@ -175,6 +174,16 @@ function markCoined(id, on) {
   if (on) ids.push(id)
   try { localStorage.setItem(COINED_KEY, JSON.stringify({ day: todayJST(), ids })) } catch { /* 残せなくても Worker が止める */ }
 }
+// つかんだコインが上に来た紙に付けるオレンジの枠（1 つを使い回す。紙の少し後ろに、紙より一回り大きい板を置く）
+const FRAME = 0.025   // 枠の太さ（モデル単位）
+const frame = new THREE.Mesh(paperGeo, new THREE.MeshBasicMaterial({ color: 0xff8a1a }))
+frame.name = 'コインの枠'
+frame.position.z = -0.001
+const showFrame = paper => {
+  if (!paper) { frame.removeFromParent(); return }
+  frame.scale.set(paper.scale.x + FRAME * 2, paper.scale.y + FRAME * 2, 1)
+  paper.parent.add(frame)
+}
 const noteOf = obj => { for (let o = obj; o; o = o.parent) if (o.userData.note) return o.userData.note; return null }
 
 // coinDrop.js の targets に渡すもの。enabled: 入れられる状態か、spend: 所持数を 1 減らす、refund: 入れられなかったとき 1 戻す
@@ -183,6 +192,7 @@ export function noteCoinTarget({ enabled, spend, refund }) {
     objects: () => coinLayers,
     enabled: () => enabled() && !pageEl,
     accepts: hit => { const n = noteOf(hit.object); return !!n && !coined().includes(n.id) },
+    hover: hit => showFrame(hit && hit.object.parent.children[0]),   // 紙のグループの最初の子が紙
     drop: hit => {
       const { board, id } = noteOf(hit.object)
       spend()
@@ -255,8 +265,7 @@ export function openBoardNotes(board) {
         const t = document.createElement('span'); t.textContent = n.text
         const d = document.createElement('time'); d.textContent = fmt(n.at)
         const c = document.createElement('span'); c.className = 'bn-coins'
-        const img = document.createElement('img'); img.src = COIN_ICON; img.alt = ''
-        c.append(img, String(n.coins ?? 0))
+        c.textContent = `+${n.coins ?? 0}`
         li.append(t, d, c)
       }
       return li

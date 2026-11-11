@@ -19,6 +19,7 @@ import { COIN_RADIUS, POP_TIME, POP_HEIGHT, SPIN_IDLE } from './coinIntro.js'
 //    targets:  投入口のほかにコインを入れられるもの（板の紙など）[{ objects, enabled, accepts, drop }]
 //              objects(): 当たりを見る Object3D の配列、enabled(): 入れられる状態か、accepts(hit): その当たり（Raycaster の結果）に入れられるか、
 //              drop(hit): 入れたとき（所持数を減らすのもここ）。コインは当たった面の前に出る
+//              hover(hit): あれば、つかんだコインが上に来たときにその当たりで、外れたら null で呼ぶ（紙に枠を付けるなど）
 //  update(dt) を毎フレーム呼ぶ。dropOne() はドラッグせずに 1 枚入れる（コイン箱の前で Enter を押したとき）
 // ============================================================
 
@@ -57,8 +58,11 @@ export function createCoinDrop({ boxEl, scene, camera, renderer, slot, getCount,
   const moveGhost = e => {
     ghost.style.left = `${e.clientX}px`
     ghost.style.top  = `${e.clientY}px`
-    ghost.classList.toggle('over', !!overTarget(e))
+    const over = overTarget(e)
+    ghost.classList.toggle('over', !!over)
+    hover(over)
   }
+  const hover = over => { for (const t of all) t.hover?.(t === over?.target ? over.hit : null) }
 
   // つかめるときだけ手のカーソルにする
   boxEl.addEventListener('pointerenter', () => boxEl.classList.toggle('grabbable', canGrab()))
@@ -85,6 +89,7 @@ export function createCoinDrop({ boxEl, scene, camera, renderer, slot, getCount,
     boxEl.classList.remove('grabbing')
     const g = ghost
     ghost = null
+    hover(null)
     const over = e.type === 'pointerup' && getCount() > 0 ? overTarget(e) : null
     if (over) {
       g.remove()
