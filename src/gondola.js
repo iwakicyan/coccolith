@@ -116,7 +116,7 @@ export function createGondolaRide({ scene, radius, getGround, waterLevel }) {
 const TOUR_STEP = 1                     // 道に沿って向きと地面の高さを持っておく間隔 (m)
 const TOUR_TURN = 12                    // 曲がり角で向きを急に変えないよう、前後この点数ぶんを結んだ向きを前にする
 const TOUR_SMOOTH = 6                   // 測った高さを前後この点数ずつでならす
-const TOUR_TURN_MS = 2 * 60 * 1000      // 道の端で 180° 振り返るのにかける時間
+const TOUR_TURN_MS = 80 * 1000          // 道の端で 180° 振り返るのにかける時間
 
 export function createGondolaTourRide({ scene, radius, getGround, waterLevel, speed, path }) {
   // 道を TOUR_STEP (m) おきの点に分ける（pts[i] は単位ベクトル）
