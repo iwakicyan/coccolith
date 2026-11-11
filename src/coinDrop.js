@@ -16,6 +16,9 @@ import { COIN_RADIUS, POP_TIME, POP_HEIGHT, SPIN_IDLE } from './coinIntro.js'
 //    getCount: 今の所持数を返す。0 のときはつかめない
 //    onDrop:   投入口に入れたときに呼ばれる（所持数を 1 減らす）
 //    enabled:  入れられる状態か（室内・俯瞰・暗転中は false）
+//    targets:  投入口のほかにコインを入れられるもの（板の紙など）[{ objects, enabled, accepts, drop }]
+//              objects(): 当たりを見る Object3D の配列、enabled(): 入れられる状態か、accepts(hit): その当たり（Raycaster の結果）に入れられるか、
+//              drop(hit): 入れたとき（所持数を減らすのもここ）。コインは当たった面の前に出る
 //  update(dt) を毎フレーム呼ぶ。dropOne() はドラッグせずに 1 枚入れる（コイン箱の前で Enter を押したとき）
 // ============================================================
 
@@ -26,7 +29,7 @@ export const INSERT_TIME = POP_TIME + SPIN_TIME   // 入れてからコインが
 const SPIN_SPEED  = SPIN_IDLE * 2   // 回転速度（起動演出の待機中の倍）(rad/s)
 const BACK_TIME   = 200    // 外したとき HUD へ戻るまで (ms)
 
-export function createCoinDrop({ boxEl, scene, camera, renderer, slot, getCount, onDrop, enabled = () => true }) {
+export function createCoinDrop({ boxEl, scene, camera, renderer, slot, getCount, onDrop, enabled = () => true, targets = [] }) {
   const ray = new THREE.Raycaster()
   ray.far = REACH
   const ndc = new THREE.Vector2()
@@ -35,17 +38,26 @@ export function createCoinDrop({ boxEl, scene, camera, renderer, slot, getCount,
   let ghost = null       // つかんでいる間、指の下に出すコインのアイコン
   let pointerId = null
 
-  const canGrab = () => getCount() > 0 && enabled()
-  const overSlot = e => {
-    if (!enabled()) return false
+  // 入れられるもの。投入口は前の向き（slot の +z）の前に、ほかは当たった面の前にコインを出す
+  const slotTarget = { objects: () => [slot], enabled, accepts: () => true, drop: () => onDrop(), slot: true }
+  const all = [slotTarget, ...targets]
+  const canGrab = () => getCount() > 0 && all.some(t => t.enabled())
+  // 指の下にある、入れられるもの（いちばん手前）{ target, hit }。なければ null
+  const overTarget = e => {
     ndc.set((e.clientX / window.innerWidth) * 2 - 1, -(e.clientY / window.innerHeight) * 2 + 1)
     ray.setFromCamera(ndc, camera)
-    return ray.intersectObject(slot, true).length > 0
+    let best = null
+    for (const target of all) {
+      if (!target.enabled()) continue
+      const hit = ray.intersectObjects(target.objects(), true)[0]
+      if (hit && target.accepts(hit) && (!best || hit.distance < best.hit.distance)) best = { target, hit }
+    }
+    return best
   }
   const moveGhost = e => {
     ghost.style.left = `${e.clientX}px`
     ghost.style.top  = `${e.clientY}px`
-    ghost.classList.toggle('over', overSlot(e))
+    ghost.classList.toggle('over', !!overTarget(e))
   }
 
   // つかめるときだけ手のカーソルにする
@@ -73,10 +85,12 @@ export function createCoinDrop({ boxEl, scene, camera, renderer, slot, getCount,
     boxEl.classList.remove('grabbing')
     const g = ghost
     ghost = null
-    if (e.type === 'pointerup' && getCount() > 0 && overSlot(e)) {
+    const over = e.type === 'pointerup' && getCount() > 0 ? overTarget(e) : null
+    if (over) {
       g.remove()
-      onDrop()
-      insertCoin()
+      over.target.drop(over.hit)
+      if (over.target.slot) insertCoin()
+      else insertCoinAt(over.hit)
     } else {
       // 外したら HUD のコインの所へ戻して消す
       const r = boxEl.getBoundingClientRect()
@@ -98,6 +112,16 @@ export function createCoinDrop({ boxEl, scene, camera, renderer, slot, getCount,
     slot.updateWorldMatrix(true, false)
     _center.setFromMatrixPosition(slot.matrixWorld)
     _normal.set(0, 0, 1).transformDirection(slot.matrixWorld)
+    spawnCoin()
+  }
+  // 当たった面（Raycaster の結果）の前にコインを出す
+  function insertCoinAt(hit) {
+    _center.copy(hit.point)
+    _normal.copy(hit.face.normal).transformDirection(hit.object.matrixWorld)
+    if (_normal.dot(ray.ray.direction) > 0) _normal.negate()   // カメラの側へ
+    spawnCoin()
+  }
+  function spawnCoin() {
     const mesh = createCoin({ renderer, radius: COIN_RADIUS })
     mesh.scale.setScalar(0)
     scene.add(mesh)
@@ -144,7 +168,7 @@ export function createCoinDrop({ boxEl, scene, camera, renderer, slot, getCount,
 
   // ドラッグせずに 1 枚入れる。入れられたら true
   function dropOne() {
-    if (!canGrab()) return false
+    if (!(getCount() > 0 && enabled())) return false
     onDrop()
     insertCoin()
     boxEl.classList.toggle('grabbable', canGrab())

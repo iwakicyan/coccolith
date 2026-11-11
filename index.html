@@ -275,7 +275,10 @@
     }
     #board-notes .bn-list li { display: flex; gap: 10px; justify-content: space-between; padding: 6px 2px; border-bottom: 1px solid rgba(255,255,255,0.12); }
     #board-notes .bn-list li span { overflow-wrap: anywhere; }
+    #board-notes .bn-list li span:first-child { flex: 1; }
     #board-notes .bn-list time { flex: none; color: rgba(255,255,255,0.4); font-size: 11px; }
+    #board-notes .bn-coins { flex: none; display: flex; align-items: center; gap: 3px; min-width: 3.2em; justify-content: flex-end; color: rgba(255,255,255,0.75); font-size: 12px; }
+    #board-notes .bn-coins img { width: 14px; height: 14px; }
     #board-notes .bn-empty { color: rgba(255,255,255,0.45); justify-content: center !important; }
     #board-notes .bn-form { width: min(92vw, 460px); display: flex; flex-direction: column; gap: 6px; }
     #board-notes textarea {

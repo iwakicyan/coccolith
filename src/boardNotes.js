@@ -7,12 +7,15 @@ import { ITA_FACE } from '../my-3d-parts/parts/ita.js'
 //  板の書き込み — だれでも名前なしで書き残せて、書いたらすぐ出る（保存は counter/ の Worker の /notes）
 //  addBoardNotes(ita, board): 板の表に、その板の新しい書き込み NOTES_ON_BOARD 件を白い紙に書いてピンで留めたように貼る
 //  openBoardNotes(board):     書き込みのページ（その板の書き込みの一覧と入力欄）を開く
+//  コイン：HUD のコインを紙にドラッグして入れると、その書き込みのコインが 1 枚増えて順位が 1 つ上がる（coinDrop.js の targets に noteCoinTarget を渡す）
+//    同じ書き込みには 1 日 1 枚まで（Worker が IP で見る。このブラウザで入れたものは COINED_KEY にも残して、先に止める）
 //  文字数の上限・URL の禁止・連投の間隔は Worker が見る（ここでは同じ上限で先に止めるだけ）
 // ============================================================
 
 const NOTES_URL = COUNTER_URL ? COUNTER_URL + '/notes' : ''
 export const NOTES_ON_BOARD = 12   // 板の表に出す件数（新しい順。書き込みのページの一覧の件数は counter/worker.js の NOTE_LIST）
 const PIN_KEY = 'coccolith.notePin'   // 前に選んだピンの色（localStorage）
+const COIN_ICON = document.querySelector('#coin-box img')?.src ?? ''   // 一覧のコインの絵（HUD のコインと同じ）
 const NOTE_MAX = 60               // 1 回に書ける文字数（counter/worker.js と同じ）
 const INK = '#4a3626'             // 紙の字と縁の色（板の輪郭線と同じ濃い茶）
 const FONT_FAMILY = '"Hiragino Maru Gothic ProN", "Hiragino Sans", "Yu Gothic", sans-serif'
@@ -92,6 +95,7 @@ export function addBoardNotes(ita, board, { minY = -Infinity } = {}) {
   const layer = new THREE.Group()
   layer.name = '板の紙'
   ita.add(layer)
+  coinLayers.push(layer)
   const placed = new Map()   // id → { x, y, w, h }（一度決めた場所）
   const y0 = Math.max(F.y0, minY)
   // ほかの紙との間（重なっていれば負）。紙の縁どうしの、x と y の離れ具合の大きいほう
@@ -133,6 +137,7 @@ export function addBoardNotes(ita, board, { minY = -Infinity } = {}) {
       paper.scale.set(w, h, 1)
       const pin = new THREE.Mesh(pinGeo, pinMats[n.pin] ?? pinMats.red)
       pin.position.set(0, h / 2 - 0.07, 0.002)
+      paper.userData.note = pin.userData.note = { board, id: n.id }   // コインを入れる先
       g.add(paper, pin)
       const { x, y } = placed.get(n.id)
       g.position.set(x, y, F.z + (shown.length - i) * LAYER)   // 新しいもの（i が小さい）ほど手前
@@ -144,6 +149,53 @@ export function addBoardNotes(ita, board, { minY = -Infinity } = {}) {
   const entry = boards[board] ??= { notes: [], draws: [] }
   entry.draws.push(draw)
   fetchNotes(board).then(notes => { entry.notes = notes; draw(notes) }).catch(() => { /* 読めなければ何も貼らない */ })
+}
+
+// 板の一覧が新しくなったとき：覚えておき、板の表と開いている書き込みのページを描き直す
+function setNotes(board, notes) {
+  const entry = boards[board] ??= { notes: [], draws: [] }
+  entry.notes = notes.slice(0, NOTES_ON_BOARD)
+  for (const d of entry.draws) d(entry.notes)
+  entry.onList?.(entry.notes)
+}
+
+// --- コインを入れる -------------------------------------------
+const coinLayers = []   // 板ごとの紙のグループ（コインをドラッグして当てる先）
+const COINED_KEY = 'coccolith.noteCoins'   // 今日このブラウザでコインを入れた書き込み { day, ids }
+const todayJST = () => new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10)   // counter/worker.js と同じ式
+function coined() {
+  try {
+    const v = JSON.parse(localStorage.getItem(COINED_KEY))
+    if (v?.day === todayJST() && Array.isArray(v.ids)) return v.ids
+  } catch { /* 読めなければ空 */ }
+  return []
+}
+function markCoined(id, on) {
+  const ids = coined().filter(x => x !== id)
+  if (on) ids.push(id)
+  try { localStorage.setItem(COINED_KEY, JSON.stringify({ day: todayJST(), ids })) } catch { /* 残せなくても Worker が止める */ }
+}
+const noteOf = obj => { for (let o = obj; o; o = o.parent) if (o.userData.note) return o.userData.note; return null }
+
+// coinDrop.js の targets に渡すもの。enabled: 入れられる状態か、spend: 所持数を 1 減らす、refund: 入れられなかったとき 1 戻す
+export function noteCoinTarget({ enabled, spend, refund }) {
+  return {
+    objects: () => coinLayers,
+    enabled: () => enabled() && !pageEl,
+    accepts: hit => { const n = noteOf(hit.object); return !!n && !coined().includes(n.id) },
+    drop: hit => {
+      const { board, id } = noteOf(hit.object)
+      spend()
+      markCoined(id, true)
+      fetch(NOTES_URL + '/coin', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) })
+        .then(r => r.json())
+        .then(res => {
+          if (res.error) { refund(); if (res.error !== 'today') markCoined(id, false) }   // 今日もう入れていたら、入れたことにしたまま戻す
+          if (Array.isArray(res.notes)) setNotes(board, res.notes)
+        })
+        .catch(() => { refund(); markCoined(id, false) })
+    },
+  }
 }
 
 // --- 書き込みのページ ------------------------------------------
@@ -202,16 +254,16 @@ export function openBoardNotes(board) {
       else {
         const t = document.createElement('span'); t.textContent = n.text
         const d = document.createElement('time'); d.textContent = fmt(n.at)
-        li.append(t, d)
+        const c = document.createElement('span'); c.className = 'bn-coins'
+        const img = document.createElement('img'); img.src = COIN_ICON; img.alt = ''
+        c.append(img, String(n.coins ?? 0))
+        li.append(t, d, c)
       }
       return li
     }))
   }
-  const refresh = notes => {
-    entry.notes = notes
-    render(notes)
-    for (const d of entry.draws) d(notes)
-  }
+  const refresh = notes => setNotes(board, notes)
+  entry.onList = render
   render(entry.notes)
   fetchNotes(board).then(refresh).catch(() => { msg.textContent = t('noteLoadFailed') })
 
@@ -242,7 +294,7 @@ export function openBoardNotes(board) {
     ok.disabled = false
   })
 
-  const close = () => { el.remove(); pageEl = null }
+  const close = () => { el.remove(); pageEl = null; entry.onList = null }
   el.querySelector('.bn-close').addEventListener('click', close)
   el.addEventListener('pointerdown', e => { if (e.target === el) close() })   // 外の暗いところを押しても閉じる
 

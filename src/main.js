@@ -34,7 +34,7 @@ import { createBluedogWalkers } from './bluedog.js'
 import { createSneakerWalkers } from './sneaker.js'
 import { createTsue } from '../my-3d-parts/parts/tsue.js'
 import { createIta, itaInflatedGeometry, itaEdgesGeometry, ITA_FACE, ITA_WIDTH } from '../my-3d-parts/parts/ita.js'
-import { addBoardNotes, openBoardNotes, isBoardNotesOpen } from './boardNotes.js'
+import { addBoardNotes, openBoardNotes, isBoardNotesOpen, noteCoinTarget } from './boardNotes.js'
 import { addShapeGlow } from './doorGlow.js'
 
 // ============================================================
@@ -995,12 +995,18 @@ coinIntro.start(pDir, pFwd)
     return new THREE.Vector3(Math.sin(phi) * Math.cos(theta), Math.cos(phi), Math.sin(phi) * Math.sin(theta))
   }))
 }
-// HUD のコイン数をつかんでコイン箱の投入口へドラッグすると、1 枚入れられる（coinDrop.js）
+// HUD のコイン数をつかんでコイン箱の投入口か板の紙へドラッグすると、1 枚入れられる（coinDrop.js）
 const coinDrop = createCoinDrop({
   boxEl: coinBoxEl, scene, camera, renderer, slot: coinSlot,
   getCount: () => coinCount,
   onDrop: () => { setCoinCount(coinCount - 1); coinboxUsed = true; setTimeout(placeStandFlower, COIN_INSERT_TIME * 1000) },
   enabled: () => !coinboxUsed && !transitioning && !overviewMode && !interior,
+  // 板の紙にも入れられる（入れるとその書き込みの順位が 1 つ上がる。boardNotes.js）
+  targets: [noteCoinTarget({
+    enabled: () => !transitioning && !overviewMode && !interior,
+    spend: () => setCoinCount(coinCount - 1),
+    refund: () => setCoinCount(coinCount + 1),
+  })],
 })
 // コイン箱は 1 枚入れたらおしまい（光らず、もう入れられない。ページを開き直すと戻る）
 let coinboxUsed = false
