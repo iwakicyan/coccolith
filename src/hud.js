@@ -12,20 +12,20 @@ const _east   = new THREE.Vector3()
 // ============================================================
 //  方位磁針 — 向いている方向がいつも上。N/E/S/W の文字盤が回る
 //  北 = 北極（+Y、HUD の lat が増える向き）、東 = HUD の lon が増える向き
-//  上の ▲ が今向いている方向、真ん中にその方角（N, NE, …）を出す
+//  上の ▲ が今向いている方向
 // ============================================================
 const CARDINALS = [['N', 0], ['E', 90], ['S', 180], ['W', 270]]
-const POINTS8 = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW']
 const NORTH_COLOR = '#ff6b6b'
 const MARK_COLOR  = 'rgba(186,205,216,1)'   // veth の矢印と同じ色
 
 export function createCompass(canvas) {
-  const SIZE = 88
+  const BASE = 88, SIZE = 59   // 絵は 88px の大きさで描き、表示は SIZE (px) に縮める（直径を 2/3 に）
   const dpr = Math.min(window.devicePixelRatio || 1, 3)   // 文字がにじまないよう画面の解像度で描く
   canvas.width = canvas.height = Math.round(SIZE * dpr)
   canvas.style.width = canvas.style.height = SIZE + 'px'
   const ctx = canvas.getContext('2d')
-  const cx = SIZE / 2, cy = SIZE / 2, R = 40
+  const k = dpr * SIZE / BASE
+  const cx = BASE / 2, cy = BASE / 2, R = 40
   let lastDeg = NaN
 
   // up: 立っている地点の外向きの法線、fwd: 向いている方向（地面に沿っていなくてよい）
@@ -41,8 +41,8 @@ export function createCompass(canvas) {
     if (Math.abs(deg - lastDeg) < 0.2) return   // ほとんど回っていなければ描き直さない
     lastDeg = deg
 
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
-    ctx.clearRect(0, 0, SIZE, SIZE)
+    ctx.setTransform(k, 0, 0, k, 0, 0)
+    ctx.clearRect(0, 0, BASE, BASE)
 
     ctx.beginPath()
     ctx.arc(cx, cy, R, 0, Math.PI * 2)
@@ -68,7 +68,7 @@ export function createCompass(canvas) {
     ctx.textBaseline = 'middle'
     for (const [label, b] of CARDINALS) {
       const [x, y] = at(b, R - 10)
-      ctx.font = b === 0 ? 'bold 12px monospace' : '10px monospace'
+      ctx.font = b === 0 ? 'bold 14px monospace' : '12px monospace'   // 縮めて表示するので、字は少し大きめに描く
       ctx.fillStyle = b === 0 ? NORTH_COLOR : 'rgba(255,255,255,0.75)'
       ctx.fillText(label, x, y + 0.5)
     }
@@ -84,13 +84,6 @@ export function createCompass(canvas) {
     ctx.beginPath()
     ctx.moveTo(cx, cy - R + 1); ctx.lineTo(cx - 4, cy - R + 7); ctx.lineTo(cx + 4, cy - R + 7)
     ctx.closePath(); ctx.fillStyle = MARK_COLOR; ctx.fill()
-
-    // 真ん中に、向いている方角
-    ctx.beginPath(); ctx.arc(cx, cy, 11, 0, Math.PI * 2)
-    ctx.fillStyle = 'rgba(0,0,0,0.55)'; ctx.fill()
-    ctx.font = 'bold 10px monospace'
-    ctx.fillStyle = MARK_COLOR
-    ctx.fillText(POINTS8[Math.round(deg / 45) % 8], cx, cy + 0.5)
   }
 
   return { drawCompass }
