@@ -2,3 +2,5 @@ node_modules/
 shots/
 .wrangler/
 .DS_Store
+counter/.admin-key
+counter/.dev.vars

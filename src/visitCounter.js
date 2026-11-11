@@ -5,7 +5,7 @@
 // ============================================================
 
 // counter/ をデプロイしたら、その URL（https://coccolith-counter.<アカウント>.workers.dev）を入れる。空なら何も出さない
-const COUNTER_URL = 'https://coccolith-counter.kassymokku-884.workers.dev'
+export const COUNTER_URL = 'https://coccolith-counter.kassymokku-884.workers.dev'
 const VISITED_KEY = 'coccolith.visitedDay'
 
 // 日本時間の今日の日付（YYYY-MM-DD）。counter/worker.js と同じ式

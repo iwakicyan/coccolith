@@ -79,6 +79,21 @@ export function addGroundGlow(mesh, { y, pad, band }) {
   mesh.userData.glow = { group: glow, halo, edges }
 }
 
+// 好きな形の輪郭を光らせる（板など）。haloGeo: ひと回りふくらませた形（裏の面だけ光らせる）、edgeGeo: 輪郭の線
+// ドアと同じく setDoorGlow で点灯する
+export function addShapeGlow(mesh, haloGeo, edgeGeo) {
+  const halo = new THREE.Mesh(
+    haloGeo,
+    new THREE.MeshBasicMaterial({ color: GLOW_COLOR, transparent: true, opacity: 0.6, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.BackSide }),
+  )
+  const edges = new THREE.LineSegments(edgeGeo, new THREE.LineBasicMaterial({ color: GLOW_COLOR, transparent: true }))
+  const glow = new THREE.Group()
+  glow.add(halo, edges)
+  glow.visible = false
+  mesh.add(glow)
+  mesh.userData.glow = { group: glow, halo, edges }
+}
+
 // on: 点灯するか、t: 経過秒（明滅。弱いときはほとんど消える）
 export function setDoorGlow(door, on, t) {
   const g = door.userData.glow

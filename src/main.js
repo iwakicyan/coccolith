@@ -33,7 +33,9 @@ import { createPixelSpriteWalkers, createPixelSpriteFlyers } from './pixelSprite
 import { createBluedogWalkers } from './bluedog.js'
 import { createSneakerWalkers } from './sneaker.js'
 import { createTsue } from '../my-3d-parts/parts/tsue.js'
-import { createIta } from '../my-3d-parts/parts/ita.js'
+import { createIta, itaInflatedGeometry, itaEdgesGeometry, ITA_FACE } from '../my-3d-parts/parts/ita.js'
+import { addBoardNotes, openBoardNotes, isBoardNotesOpen } from './boardNotes.js'
+import { addShapeGlow } from './doorGlow.js'
 
 // ============================================================
 //  LMF — Layout Master File
@@ -471,6 +473,7 @@ const rideCarrier = {
 
 // 板（my-3d-parts/parts/ita.js）: lat 53.7・lon -150 のまわり 30m 四方に、横幅 ITA_W (m) の板を 5 枚、地面に刺す
 //   sabちゃんは板を通り抜けられない（colliders に足す。footprint は createIta が入れる板の外形の箱）。当たり判定を作る前に置く
+//   板ごとにだれでも書き込める（boardNotes.js）。表に新しい書き込みを字で出し、近づくと輪郭が光ってタップ（Enter）で書き込みのページを開く
 //   ITA_SPOTS は中心から東へ e (m)・北へ n (m)、向き yaw（度。0 で正面が北）、傾き tilt（度。前後へ）
 //   地面に ITA_SINK だけ埋める。太陽の当たる側（x > 0）にあれば影を落とす。影は受けない（杖と同じ）
 {
@@ -486,7 +489,7 @@ const rideCarrier = {
   const RL = R_C + LAND_LIFT
   const c = dirOf(ITA_CENTER.lat, ITA_CENTER.lon)
   const north = new THREE.Vector3(0, 1, 0).addScaledVector(c, -c.y).normalize()
-  const east = new THREE.Vector3().crossVectors(north, c).normalize()
+  const east = new THREE.Vector3().crossVectors(c, north).normalize()
   const _m = new THREE.Matrix4(), _q = new THREE.Quaternion()
   ITA_SPOTS.forEach(({ e, n, yaw, tilt }, i) => {
     const dir = c.clone().addScaledVector(east, e / RL).addScaledVector(north, n / RL).normalize()
@@ -501,6 +504,11 @@ const rideCarrier = {
     ita.traverse(o => { if (o.isMesh) { o.castShadow = !o.userData.outline && ita.position.x > 0; o.receiveShadow = false } })
     scene.add(ita)
     colliders.push(ita)
+    const board = i + 1, mesh = ita.getObjectByName('板')
+    addBoardNotes(ita, board)
+    addShapeGlow(mesh, itaInflatedGeometry(0.1), itaEdgesGeometry())   // 光は板の外へ 0.1（モデル単位。約 15cm）はみ出す
+    const center = new THREE.Vector3(0, (ITA_FACE.y0 + ITA_FACE.y1) / 2, 0)   // 板の真ん中（ita のローカル）
+    ita.userData.glowSpot = { mesh, local: center, reach: ITA_W / 2 + 2.5, onTap: () => openBoardNotes(board) }
   })
 }
 
@@ -888,7 +896,7 @@ function toggleOverview() {
 const keys = {}
 
 window.addEventListener('keydown', e => {
-  if (isFlowerCutOpen() || isPixelSceneOpen()) return   // 花の切り抜き・ドット絵のページを開いている間はゲームの操作をしない
+  if (isFlowerCutOpen() || isPixelSceneOpen() || isBoardNotesOpen()) return   // 花の切り抜き・ドット絵・板の書き込みのページを開いている間はゲームの操作をしない
   if (e.code === 'Enter' && !e.repeat) {
     if (viewCut || viewFadeOutT !== null) { e.preventDefault(); return }   // 視点切り替えのカット中（明るくなりきるまで）は出入りしない
     // くぐれるドアがあれば出入り、なければ近くで光っているものを使う（キャンバス・ツリーハウスの扉は開く、コイン箱は 1 枚入れる）
