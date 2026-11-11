@@ -33,6 +33,7 @@ import { createPixelSpriteWalkers, createPixelSpriteFlyers } from './pixelSprite
 import { createBluedogWalkers } from './bluedog.js'
 import { createSneakerWalkers } from './sneaker.js'
 import { createTsue } from '../my-3d-parts/parts/tsue.js'
+import { createIta } from '../my-3d-parts/parts/ita.js'
 
 // ============================================================
 //  LMF — Layout Master File
@@ -1362,6 +1363,39 @@ const sneakers = createSneakerWalkers({
       }
     }
   }
+}
+
+// 板（my-3d-parts/parts/ita.js）: lat 53.7・lon -150 のまわり 30m 四方に、横幅 ITA_W (m) の板を 5 枚、地面に刺す
+//   ITA_SPOTS は中心から東へ e (m)・北へ n (m)、向き yaw（度。0 で正面が北）、傾き tilt（度。前後へ）
+//   地面に ITA_SINK だけ埋める。太陽の当たる側（x > 0）にあれば影を落とす。影は受けない（杖と同じ）
+{
+  const ITA_CENTER = { lat: 53.7, lon: -150 }
+  const ITA_SPOTS = [
+    { e: -11, n:   8, yaw:  20, tilt:  4 },
+    { e:   3, n:  12, yaw: -35, tilt: -6 },
+    { e:  12, n:  -2, yaw:  75, tilt:  3 },
+    { e:  -4, n:  -6, yaw: 160, tilt: -4 },
+    { e: -13, n: -12, yaw: -100, tilt: 7 },
+  ]
+  const ITA_W = 3, ITA_SINK = 0.4
+  const RL = R_C + LAND_LIFT
+  const c = dirOf(ITA_CENTER.lat, ITA_CENTER.lon)
+  const north = new THREE.Vector3(0, 1, 0).addScaledVector(c, -c.y).normalize()
+  const east = new THREE.Vector3().crossVectors(north, c).normalize()
+  const _m = new THREE.Matrix4(), _q = new THREE.Quaternion()
+  ITA_SPOTS.forEach(({ e, n, yaw, tilt }, i) => {
+    const dir = c.clone().addScaledVector(east, e / RL).addScaledVector(north, n / RL).normalize()
+    const fwd = north.clone().applyAxisAngle(c, -yaw * Math.PI / 180)
+    fwd.addScaledVector(dir, -fwd.dot(dir)).normalize()
+    const side = new THREE.Vector3().crossVectors(dir, fwd).normalize()   // +x
+    const ita = createIta({ width: ITA_W })
+    ita.name = `板 ${i + 1}`
+    ita.quaternion.setFromRotationMatrix(_m.makeBasis(side, dir, fwd))
+    ita.quaternion.multiply(_q.setFromAxisAngle(new THREE.Vector3(1, 0, 0), tilt * Math.PI / 180))
+    ita.position.copy(dir).multiplyScalar(getGroundHeight(dir) - 1 - ITA_SINK)
+    ita.traverse(o => { if (o.isMesh) { o.castShadow = !o.userData.outline && ita.position.x > 0; o.receiveShadow = false } })
+    scene.add(ita)
+  })
 }
 
 // 空を飛ぶドット絵スプライト（pixelSprite.js）: pixelArt/flyers/ の絵を全部読み込み、雲より上を count 機ずつ飛ばす
