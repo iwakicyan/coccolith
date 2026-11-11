@@ -4,7 +4,7 @@ import { ITA_FACE } from '../my-3d-parts/parts/ita.js'
 
 // ============================================================
 //  板の書き込み — だれでも名前なしで書き残せて、書いたらすぐ出る（保存は counter/ の Worker の /notes）
-//  addBoardNotes(ita, board): 板の表に、その板の新しい書き込み NOTES_ON_BOARD 件を字で出す
+//  addBoardNotes(ita, board): 板の表に、その板の新しい書き込み NOTES_ON_BOARD 件を白い紙に書いてピンで留めたように貼る
 //  openBoardNotes(board):     書き込みのページ（その板の書き込みの一覧と入力欄）を開く
 //  文字数の上限・URL の禁止・連投の間隔は Worker が見る（ここでは同じ上限で先に止めるだけ）
 // ============================================================
@@ -12,9 +12,8 @@ import { ITA_FACE } from '../my-3d-parts/parts/ita.js'
 const NOTES_URL = COUNTER_URL ? COUNTER_URL + '/notes' : ''
 export const NOTES_ON_BOARD = 5   // 板の表に出す件数（新しい順）
 const NOTE_MAX = 60               // 1 回に書ける文字数（counter/worker.js と同じ）
-const INK = '#4a3626'             // 板の字の色（板の輪郭線と同じ濃い茶）
+const INK = '#4a3626'             // 紙の字と縁の色（板の輪郭線と同じ濃い茶）
 const FONT = '"Hiragino Maru Gothic ProN", "Hiragino Sans", "Yu Gothic", sans-serif'
-const CANVAS_W = 1024             // 板の字のキャンバスの横の画素（縦は字を書ける範囲の縦横比で決める）
 
 const boards = {}   // board → { notes, draw }。書き込んだら同じ板の表も描き直す
 
@@ -37,54 +36,80 @@ function wrap(ctx, text, maxW) {
   return lines
 }
 
-// 板の表に字を描く板（透明なキャンバスを貼った平面）を付ける。ita: createIta の root、board: 板の番号（1〜）
+// 板の表に、書き込みを 1 件ずつ白い紙に書いてピンで留めたように貼る。ita: createIta の root、board: 板の番号（1〜）
+//   紙は PAPER_SLOTS の場所に新しい順に貼り、新しいものほど手前に重ねる。傾きは板と場所ごとに決まった小さな角度
+const PAPER_W = 1.2, PAPER_H = 0.95   // 紙の大きさ（板のモデル単位。板の横幅は約 3.9）
+const PAPER_PX = 512                  // 紙のキャンバスの横の画素
+const FONT_PX = 44                    // 字の大きさ（紙のキャンバスの画素）。入りきらないときは小さくする
+// 紙を貼る場所（字を書ける範囲 ITA_FACE の中の割合。u: 左 0〜右 1、v: 上 0〜下 1）とピンの色。新しい順
+const PAPER_SLOTS = [
+  { u: 0.24, v: 0.26, pin: '#ff3b30' },
+  { u: 0.74, v: 0.34, pin: '#0a5cff' },
+  { u: 0.46, v: 0.70, pin: '#ffc21a' },
+  { u: 0.86, v: 0.80, pin: '#2fb84f' },
+  { u: 0.14, v: 0.76, pin: '#ff3b30' },
+]
+const paperMat = tex => new THREE.MeshLambertMaterial({ map: tex, emissive: 0xffffff, emissiveMap: tex, emissiveIntensity: 0.45 })
+const pinGeo = new THREE.SphereGeometry(0.045, 10, 6).scale(1, 1, 0.5)
+const tilt = (board, i) => { const x = Math.sin(board * 12.9898 + i * 78.233) * 43758.5453; return (x - Math.floor(x) - 0.5) * 0.12 }   // ±3.4°
+
+function drawPaper(ctx, text) {
+  const W = ctx.canvas.width, H = ctx.canvas.height, pad = W * 0.08
+  ctx.fillStyle = '#fff'
+  ctx.fillRect(0, 0, W, H)
+  ctx.strokeStyle = INK
+  ctx.lineWidth = W * 0.012
+  ctx.strokeRect(ctx.lineWidth / 2, ctx.lineWidth / 2, W - ctx.lineWidth, H - ctx.lineWidth)
+  let size = FONT_PX, lines
+  for (;;) {
+    ctx.font = `bold ${size}px ${FONT}`
+    lines = wrap(ctx, text, W - pad * 2)
+    if (lines.length * size * 1.35 <= H - pad * 2.6 || size <= 14) break
+    size -= 2
+  }
+  ctx.fillStyle = INK
+  ctx.textBaseline = 'top'
+  lines.forEach((l, k) => ctx.fillText(l, pad, pad * 1.6 + k * size * 1.35))   // 上はピンの分あける
+}
+
 export function addBoardNotes(ita, board) {
   const F = ITA_FACE
-  const w = F.x1 - F.x0, h = F.y1 - F.y0
-  const canvas = document.createElement('canvas')
-  canvas.width = CANVAS_W
-  canvas.height = Math.round(CANVAS_W * h / w)
-  const ctx = canvas.getContext('2d')
-  const tex = new THREE.CanvasTexture(canvas)
-  tex.colorSpace = THREE.SRGBColorSpace
-  tex.anisotropy = 4
-  const face = new THREE.Mesh(
-    new THREE.PlaneGeometry(w, h),
-    new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false }),
-  )
-  face.name = '板の字'
-  face.position.set((F.x0 + F.x1) / 2, (F.y0 + F.y1) / 2, F.z)
-  face.renderOrder = 1
-  ita.add(face)
+  const papers = PAPER_SLOTS.slice(0, NOTES_ON_BOARD).map((slot, i) => {
+    const canvas = document.createElement('canvas')
+    canvas.width = PAPER_PX
+    canvas.height = Math.round(PAPER_PX * PAPER_H / PAPER_W)
+    const tex = new THREE.CanvasTexture(canvas)
+    tex.colorSpace = THREE.SRGBColorSpace
+    tex.anisotropy = 4
+    const paper = new THREE.Mesh(new THREE.PlaneGeometry(PAPER_W, PAPER_H), paperMat(tex))
+    paper.name = `板の紙 ${i + 1}`
+    // 字を書ける範囲からはみ出さないよう、紙の中心を寄せる
+    const x = THREE.MathUtils.clamp(F.x0 + slot.u * (F.x1 - F.x0), F.x0 + PAPER_W / 2, F.x1 - PAPER_W / 2)
+    const y = THREE.MathUtils.clamp(F.y1 - slot.v * (F.y1 - F.y0), F.y0 + PAPER_H / 2, F.y1 - PAPER_H / 2)
+    paper.position.set(x, y, F.z + (PAPER_SLOTS.length - i) * 0.004)   // 新しいものほど手前
+    paper.rotation.z = tilt(board, i)
+    const pin = new THREE.Mesh(pinGeo, new THREE.MeshLambertMaterial({ color: slot.pin, emissive: slot.pin, emissiveIntensity: 0.45 }))
+    pin.name = 'ピン'
+    pin.position.set(0, PAPER_H / 2 - 0.1, 0.01)
+    paper.add(pin)
+    paper.visible = false
+    ita.add(paper)
+    return { paper, ctx: canvas.getContext('2d'), tex }
+  })
 
-  // 新しい順に上から。字が多くて入りきらないときは字を小さくする
   const draw = notes => {
-    const W = canvas.width, H = canvas.height
-    ctx.clearRect(0, 0, W, H)
-    const shown = notes.slice(0, NOTES_ON_BOARD)
-    if (!shown.length) return void (tex.needsUpdate = true)
-    let size = 64, blocks
-    for (;;) {
-      ctx.font = `bold ${size}px ${FONT}`
-      blocks = shown.map(n => wrap(ctx, n.text, W - size * 1.2))
-      const total = blocks.reduce((s, b) => s + b.length, 0) * size * 1.25 + (blocks.length - 1) * size * 0.5
-      if (total <= H || size <= 20) break
-      size -= 4
-    }
-    ctx.fillStyle = INK
-    ctx.textBaseline = 'top'
-    let y = 0
-    for (const lines of blocks) {
-      ctx.fillText('・', 0, y)
-      for (const l of lines) { ctx.fillText(l, size * 1.2, y); y += size * 1.25 }
-      y += size * 0.5
-    }
-    tex.needsUpdate = true
+    papers.forEach((p, i) => {
+      const n = notes[i]
+      p.paper.visible = !!n
+      if (!n) return
+      drawPaper(p.ctx, n.text)
+      p.tex.needsUpdate = true
+    })
   }
 
   const entry = boards[board] ??= { notes: [], draws: [] }
   entry.draws.push(draw)
-  fetchNotes(board).then(notes => { entry.notes = notes; draw(notes) }).catch(() => { /* 読めなければ何も書かない */ })
+  fetchNotes(board).then(notes => { entry.notes = notes; draw(notes) }).catch(() => { /* 読めなければ何も貼らない */ })
 }
 
 // --- 書き込みのページ ------------------------------------------
