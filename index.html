@@ -81,18 +81,27 @@
     #coin-box {
       display: inline-flex; align-items: center; gap: 3px;
       margin-left: 10px; padding: 0 7px 0 3px;
-      border: 1px solid rgba(255,255,255,0.35); border-radius: 10px;
+      border: 1px solid transparent;   /* 縁は下の ::after の画像で描く（幅を合わせるため枠線分の場所だけ取っておく） */
       line-height: 18px; vertical-align: middle;
       position: relative; top: -2px;
       visibility: hidden;   /* lat/lon が入るまで隠す（起動直後に左へずれて見えるのを防ぐ） */
     }
     #coin-box.ready { visibility: visible; }
+    /* 縁に手を置いた枠（ui/coin_frame.png）。つかんでドラッグできることが分かるように。
+       画像の楕円の左右は端（左 53px・右 90px）をそのまま使い、間の直線だけ桁数に合わせて伸ばす。手は枠の右へはみ出す */
+    #coin-box::after {
+      content: ''; position: absolute; pointer-events: none;
+      top: -1.36px; left: -1.36px; right: -18.2px; bottom: -3.76px;
+      border-style: solid; border-width: 0 22.6px 0 13.3px;
+      border-image: url(/ui/coin_frame.png) 0 90 0 53 fill / 0 22.6px 0 13.3px stretch;
+      opacity: 0.55; transition: opacity 0.12s ease-out;
+    }
     #coin-box img { width: 18px; height: 18px; }
     #coin-num { display: inline-block; min-width: 1ch; color: rgba(255,255,255,0.8); transition: transform 0.12s ease-out; }
     #coin-num.bump { transform: scale(1.4); }
     /* コイン数は JUMP と同じく、カーソルを合わせると縁が明るくなる。つかんで投入口へドラッグできる（coinDrop.js） */
     #coin-box { pointer-events: auto; touch-action: none; user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent; }
-    #coin-box:hover, #coin-box.grabbing { border-color: rgba(255,255,255,0.7); }
+    #coin-box:hover::after, #coin-box.grabbing::after { opacity: 1; }
     #coin-box:hover #coin-num, #coin-box.grabbing #coin-num { color: #fff; }
     #coin-box.grabbable { cursor: grab; }
     #coin-box.grabbing { cursor: grabbing; }
