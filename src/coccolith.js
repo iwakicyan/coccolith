@@ -767,9 +767,12 @@ export function createCoccolith({ renderer = null } = {}) {
     const s = wrapper.scale.x
     addGroundGlow(base, { y: JIHANKI_SINK / s, pad: 0.1 / s, band: 0.12 / s, width: baseSize.w, depth: baseSize.d })
     jihanki.userData.glowSpot = { mesh: base, local: new THREE.Vector3(0, 0, baseSize.d / 2), reach: 4, jihanki }
+    // 取り出し口に缶が出ているときは、缶の下（取り出し口の底）が光り、選ぶと sabちゃんが持つ（main.js）
+    const { trayHit, trayKanSize: ks } = jihanki.userData
+    addGroundGlow(trayHit, { y: -trayHit.position.y + 0.005, pad: 0.03, band: 0.03, width: ks.length, depth: ks.diameter })
     colliders.push(jihanki)
     jihankis.push(jihanki)
-    // 投入口のメッシュ（コインの当たり）・投入口の面・取り出し口の置き場・光る所はまとめない
+    // 投入口のメッシュ（コインの当たり）・投入口の面・取り出し口の置き場（缶の当たりを含む）・光る所はまとめない
     const keepSet = new Set([...slotMeshes, slot, tray, base])
     mergeStatic(jihanki, { keep: o => keepSet.has(o) })
   }
