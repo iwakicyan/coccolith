@@ -744,10 +744,10 @@ export function createCoccolith({ renderer = null } = {}) {
   // 台（光る接地ライン）と投入口（コインの演出で使う）以外をまとめる
   mergeStatic(coinbox, { keep: o => o === coinbox.userData.glowSpot.mesh || o === coinbox.userData.slot })
 
-  // --- 自販機（my-3d-parts/landmark/jihanki.js）: 高さ 2m で 3 か所に置く ------------
+  // --- 自販機（my-3d-parts/landmark/jihanki.js）: 高さ 3m で 3 か所に置く ------------
   //   向き face: 正面（ローカル +Z）を向ける方角。ユーザーの言う「東」は lon が減る向き（コンパスの E とは逆）なので、
   //   東 = [0, -1]・北東 = [1, -1]（[lat の増える向き, lon の増える向き] を地面の上の m で）
-  const JIHANKI_H = 2, JIHANKI_SINK = 0.1   // 高さ (m)・地面にめり込ませる量 (m)
+  const JIHANKI_H = 3, JIHANKI_SINK = 0.1   // 高さ (m)・地面にめり込ませる量 (m)
   const JIHANKI_SPOTS = [
     { lat: 25.2, lon:  -86.7, face: [0, -1] },   // 東向き
     { lat: 65.0, lon:  118.0, face: [0, -1] },   // 東向き
@@ -766,7 +766,7 @@ export function createCoccolith({ renderer = null } = {}) {
     const { base, baseSize, slot, slotMeshes, tray } = jihanki.userData
     const s = wrapper.scale.x
     addGroundGlow(base, { y: JIHANKI_SINK / s, pad: 0.1 / s, band: 0.12 / s, width: baseSize.w, depth: baseSize.d })
-    jihanki.userData.glowSpot = { mesh: base, local: new THREE.Vector3(0, 0, baseSize.d / 2), reach: 4, jihanki }
+    jihanki.userData.glowSpot = { mesh: base, local: new THREE.Vector3(0, 0, baseSize.d / 2), reach: 5, jihanki }
     // 取り出し口に缶が出ているときは、缶の下（取り出し口の底）が光り、選ぶと sabちゃんが持つ（main.js）
     const { trayHit, trayKanSize: ks } = jihanki.userData
     addGroundGlow(trayHit, { y: -trayHit.position.y + 0.005, pad: 0.03, band: 0.03, width: ks.length, depth: ks.diameter })

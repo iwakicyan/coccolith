@@ -29,7 +29,7 @@ import { createCoinDrop, INSERT_TIME as COIN_INSERT_TIME } from './coinDrop.js'
 import { whenNightEnvReady } from './nightEnv.js'
 import { toLambert, ignoreSun } from './lambert.js'
 import { createLightHeads } from './lightHeads.js'
-import { createPixelSpriteWalkers, createPixelSpriteFlyers } from './pixelSprite.js'
+import { createPixelSpriteWalkers, createPixelSpriteFlyers, WATCH_DIST as SPRITE_WATCH_DIST } from './pixelSprite.js'
 import { createBluedogWalkers } from './bluedog.js'
 import { createSneakerWalkers } from './sneaker.js'
 import { createTsue } from '../my-3d-parts/parts/tsue.js'
@@ -283,6 +283,7 @@ canvas.addEventListener('pointerdown', e => {
   tapUsed = true
   if (hitDoor(e)) useDoor()
   else if ((g = hitGlowSpot(e))) openGlowSpot(g)
+  else if (giveKanByTap(e)) { /* 缶をあげた */ }
   else if (hitLightIcon(e)) toggleSabLight()
   else tapUsed = false
 })
@@ -913,6 +914,7 @@ window.addEventListener('keydown', e => {
     if (g?.onTap) openGlowSpot(g)
     else if (g?.coinbox) coinDrop.dropOne()
     else if (g?.jihanki) coinDrop.dropInto(jihankiTargets[jihankis.indexOf(g.jihanki)])
+    else if (!activeDoorMesh() && giveKanNearest()) { /* 缶をあげた */ }
     else useDoor()
     e.preventDefault()
     return
@@ -1025,7 +1027,7 @@ for (const j of jihankis) {
       const k = j.userData.takeKan()
       if (!k) return
       j.userData.kanOut = false
-      holdKan(k, j)
+      holdKan(k)
     },
   })
 }
@@ -1091,10 +1093,10 @@ flowerStand.onTake = () => {
   f.rotation.set(0.2, 0, 0.2)
   hold('flower', f, () => f.children[1].geometry.dispose())
 }
-// 自販機の取り出し口から取った缶（k は取り出し口と同じ倍率）を、襟の輪の左寄りのやや上に立てて持つ（後ろからの視点でも少し見える）
-const KAN_HOLD = { pos: [4.4, -1.4, 1.6], rot: [0.1, 0, -0.2] }   // 缶の底面の真ん中の位置と向き（sabちゃんのローカル）
-function holdKan(k, jihanki) {
-  k.scale.multiplyScalar(jihanki.parent.scale.x / sabchan.group.scale.x)   // 取り出し口と同じ大きさ（自販機の wrapper の倍率を掛ける）
+// 自販機の取り出し口から取った缶を、襟の輪の左寄りのやや上に立てて持つ（後ろからの視点でも少し見える）
+const KAN_HOLD = { pos: [4.4, -1.4, 1.6], rot: [0.1, 0, -0.2], height: 0.36 }   // 缶の底面の真ん中の位置と向き（sabちゃんのローカル）・缶の高さ (m。自販機の大きさによらない)
+function holdKan(k) {
+  k.scale.setScalar(KAN_HOLD.height / KAN.H / sabchan.group.scale.x)
   k.position.fromArray(KAN_HOLD.pos)
   k.rotation.fromArray(KAN_HOLD.rot)
   k.userData.holdPose = { position: k.position.clone(), quaternion: k.quaternion.clone(), scale: k.scale.clone() }
@@ -1436,7 +1438,45 @@ const spriteWalkers = Object.values(import.meta.glob('./pixelArt/sprites/*.js', 
     scene, art, count: art.count, dot: SPRITE_DOT * (art.scale ?? 1), speed: SPEED * 0.05, radius: R_C,
     getGround: dir => getGroundHeight(dir) - 1,
     waterLevel: R_OCEAN + TIDE_SHIFT, spawn: { dir: pDir, fwd: pFwd }, migrations, carrier: rideCarrier,
+    followSpeed: SPEED * 1.15,   // ついてくるときは sabちゃんより少し速く走れる
   }))
+// 缶を持った sabちゃんが近づくと、ドット絵のキャラは立ち止まって sabちゃんの方を向く（10m 以内。pixelSprite.js）
+// こちらを向いている距離（WATCH_DIST）なら、Enter（いちばん近いキャラ）かキャラをタップで缶をあげられる。もらったキャラは sabちゃんから 5m より離れないようについてくる（ページを開き直すと戻る）
+const GIVE_DIST = SPRITE_WATCH_DIST
+const sabForSprites = { dir: pDir, fwd: pFwd, kan: false, still: false }
+// sabちゃんが止まっているか: SAB_STILL_SPEED (m/s) より遅い状態が SAB_STILL_TIME (s) 続いたら止まっているとみなす
+const SAB_STILL_SPEED = 0.5, SAB_STILL_TIME = 0.3
+const _sabPrevDir = new THREE.Vector3().copy(pDir)
+let sabStillT = 0
+function giveKan(group, walker) {
+  if (!held.kan) return false
+  group.follow(walker)
+  sabchan.group.remove(held.kan.obj)
+  held.kan.dispose()
+  held.kan = null
+  return true
+}
+// Enter: GIVE_DIST 以内のいちばん近いキャラに缶をあげる。あげたら true
+function giveKanNearest() {
+  if (!held.kan || transitioning || overviewMode || interior) return false
+  let best = null
+  for (const group of spriteWalkers) {
+    const n = group.nearest(pDir, GIVE_DIST)
+    if (n && (!best || n.dist < best.dist)) best = { group, ...n }
+  }
+  return best ? giveKan(best.group, best.walker) : false
+}
+// タップ: 当たったキャラが GIVE_DIST 以内なら缶をあげる。あげたら true
+function giveKanByTap(e) {
+  if (!held.kan || transitioning || overviewMode || interior) return false
+  _pointer.set((e.clientX / window.innerWidth) * 2 - 1, -(e.clientY / window.innerHeight) * 2 + 1)
+  _iconRay.setFromCamera(_pointer, camera)
+  for (const group of spriteWalkers) {
+    const w = group.hit(_iconRay, pDir, GIVE_DIST)
+    if (w) return giveKan(group, w)
+  }
+  return false
+}
 
 // bluedog（my-3d-parts/parts/bluedog.js の 3D モデル。bluedog.js）: 高さ 1m、開くたびに陸のランダムな地点に 12 匹出して歩き回らせる
 const bluedogs = createBluedogWalkers({
@@ -1773,7 +1813,10 @@ function animate() {
     camera.updateMatrixWorld()
     updateLedBoards(now / 1000, camera)
     for (const k in migrations) migrations[k].tick(dt)
-    for (const w of spriteWalkers) w.update(dt, camera)
+    sabStillT = R_C * pDir.angleTo(_sabPrevDir) < SAB_STILL_SPEED * dt ? sabStillT + dt : 0
+    _sabPrevDir.copy(pDir)
+    sabForSprites.dir = pDir; sabForSprites.fwd = pFwd; sabForSprites.kan = !!held.kan; sabForSprites.still = sabStillT > SAB_STILL_TIME
+    for (const w of spriteWalkers) w.update(dt, camera, sabForSprites)
     bluedogs.update(dt)
     sneakers.update(dt)
     for (const f of spriteFlyers) f.update(dt, camera)

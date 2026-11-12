@@ -243,6 +243,25 @@ const _right = new THREE.Vector3()
 const _axis  = new THREE.Vector3()
 const _next  = new THREE.Vector3()
 const _m     = new THREE.Matrix4()
+const _to    = new THREE.Vector3()
+// sabちゃんが缶を持っていると、WATCH_DIST (m) 以内のキャラは立ち止まって sabちゃんの方を向き続ける
+// 缶をもらったキャラは、sabちゃんから FOLLOW_DIST (m) より離れたら sabちゃんの方へ歩き、FOLLOW_DIST の所で止まる（それより近ければその場で sabちゃんの方を向く）
+// sabちゃんが止まっているあいだは、FOLLOW_DIST の内側をふつうに歩き回る
+export const WATCH_DIST = 10
+const WATCH_TURN  = Math.PI * 1.5   // 向きを変える速さ (rad/s)
+const FOLLOW_DIST = 5
+const FOLLOW_GAIN = 2               // FOLLOW_DIST より離れた分 × これ (m/s) で近づく（followSpeed まで）
+const FOLLOW_ROAM_EDGE  = 1          // sabちゃんが止まっているとき、FOLLOW_DIST のこれだけ手前から内側へ向きを変える (m)
+const FOLLOW_ROAM_SLACK = 1         // 歩き回っていて FOLLOW_DIST からこれよりはみ出したら、sabちゃんの方へ戻る (m)
+// fwd を dir まわりに回して to（接平面の向き）へ、1 フレームに最大 maxAng だけ寄せる
+function turnToward(dir, fwd, to, maxAng) {
+  const ang = Math.atan2(_axis.crossVectors(fwd, to).dot(dir), fwd.dot(to))
+  fwd.applyAxisAngle(dir, Math.max(-maxAng, Math.min(maxAng, ang)))
+}
+// dir から target（どちらも単位ベクトル）への接平面の向きを out に入れる
+function tangentTo(dir, target, out) {
+  return out.copy(target).addScaledVector(dir, -target.dot(dir)).normalize()
+}
 
 // art: 絵のデータ / count: 数 / dot: ドット 1 つの大きさ (m) / speed: 歩く速さ (m/s) / radius: 惑星の半径 (m)
 // getGround(dir): 単位ベクトル dir の地点の地面の高さ（惑星中心から m） / waterLevel: 地面がこれより低ければ海 (m)
@@ -250,7 +269,7 @@ const _m     = new THREE.Matrix4()
 // migrations: 集まる先の名前 → 時刻で集まって散らばる動き（migration.js の createMigration）。絵の migrate の名前のものを使う
 // carrier: 上に乗れる動く台（gondola・gondeer。main.js の rideCarrier）。measure が足元の台の回った分（delta）を on に入れるので、乗っている子はその分だけ一緒に運び、
 //          台の近く（near）では足元の高さを毎フレーム測り直す（台が下に来たら乗り、去ったら下りる）
-export function createPixelSpriteWalkers({ scene, art, count, dot, speed, radius, getGround, waterLevel, spawn, migrations = {}, carrier = null }) {
+export function createPixelSpriteWalkers({ scene, art, count, dot, speed, radius, getGround, waterLevel, spawn, migrations = {}, carrier = null, followSpeed = speed }) {
   const mig = art.migrate ? migrations[art.migrate] ?? null : null
   const sheet = buildSheet(art)
   const height = sheet.cellHeight * dot
@@ -301,26 +320,71 @@ export function createPixelSpriteWalkers({ scene, art, count, dot, speed, radius
     scene.add(sprite.group)
     // ground0: 前に測った地点の高さ / ground1: PROBE_STEP 先の高さ（null ならまだ測っていない） / travel: ground0 の地点から歩いた距離 (m)
     // bobPhase: 浮き沈みの位相（0 で沈みきり。立ち止まったら 1 回ぶん浮き沈みし終えたところで止める）
-    walkers.push({ sprite, dir, fwd, ground, ground0: ground, ground1: null, travel: 0, turn: 0, turnTarget: 0, walking: false, timer: rand(STOP_TIME), step: 0, bobPhase: 0, onCarrier: null })
+    walkers.push({ sprite, dir, fwd, ground, ground0: ground, ground1: null, travel: 0, turn: 0, turnTarget: 0, walking: false, timer: rand(STOP_TIME), step: 0, bobPhase: 0, onCarrier: null, follow: null })
   }
 
-  function update(dt, camera) {
+  // sab: { dir, fwd, kan, still }（sabちゃんの足元の向き・前の向き・缶を持っているか・止まっているか）。なければ見ない
+  function update(dt, camera, sab = null) {
     const da = speed / radius * dt
     for (let i = 0; i < walkers.length; i++) {
       const w = walkers[i]
       if (w.onCarrier) { w.dir.applyQuaternion(w.onCarrier).normalize(); w.fwd.applyQuaternion(w.onCarrier) }   // 乗っている台と一緒に動く
-      w.timer -= dt
+      let roam = false   // ついてくるキャラが、止まっている sabちゃんのまわりを歩き回るか
+      if (w.follow && sab) {
+        // ついていく: sabちゃんから FOLLOW_DIST より離れていたら、sabちゃんの方へ離れた分だけ歩く（離れているほど速く）
+        //   sabちゃんが止まっているときは FOLLOW_DIST の内側を歩き回る（はみ出しが FOLLOW_ROAM_SLACK を超えたら戻る）
+        const over = radius * w.dir.angleTo(sab.dir) - FOLLOW_DIST
+        if (over > 0 && (!sab.still || over > FOLLOW_ROAM_SLACK)) {
+          turnToward(w.dir, w.fwd, tangentTo(w.dir, sab.dir, _to), Math.PI)   // ほぼすぐ向きを変える
+          const step = Math.min(over, Math.min(followSpeed, over * FOLLOW_GAIN) * dt)
+          w.dir.applyAxisAngle(_axis.crossVectors(w.dir, w.fwd).normalize(), step / radius).normalize()
+          w.walking = true
+          w.step += dt * sheet.looks.walk.fps
+          w.roaming = false
+        } else if (sab.still) {
+          roam = true
+          if (!w.roaming) {   // 歩き回りはじめ: いったん立ち止まるところから
+            w.roaming = true
+            w.walking = false
+            w.step = 0
+            w.timer = rand(STOP_TIME)
+          }
+          w.timer -= dt
+        } else {
+          w.walking = false
+          w.step = 0
+          w.roaming = false
+          turnToward(w.dir, w.fwd, tangentTo(w.dir, sab.dir, _to), WATCH_TURN * dt)
+        }
+        if (!roam) {
+          w.fwd.addScaledVector(w.dir, -w.fwd.dot(w.dir)).normalize()
+          w.ground = w.ground0 = getGround(w.dir)   // 速く動くので毎フレーム測る
+          w.ground1 = null
+          w.travel = 0
+          w.timer = rand(STOP_TIME)   // ついていくのをやめたら、立ち止まるところから歩き回る
+        }
+      } else if (sab?.kan && radius * w.dir.angleTo(sab.dir) < WATCH_DIST) {
+        // 缶を持った sabちゃんが近い: 立ち止まって sabちゃんの方を向き続ける
+        w.walking = false
+        w.step = 0
+        w.timer = Math.max(w.timer, STOP_TIME[0])
+        turnToward(w.dir, w.fwd, tangentTo(w.dir, sab.dir, _to), WATCH_TURN * dt)
+        w.fwd.addScaledVector(w.dir, -w.fwd.dot(w.dir)).normalize()
+      } else w.timer -= dt
       if (w.timer <= 0) {
         w.walking = !w.walking
         w.timer = rand(w.walking ? WALK_TIME : STOP_TIME)
         w.step = 0
       }
-      if (w.walking) {
+      if (w.walking && (!w.follow || roam)) {
         w.step += dt * sheet.looks.walk.fps
         if (Math.random() < dt / TURN_CHANGE) w.turnTarget = (Math.random() * 2 - 1) * TURN_MAX
         w.turn += (w.turnTarget - w.turn) * Math.min(1, dt * 2)
         w.fwd.applyAxisAngle(w.dir, w.turn * dt)
-        if (mig) mig.steer(w.dir, w.fwd, dt)   // 時間帯によって集まる先へ寄せる・離す
+        if (roam) {
+          // 歩き回る範囲の縁（FOLLOW_DIST の FOLLOW_ROAM_EDGE 手前）より外では sabちゃんの方へ向きを変える
+          if (radius * w.dir.angleTo(sab.dir) > FOLLOW_DIST - FOLLOW_ROAM_EDGE) turnToward(w.dir, w.fwd, tangentTo(w.dir, sab.dir, _to), WATCH_TURN * dt)
+        } else if (mig) mig.steer(w.dir, w.fwd, dt)   // 時間帯によって集まる先へ寄せる・離す
 
         // PROBE_STEP 先の地面を測る。海なら進まずに後ろ寄りへ向きを変える（次のフレームで向きを変えた先を測り直す）
         _axis.crossVectors(w.dir, w.fwd).normalize()
@@ -344,7 +408,7 @@ export function createPixelSpriteWalkers({ scene, art, count, dot, speed, radius
         w.fwd.addScaledVector(w.dir, -w.fwd.dot(w.dir)).normalize()
       }
       // 動く台の近くでは、足元を毎フレーム測り直す（次に進むときは先の地面も測り直す）
-      if (carrier && carrier.near(w.dir)) {
+      if (carrier && !w.follow && carrier.near(w.dir)) {
         w.ground = w.ground0 = carrier.measure(w.dir)
         w.onCarrier = carrier.on
         w.ground1 = null
@@ -370,7 +434,32 @@ export function createPixelSpriteWalkers({ scene, art, count, dot, speed, radius
     if (shadows) shadows.commit()
   }
 
-  return { update }
+  // dir（単位ベクトル）から maxDist (m) 以内で、まだついてきていないいちばん近いキャラ（なければ null）
+  function nearest(dir, maxDist) {
+    let best = null, bestD = maxDist
+    for (const w of walkers) {
+      if (w.follow) continue
+      const d = radius * w.dir.angleTo(dir)
+      if (d <= bestD) { best = w; bestD = d }
+    }
+    return best ? { walker: best, dist: bestD } : null
+  }
+  // raycaster の当たる、dir から maxDist (m) 以内のまだついてきていないキャラ（いちばん手前。なければ null）
+  function hit(raycaster, dir, maxDist) {
+    let best = null, bestD = Infinity
+    for (const w of walkers) {
+      if (w.follow || radius * w.dir.angleTo(dir) > maxDist) continue
+      const h = raycaster.intersectObject(w.sprite.group, true)[0]
+      if (h && h.distance < bestD) { best = w; bestD = h.distance }
+    }
+    return best
+  }
+  // ついてこさせる
+  function follow(w) {
+    w.follow = true
+  }
+
+  return { update, nearest, hit, follow }
 }
 
 // ------------------------------------------------------------
