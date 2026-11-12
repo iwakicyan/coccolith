@@ -97,7 +97,7 @@ scene.add(new THREE.AmbientLight(0x334455, 1.0))
 
 
 // --- 天体 ---------------------------------------------------
-const { group: coccolith, terrainMeshes, oceanMesh, colliders, lamps, coinSlot, flowerStand } = createCoccolith({ renderer })
+const { group: coccolith, terrainMeshes, oceanMesh, colliders, lamps, coinSlot, flowerStand, jihankis } = createCoccolith({ renderer })
 terrainMeshes.forEach(m => m.receiveShadow = true)
 // 地形に当たり判定の索引（BVH。three-mesh-bvh）をつけ、地面を測るレイキャストで三角形を総当たりしないようにする
 // （1 回 0.4ms → 0.008ms。索引を作るのは起動時に 6ms ほど）
@@ -911,6 +911,7 @@ window.addEventListener('keydown', e => {
     const g = activeDoorMesh() ? null : nearGlowSpot()
     if (g?.onTap) openGlowSpot(g)
     else if (g?.coinbox) coinDrop.dropOne()
+    else if (g?.jihanki) coinDrop.dropInto(jihankiTargets[jihankis.indexOf(g.jihanki)])
     else useDoor()
     e.preventDefault()
     return
@@ -998,45 +999,62 @@ coinIntro.start(pDir, pFwd)
     return new THREE.Vector3(Math.sin(phi) * Math.cos(theta), Math.cos(phi), Math.sin(phi) * Math.sin(theta))
   }))
 }
-// HUD のコイン数をつかんでコイン箱の投入口か板の紙へドラッグすると、1 枚入れられる（coinDrop.js）
+// 自販機（coccolith.js の jihankis）：投入口にコインを入れると、コインが回り終えたところで暗転し、真っ暗の間に取り出し口へ缶を 1 本出す
+//   缶が出ている自販機は光らず、もう入れられない（ページを開き直すと戻る）
+const jihankiTargets = jihankis.map(j => ({
+  objects: () => j.userData.slotMeshes,
+  enabled: () => !j.userData.kanOut && !transitioning && !overviewMode && !interior,
+  accepts: () => true,
+  slot: j.userData.slot,
+  drop: () => {
+    setCoinCount(coinCount - 1)
+    j.userData.kanOut = true
+    setTimeout(() => fadeCut(() => j.userData.dispenseKan()), COIN_INSERT_TIME * 1000)
+  },
+}))
+for (const g of _glowSpots) if (g.jihanki) g.enabled = () => !g.jihanki.userData.kanOut
+
+// HUD のコイン数をつかんでコイン箱・自販機の投入口か板の紙へドラッグすると、1 枚入れられる（coinDrop.js）
 const coinDrop = createCoinDrop({
   boxEl: coinBoxEl, scene, camera, renderer, slot: coinSlot,
   getCount: () => coinCount,
-  onDrop: () => { setCoinCount(coinCount - 1); coinboxUsed = true; setTimeout(placeStandFlower, COIN_INSERT_TIME * 1000) },
+  onDrop: () => { setCoinCount(coinCount - 1); coinboxUsed = true; setTimeout(() => fadeCut(() => flowerStand.place()), COIN_INSERT_TIME * 1000) },
   enabled: () => !coinboxUsed && !transitioning && !overviewMode && !interior,
   // 板の紙にも入れられる（入れるとその書き込みの順位が 1 つ上がる。boardNotes.js）
   targets: [noteCoinTarget({
     enabled: () => !transitioning && !overviewMode && !interior,
     spend: () => setCoinCount(coinCount - 1),
     refund: () => setCoinCount(coinCount + 1),
-  })],
+  }), ...jihankiTargets],
 })
 // コイン箱は 1 枚入れたらおしまい（光らず、もう入れられない。ページを開き直すと戻る）
 let coinboxUsed = false
 _glowSpots.find(g => g.coinbox).enabled = () => !coinboxUsed
 
 // --- 階段の前の台の花 ------------------------------------------
-// コイン箱にコインを入れると、コインが回り終えたところで 0.3 秒暗転し（暗くなって明るくなるまで）、
-// 真っ暗の間に台の上へ花壇の花を 1 本置く（coccolith.js の createFlowerStand）。花のある台は接地ラインが光る
+// コイン箱にコインを入れると、コインが回り終えたところで暗転し（fadeCut）、真っ暗の間に台の上へ花壇の花を 1 本置く（coccolith.js の createFlowerStand）。花のある台は接地ラインが光る
 // 光っている台を選ぶ（タップ・Enter）と、sabちゃんが台の上の花を持つ（前に持っていた花は捨てる）
-const FLOWER_FADE      = 0.3    // 暗転の長さ (s)。半分で真っ暗、残りで明るくする
-let placingFlower = false
-function placeStandFlower() {
-  if (placingFlower) return
-  placingFlower = true
-  transitioning = true
-  const half = FLOWER_FADE / 2 * 1000
-  fadeEl.style.transition = `opacity ${half}ms`
-  fadeEl.style.opacity = 1
-  setTimeout(() => {
-    flowerStand.place()
-    fadeEl.style.opacity = 0
+
+// FADE_CUT 秒の暗転（半分で真っ暗、残りで明るくする）。真っ暗になったところで fn を呼ぶ（花を置く・缶を出す）
+// 暗転が重なったときは、あとのものは前のものが明けてから始める
+const FADE_CUT = 0.3
+let fadeCutChain = Promise.resolve()
+function fadeCut(fn) {
+  fadeCutChain = fadeCutChain.then(() => new Promise(done => {
+    transitioning = true
+    const half = FADE_CUT / 2 * 1000
+    fadeEl.style.transition = `opacity ${half}ms`
+    fadeEl.style.opacity = 1
     setTimeout(() => {
-      fadeEl.style.transition = ''
-      transitioning = false
-      placingFlower = false
+      fn()
+      fadeEl.style.opacity = 0
+      setTimeout(() => {
+        fadeEl.style.transition = ''
+        transitioning = false
+        done()
+      }, half)
     }, half)
-  }, half)
+  }))
 }
 let heldFlower = null
 flowerStand.onTake = () => {

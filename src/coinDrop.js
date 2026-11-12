@@ -20,7 +20,9 @@ import { COIN_RADIUS, POP_TIME, POP_HEIGHT, SPIN_IDLE } from './coinIntro.js'
 //              objects(): 当たりを見る Object3D の配列、enabled(): 入れられる状態か、accepts(hit): その当たり（Raycaster の結果）に入れられるか、
 //              drop(hit): 入れたとき（所持数を減らすのもここ）。コインは当たった面の前に出る
 //              hover(hit): あれば、つかんだコインが上に来たときにその当たりで、外れたら null で呼ぶ（紙に枠を付けるなど）
+//              slot: あれば投入口（Object3D。ローカル +z が面の法線・原点が中心）。コインは当たった面ではなく投入口の前に出る（自販機など）
 //  update(dt) を毎フレーム呼ぶ。dropOne() はドラッグせずに 1 枚入れる（コイン箱の前で Enter を押したとき）
+//  dropInto(target) は targets のうち slot を持つものへ、ドラッグせずに 1 枚入れる（自販機の前で Enter を押したとき）
 // ============================================================
 
 const REACH       = 14     // カメラからこの距離までの投入口に入れられる (m)。カメラは sabちゃんの 8m 後ろ
@@ -40,7 +42,7 @@ export function createCoinDrop({ boxEl, scene, camera, renderer, slot, getCount,
   let pointerId = null
 
   // 入れられるもの。投入口は前の向き（slot の +z）の前に、ほかは当たった面の前にコインを出す
-  const slotTarget = { objects: () => [slot], enabled, accepts: () => true, drop: () => onDrop(), slot: true }
+  const slotTarget = { objects: () => [slot], enabled, accepts: () => true, drop: () => onDrop(), slot }
   const all = [slotTarget, ...targets]
   const canGrab = () => getCount() > 0 && all.some(t => t.enabled())
   // 指の下にある、入れられるもの（いちばん手前）{ target, hit }。なければ null
@@ -94,7 +96,7 @@ export function createCoinDrop({ boxEl, scene, camera, renderer, slot, getCount,
     if (over) {
       g.remove()
       over.target.drop(over.hit)
-      if (over.target.slot) insertCoin()
+      if (over.target.slot) insertCoin(over.target.slot)
       else insertCoinAt(over.hit)
     } else {
       // 外したら HUD のコインの所へ戻して消す
@@ -113,10 +115,10 @@ export function createCoinDrop({ boxEl, scene, camera, renderer, slot, getCount,
 
   // 投入口の前にコインを出す（表を投入口の外へ向ける）
   const _center = new THREE.Vector3(), _normal = new THREE.Vector3()
-  function insertCoin() {
-    slot.updateWorldMatrix(true, false)
-    _center.setFromMatrixPosition(slot.matrixWorld)
-    _normal.set(0, 0, 1).transformDirection(slot.matrixWorld)
+  function insertCoin(s) {
+    s.updateWorldMatrix(true, false)
+    _center.setFromMatrixPosition(s.matrixWorld)
+    _normal.set(0, 0, 1).transformDirection(s.matrixWorld)
     spawnCoin()
   }
   // 当たった面（Raycaster の結果）の前にコインを出す
@@ -172,13 +174,14 @@ export function createCoinDrop({ boxEl, scene, camera, renderer, slot, getCount,
   }
 
   // ドラッグせずに 1 枚入れる。入れられたら true
-  function dropOne() {
-    if (!(getCount() > 0 && enabled())) return false
-    onDrop()
-    insertCoin()
+  function dropInto(target) {
+    if (!(getCount() > 0 && target.enabled())) return false
+    target.drop()
+    insertCoin(target.slot)
     boxEl.classList.toggle('grabbable', canGrab())
     return true
   }
+  const dropOne = () => dropInto(slotTarget)
 
-  return { update, dropOne }
+  return { update, dropOne, dropInto }
 }

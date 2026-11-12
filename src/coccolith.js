@@ -206,6 +206,7 @@ export function createCoccolith({ renderer = null } = {}) {
   const group = new THREE.Group()
   const terrainMeshes = []
   const colliders = []   // sabちゃんが侵入できない建物（userData.footprint を持つ Object3D）
+  const jihankis = []    // 自販機（my-3d-parts/landmark/jihanki.js。コインを入れると取り出し口に缶が出る → main.js）
   const lamps = []       // ライト { pos: 光の位置（group のローカル座標）, glow: 頭の発光マテリアル }。main.js が近いものだけ点ける
 
   const noise3D = createNoise3D(Alea('coccolith'))
@@ -761,8 +762,16 @@ export function createCoccolith({ renderer = null } = {}) {
     const dDeg = THREE.MathUtils.radToDeg(1 / (R_C + LAND_LIFT))   // 1m ぶんの角度
     jihanki.rotation.y = headingTo(wrapper, lat + fn * dDeg, lon + fe * dDeg / Math.cos(THREE.MathUtils.degToRad(lat)))
     landmarkShadow(jihanki, wrapper)
+    // 近づくと本体の接地ラインが光り、コインを入れられる（main.js。投入口へのドラッグ・タップ・Enter）
+    const { base, baseSize, slot, slotMeshes, tray } = jihanki.userData
+    const s = wrapper.scale.x
+    addGroundGlow(base, { y: JIHANKI_SINK / s, pad: 0.1 / s, band: 0.12 / s, width: baseSize.w, depth: baseSize.d })
+    jihanki.userData.glowSpot = { mesh: base, local: new THREE.Vector3(0, 0, baseSize.d / 2), reach: 4, jihanki }
     colliders.push(jihanki)
-    mergeStatic(jihanki)
+    jihankis.push(jihanki)
+    // 投入口のメッシュ（コインの当たり）・投入口の面・取り出し口の置き場・光る所はまとめない
+    const keepSet = new Set([...slotMeshes, slot, tray, base])
+    mergeStatic(jihanki, { keep: o => keepSet.has(o) })
   }
 
   // --- ランドマーク: SShall (lat=27.0, lon=161.0) ------------
@@ -1026,7 +1035,7 @@ export function createCoccolith({ renderer = null } = {}) {
   ebWrapper.setRotationFromMatrix(new THREE.Matrix4().makeBasis(ebRight, ebN, ebFwd))
   group.add(ebWrapper)
 
-  return { group, terrainMeshes, oceanMesh, colliders, lamps, coinSlot: coinbox.userData.slot, flowerStand }
+  return { group, terrainMeshes, oceanMesh, colliders, lamps, coinSlot: coinbox.userData.slot, flowerStand, jihankis }
 }
 
 // 島[GF] (lat 0-36°N, lon 72-108°E) に岩を InstancedMesh で散布
