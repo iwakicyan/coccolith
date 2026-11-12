@@ -24,6 +24,7 @@ import { openPixelScene } from './pixelScene.js'
 import { TREEHOUSE_PIXEL_LAYERS, TREEHOUSE_PIXEL_TEXT } from './pixelArt/treehouse.js'
 import { createFlowerGeometry, openFlowerCut } from './flowerCut.js'
 import { addLedBoard } from './ledBoard.js'
+import { createShitabaGround } from './shitabaGround.js'
 import { applyNightEnv } from './nightEnv.js'
 import { createForest1 } from '../my-3d-parts/parts/forest1.jsx'
 import { createFrame64 } from '../my-3d-parts/parts/Frame_6-4.jsx'
@@ -209,7 +210,8 @@ export function createCoccolith({ renderer = null } = {}) {
   const noise3D = createNoise3D(Alea('coccolith'))
 
   // --- 地表メッシュ -------------------------------------------
-  const geo = new THREE.SphereGeometry(R_C, 64, 64)
+  const TERRAIN_SEGS = 64
+  const geo = new THREE.SphereGeometry(R_C, TERRAIN_SEGS, TERRAIN_SEGS)
   const pos = geo.attributes.position
 
   // 道路セグメントを事前計算 (大円法線 gnx,gny,gnz + ルート色 付き)
@@ -510,10 +512,29 @@ export function createCoccolith({ renderer = null } = {}) {
     [{lat:11.2,lon:-43.2},{lat:11.0,lon:-46.8},{lat:6.9,lon:-46.8},{lat:6.9,lon:-43.2}],
     [{lat:50,lon:-100},{lat:50,lon:-114.6},{lat:30,lon:-114.6},{lat:22.7,lon:-132},{lat:12,lon:-125},{lat:26.5,lon:-100}],
     [{lat:66,lon:-145},{lat:56,lon:-176.5},{lat:42,lon:-145},{lat:53.6,lon:-128.4}],
-    [{lat:73.3,lon:7.2},{lat:42.4,lon:-33.8},{lat:42.4,lon:-16.6},{lat:56.3,lon:62.4}],
     [{lat:59.9,lon:157.6},{lat:59.9,lon:80.2},{lat:44.4,lon:117.3}],
   ]
   for (const poly of GRASS_AREAS) group.add(createGrassField(poly, noise3D, GRASS_KIND_1, [gojunotoHole]))
+
+  // --- 下葉: forest1 ×3 のあたりの草地は、立てた草の代わりにドット絵を地面に貼る（shitabaGround.js） ---
+  //   範囲は前の草地と同じポリゴンを 5m 内側へ寄せたところ（草地の境目のぼかしの真ん中くらい）
+  const SHITABA_AREA = [{lat:73.3,lon:7.2},{lat:42.4,lon:-33.8},{lat:42.4,lon:-16.6},{lat:56.3,lon:62.4}]
+  //   立てた草も、ほかの草地の 3 割の密度でこの草地全体（下葉の上と、lon 25 より先）に残す
+  group.add(createGrassField(SHITABA_AREA, noise3D, { ...GRASS_KIND_1, density: GRASS_KIND_1.density * 0.3 }))
+  //   草地の外にある森（lat 54.6・lon -36.6。コンパスでいちばん東）の下にも、森の中心から半径 r (m) の円で足す（草地の範囲とつながる）
+  //   lon 25 より lon の大きい側（コンパスでは西）は森が無いので貼らない
+  const SHITABA_LON_MAX = 25
+  const SHITABA_SHRINK_DEG = (5 / R_C) * (180 / Math.PI)
+  const SHITABA_CIRCLES = [{ lat: 54.6, lon: -36.6, r: 70 }]
+    .map(c => ({ dir: dirOf(c.lat, c.lon), cosR: Math.cos(c.r / (R_C + LAND_LIFT)) }))
+  group.add(createShitabaGround({
+    terrainGeo: geo, segs: TERRAIN_SEGS,
+    center: { lat: 54, lon: -5 },
+    contains: (lat, lon) => lon <= SHITABA_LON_MAX && ((_polyContains(lat, lon, SHITABA_AREA) &&
+      SHITABA_AREA.every((a, i) => { const b = SHITABA_AREA[(i + 1) % SHITABA_AREA.length]
+        return _distToSeg(lat, lon, a.lat, a.lon, b.lat, b.lon) >= SHITABA_SHRINK_DEG })) ||
+      SHITABA_CIRCLES.some(c => dirOf(lat, lon).dot(c.dir) >= c.cosR)),
+  }))
 
   const FIELD01_AREAS = [
     [{lat:-60,lon:30},{lat:-37,lon:62},{lat:-43,lon:82},{lat:-60,lon:82}],
