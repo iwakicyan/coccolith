@@ -4,6 +4,7 @@
 //  歩き: 各方向 2 コマ。立ち止まったら座り（静止）の絵
 //  泳ぎ: 海に入ったら泳ぎの絵（止まっていても水をかく）
 //  flipped(…) は番号のない絵の左右反転（2 コマ目に使う）
+//  斜め後ろの絵は右側から見た向きで描いてあるので、flipped(…) で左右反転して使う
 //  横の絵は左側から見た絵（顔が画面の左）。どの絵も左から 12 列目が中心
 
 import { flipped } from '../../pixelSprite.js'
@@ -971,7 +972,7 @@ export default {
         front: [sitFront1],
         frontSide: [sitFrontSide1],
         side: [sitSide1],
-        backSide: [sitBackSide1],
+        backSide: [flipped(sitBackSide1)],
         back: [sitBack1],
         top: [sitTop1],
       },
@@ -982,7 +983,7 @@ export default {
         front: [walkFront1, walkFront2],
         frontSide: [walkFrontSide1, walkFrontSide2],
         side: [walkSide1, walkSide2],
-        backSide: [walkBackSide1, walkBackSide2],
+        backSide: [flipped(walkBackSide1), flipped(walkBackSide2)],
         back: [walkBack1, flipped(walkBack1)],
         top: [walkTop1, flipped(walkTop1)],
       },
@@ -993,7 +994,7 @@ export default {
         front: [swimFront1, flipped(swimFront1)],
         frontSide: [swimFrontSide1, swimFrontSide2],
         side: [swimSide1, swimSide2],
-        backSide: [swimBackSide1, swimBackSide2],
+        backSide: [flipped(swimBackSide1), flipped(swimBackSide2)],
         back: [swimBack1, flipped(swimBack1)],
         top: [swimTop1, flipped(swimTop1)],
       },
