@@ -34,6 +34,7 @@ import { createBluedogWalkers } from './bluedog.js'
 import { createSneakerWalkers } from './sneaker.js'
 import { createTsue } from '../my-3d-parts/parts/tsue.js'
 import { createIta, ITA_FACE, ITA_WIDTH } from '../my-3d-parts/parts/ita.js'
+import { KAN } from '../my-3d-parts/parts/kan.js'
 import { addBoardNotes, openBoardNotes, isBoardNotesOpen, noteCoinTarget } from './boardNotes.js'
 import { addGroundGlow } from './doorGlow.js'
 
@@ -1073,12 +1074,12 @@ function fadeCut(fn) {
 }
 // sabちゃんが持つもの（花か缶のどちらか 1 つ）。新しく持つと前に持っていたものは捨てる
 // 位置は sabちゃんのローカル（+z が前、+y が上、単位は sabchan.group の拡大前）
-let held = null   // { obj, dispose }
-function hold(obj, dispose) {
+let held = null   // { obj, dispose, kan }
+function hold(obj, dispose, { kan = false } = {}) {
   if (held) { sabchan.group.remove(held.obj); held.dispose() }
-  obj.traverse(o => { if (o.isMesh) o.visible = !sabHidden })   // 主観で体を隠しているときは一緒に隠す
+  obj.traverse(o => { if (o.isMesh) o.visible = !sabHidden })   // 主観で体を隠しているときは一緒に隠す（缶は updateHeldInView で見せる）
   sabchan.group.add(obj)
-  held = { obj, dispose }
+  held = { obj, dispose, kan }
 }
 flowerStand.onTake = () => {
   const f = flowerStand.take()
@@ -1089,12 +1090,45 @@ flowerStand.onTake = () => {
   f.rotation.set(0.2, 0, -0.2)
   hold(f, () => f.children[1].geometry.dispose())
 }
-// 自販機の取り出し口から取った缶（k は取り出し口と同じ倍率）を、襟の輪の前の右寄りに立てて、ラベルを前へ向けて持つ
+// 自販機の取り出し口から取った缶（k は取り出し口と同じ倍率）を、襟の輪の左寄りのやや上に立てて持つ（後ろからの視点でも少し見える）
+const KAN_HOLD = { pos: [4.4, -1.4, 1.6], rot: [0.1, 0, -0.2] }   // 缶の底面の真ん中の位置と向き（sabちゃんのローカル。前が +z なので、後ろから見て左が +x）
 function holdKan(k, jihanki) {
   k.scale.multiplyScalar(jihanki.parent.scale.x / sabchan.group.scale.x)   // 取り出し口と同じ大きさ（自販機の wrapper の倍率を掛ける）
-  k.position.set(1.1, -3.6, 4.0)   // 缶の底面の真ん中。襟の輪に寄せる
-  k.rotation.set(0.15, 0, -0.15)
-  hold(k, () => k.traverse(o => { if (o.isMesh) { o.geometry.dispose(); if (!o.material.map) o.material.dispose() } }))
+  k.position.fromArray(KAN_HOLD.pos)
+  k.rotation.fromArray(KAN_HOLD.rot)
+  k.userData.holdPose = { position: k.position.clone(), quaternion: k.quaternion.clone(), scale: k.scale.clone() }
+  k.userData.worldScale = k.scale.x * sabchan.group.scale.x
+  k.userData.inView = false
+  hold(k, () => k.traverse(o => { if (o.isMesh) { o.geometry.dispose(); if (!o.material.map) o.material.dispose() } }), { kan: true })
+}
+
+// 主観で sabちゃんの体を隠しているときは、持っている缶だけ見せて、画面の左下に見切れるように置く（毎フレーム、描く直前にカメラから置き直す）
+// KAN_VIEW: カメラからの距離 (m) と、缶の真ん中の位置（画面の半幅・半高さに対する割合。左下が -）、向き
+const KAN_VIEW = { depth: 0.7, x: -0.78, y: -0.95, rot: [0.15, 0.35, 0.25] }
+const _kvOff = new THREE.Matrix4(), _kvInv = new THREE.Matrix4(), _kvPos = new THREE.Vector3(), _kvQ = new THREE.Quaternion(), _kvS = new THREE.Vector3(), _kvE = new THREE.Euler(), _kvUp = new THREE.Vector3()
+function updateHeldInView() {
+  if (!held?.kan) return
+  const k = held.obj
+  if (!sabHidden) {
+    if (k.userData.inView) {   // 後ろからの視点に戻ったら、手で持つ位置へ
+      const p = k.userData.holdPose
+      k.position.copy(p.position); k.quaternion.copy(p.quaternion); k.scale.copy(p.scale)
+      k.userData.inView = false
+    }
+    return
+  }
+  if (!k.userData.inView) { k.traverse(o => { if (o.isMesh) o.visible = true }); k.userData.inView = true }
+  camera.updateMatrixWorld()
+  const halfH = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) / camera.zoom * KAN_VIEW.depth, halfW = halfH * camera.aspect
+  const ws = k.userData.worldScale
+  _kvQ.setFromEuler(_kvE.fromArray(KAN_VIEW.rot))
+  _kvUp.set(0, 1, 0).applyQuaternion(_kvQ)
+  // 缶の原点は底面の真ん中なので、真ん中が狙った所に来るよう缶の軸に沿って半分下げる
+  _kvPos.set(KAN_VIEW.x * halfW, KAN_VIEW.y * halfH, -KAN_VIEW.depth).addScaledVector(_kvUp, -KAN.H * ws / 2)
+  _kvOff.compose(_kvPos, _kvQ, _kvS.setScalar(ws))
+  sabchan.group.updateMatrixWorld()
+  _kvInv.copy(sabchan.group.matrixWorld).invert().multiply(camera.matrixWorld).multiply(_kvOff)
+  _kvInv.decompose(k.position, k.quaternion, k.scale)
 }
 
 // 正規化済み球面法線から緯度経度（度）を返す。lon は -180〜180
@@ -1743,6 +1777,7 @@ function animate() {
     for (const f of spriteFlyers) f.update(dt, camera)
     horizonCull.update(camera)
   }
+  updateHeldInView()
   renderer.render(interior ? interior.def.scene : scene, camera)
   shotFrameRendered()
   if (loadingShown && !loadingHold) hideLoading()
