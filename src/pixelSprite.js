@@ -16,6 +16,8 @@ import { createBlobShadows, polygonShadow } from './blobShadow.js'
 //    sink: 側面の絵の高さ（いちばん上のドットから足元まで）のこの割合だけ地面に埋める（なければ埋めない。main.js が使う）
 //    bob: 歩くあいだ、側面の絵の高さのこの割合だけ浮き沈みする（なければしない）
 //    anywhere: true なら陸でも海でも出て、海に入っても向きを変えない（海底を歩く）
+//    poses に swim があれば、陸に出て、海に入っても向きを変えずに海面を泳ぐ（海の上では swim のポーズ。止まっていても水をかく）
+//    swimSink: 泳ぐとき、側面の絵の高さのこの割合だけ海面より下に沈める（なければ 0.35）
 //    migrate: 集まる先の名前（'gojunoto' など）。時刻によってそこへ集まって散らばる（createPixelSpriteWalkers に渡す migrations。migration.js）
 //    near: true なら見た目の確認用にスポーン地点の近くに出す
 //    shadow: { w, l, dz, sides } があれば足元に擬似的な影（ダークグレーの多角形の板。blobShadow.js）を置く。幅・前後の長さ・前へずらす量 (m)・角の数（なければ 8）
@@ -265,11 +267,12 @@ function tangentTo(dir, target, out) {
 
 // art: 絵のデータ / count: 数 / dot: ドット 1 つの大きさ (m) / speed: 歩く速さ (m/s) / radius: 惑星の半径 (m)
 // getGround(dir): 単位ベクトル dir の地点の地面の高さ（惑星中心から m） / waterLevel: 地面がこれより低ければ海 (m)
+// getSeaLevel(dir): dir の地点の海面の高さ（惑星中心から m。潮でずれる。泳ぐ絵だけが使う。なければ waterLevel）
 // spawn: { dir, fwd } スポーン地点とその正面（絵が near のとき、この近くに出す）
 // migrations: 集まる先の名前 → 時刻で集まって散らばる動き（migration.js の createMigration）。絵の migrate の名前のものを使う
 // carrier: 上に乗れる動く台（gondola・gondeer。main.js の rideCarrier）。measure が足元の台の回った分（delta）を on に入れるので、乗っている子はその分だけ一緒に運び、
 //          台の近く（near）では足元の高さを毎フレーム測り直す（台が下に来たら乗り、去ったら下りる）
-export function createPixelSpriteWalkers({ scene, art, count, dot, speed, radius, getGround, waterLevel, spawn, migrations = {}, carrier = null, followSpeed = speed }) {
+export function createPixelSpriteWalkers({ scene, art, count, dot, speed, radius, getGround, waterLevel, getSeaLevel = () => waterLevel, spawn, migrations = {}, carrier = null, followSpeed = speed }) {
   const mig = art.migrate ? migrations[art.migrate] ?? null : null
   const sheet = buildSheet(art)
   const height = sheet.cellHeight * dot
@@ -277,6 +280,8 @@ export function createPixelSpriteWalkers({ scene, art, count, dot, speed, radius
   const sink = (art.sink ?? 0) * body
   const bob = (art.bob ?? 0) * body
   const isWater = g => !art.anywhere && g < waterLevel
+  const swims = !!sheet.looks.swim   // 海に入って泳ぐ
+  const swimSink = (art.swimSink ?? 0.35) * body
   const restPose = sheet.looks.sit ? 'sit' : 'walk'
   const walkers = []
   // 足元の影（絵に shadow があるときだけ。全員ぶんを 1 回で描く）
@@ -320,7 +325,7 @@ export function createPixelSpriteWalkers({ scene, art, count, dot, speed, radius
     scene.add(sprite.group)
     // ground0: 前に測った地点の高さ / ground1: PROBE_STEP 先の高さ（null ならまだ測っていない） / travel: ground0 の地点から歩いた距離 (m)
     // bobPhase: 浮き沈みの位相（0 で沈みきり。立ち止まったら 1 回ぶん浮き沈みし終えたところで止める）
-    walkers.push({ sprite, dir, fwd, ground, ground0: ground, ground1: null, travel: 0, turn: 0, turnTarget: 0, walking: false, timer: rand(STOP_TIME), step: 0, bobPhase: 0, onCarrier: null, follow: null })
+    walkers.push({ sprite, dir, fwd, ground, ground0: ground, ground1: null, travel: 0, turn: 0, turnTarget: 0, walking: false, timer: rand(STOP_TIME), step: 0, paddle: 0, bobPhase: 0, onCarrier: null, follow: null })
   }
 
   // sab: { dir, fwd, kan, still }（sabちゃんの足元の向き・前の向き・缶を持っているか・止まっているか）。なければ見ない
@@ -390,7 +395,7 @@ export function createPixelSpriteWalkers({ scene, art, count, dot, speed, radius
         _axis.crossVectors(w.dir, w.fwd).normalize()
         if (w.ground1 === null) {
           const ahead = getGround(_next.copy(w.dir).applyAxisAngle(_axis, PROBE_STEP / radius))
-          if (isWater(ahead)) w.fwd.applyAxisAngle(w.dir, Math.PI * (0.6 + Math.random() * 0.8))
+          if (!swims && isWater(ahead)) w.fwd.applyAxisAngle(w.dir, Math.PI * (0.6 + Math.random() * 0.8))
           else w.ground1 = ahead
         }
         // 前へ進み、高さは測った 2 地点のあいだをならす。測った地点まで来たら次を測る
@@ -424,12 +429,22 @@ export function createPixelSpriteWalkers({ scene, art, count, dot, speed, radius
         lift = bob * 0.5 * (1 - Math.cos(w.bobPhase))
       }
 
+      // 泳ぐ: 海面より低い所では海面から swimSink だけ沈めて浮かべる（浅瀬では地面に足がつく）
+      let base = w.ground - sink, wet = false
+      if (swims) {
+        const sea = getSeaLevel(w.dir)
+        wet = w.ground < sea
+        base = Math.max(base, sea - swimSink)
+        if (wet) w.paddle += dt * sheet.looks.swim.fps
+      }
+
       // 置く: local Y = 上、local Z = 前、原点 = 足元
       const g = w.sprite.group
       g.setRotationFromMatrix(_m.makeBasis(_right.crossVectors(w.dir, w.fwd), w.dir, w.fwd))
-      g.position.copy(w.dir).multiplyScalar(w.ground - sink + lift)
-      w.sprite.face(camera, w.walking ? 'walk' : restPose, Math.floor(w.step))
-      if (shadows) shadows.set(i, w.dir, w.fwd, w.ground)
+      g.position.copy(w.dir).multiplyScalar(base + lift)
+      if (wet) w.sprite.face(camera, 'swim', Math.floor(w.paddle))
+      else w.sprite.face(camera, w.walking ? 'walk' : restPose, Math.floor(w.step))
+      if (shadows) shadows.set(i, w.dir, w.fwd, Math.max(w.ground, base))
     }
     if (shadows) shadows.commit()
   }

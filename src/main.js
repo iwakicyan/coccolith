@@ -1438,6 +1438,7 @@ const spriteWalkers = Object.values(import.meta.glob('./pixelArt/sprites/*.js', 
     scene, art, count: art.count, dot: SPRITE_DOT * (art.scale ?? 1), speed: SPEED * 0.05, radius: R_C,
     getGround: dir => getGroundHeight(dir) - 1,
     waterLevel: R_OCEAN + TIDE_SHIFT, spawn: { dir: pDir, fwd: pFwd }, migrations, carrier: rideCarrier,
+    getSeaLevel: dir => R_OCEAN + dir.dot(oceanMesh.position),   // 海面球は潮で oceanMesh.position だけずれている
     followSpeed: SPEED * 1.15,   // ついてくるときは sabちゃんより少し速く走れる
   }))
 // 缶を持った sabちゃんが近づくと、ドット絵のキャラは立ち止まって sabちゃんの方を向く（10m 以内。pixelSprite.js）

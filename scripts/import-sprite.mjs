@@ -10,7 +10,9 @@
 //
 //  txt の形: 絵の名前の行のすぐ下に、書き出しの JSON（{ palette, width, height, grid }）を貼ったものを並べる
 //    名前に入っている言葉で方向を決める: 正面 / 斜め前 / 横（真横）/ 斜め後ろ / 背面 / 天面
-//    名前の最後の数字がコマの番号（1, 2, …、なければ 1）。「座」か「静止」が入っていれば立ち止まったときの絵（sit）、それ以外は歩き（walk）
+//    名前の最後の数字がコマの番号（1, 2, …、なければ 1）。「座」か「静止」が入っていれば立ち止まったときの絵（sit）、
+//    「泳」が入っていれば海を泳ぐときの絵（swim。あれば陸から海へ入って泳ぐ）、それ以外は歩き（walk）
+//    同じポーズでほかの方向が 2 コマあるのに番号のない絵が 1 枚だけなら、2 コマ目はその絵の左右反転にする
 //    斜め前・斜め後ろがなければ 4 方向、あれば 8 方向のスプライトになる
 //    sit がなければ、立ち止まると歩きの 1 コマ目で止まる
 //  空を飛ぶもの（飛行機など）: 名前に「真下」「下方」「水平」「上から」があれば、飛びまわるスプライトにして src/pixelArt/flyers/ に書き出す
@@ -60,7 +62,7 @@ for (let m; (m = re.exec(txt));) {
   if (!view) throw new Error(`「${label}」の方向がわからない（正面・斜め前・横・斜め後ろ・背面・天面 のどれかを名前に入れる）`)
   const json = m[2].trimEnd().endsWith('}') ? m[2] : `${m[2]}\n}`
   const { width } = JSON.parse(json.replace(/\/\/[^\n]*/g, ''))
-  frames.push({ label, pose: flying ? 'fly' : /座|静止/.test(label) ? 'sit' : 'walk', view, n, json, width })
+  frames.push({ label, pose: flying ? 'fly' : /座|静止/.test(label) ? 'sit' : /泳/.test(label) ? 'swim' : 'walk', view, n, json, width, numbered: /\d\s*$/.test(label) })
 }
 if (!frames.length) throw new Error('絵が見つからない')
 
@@ -68,6 +70,11 @@ if (!frames.length) throw new Error('絵が見つからない')
 const poses = {}
 for (const f of frames) ((poses[f.pose] ??= {})[f.view] ??= []).push(f)
 for (const views of Object.values(poses)) for (const list of Object.values(views)) list.sort((a, b) => a.n - b.n)
+// 番号のない 1 枚だけの絵は、ほかの方向が 2 コマならその左右反転を 2 コマ目にする
+for (const views of Object.values(poses)) {
+  if (Math.max(...Object.values(views).map(l => l.length)) !== 2) continue
+  for (const list of Object.values(views)) if (list.length === 1 && !list[0].numbered) list.push({ ...list[0], flip: true })
+}
 
 const eight = Object.values(poses).some(v => v.frontSide || v.backSide)
 const need = flying
@@ -80,6 +87,8 @@ for (const [pose, views] of Object.entries(poses)) {
 if (!flying && !poses.walk) throw new Error('歩きの絵がない（「座」「静止」の入っていない名前の絵）')
 
 const varName = f => `${f.pose}${f.view[0].toUpperCase()}${f.view.slice(1)}${f.n}`
+const frameRef = f => f.flip ? `flipped(${varName(f)})` : varName(f)
+const anyFlip = Object.values(poses).some(v => Object.values(v).some(l => l.some(f => f.flip)))
 const cx = Math.floor(frames[0].width / 2)
 const frameCount = Math.max(...(poses.walk ?? poses.fly).front.map(f => f.n))
 
@@ -104,18 +113,18 @@ ${need.map(v => `        ${v}: [${poses.fly[v].map(varName).join(', ')}],`).join
 ` : `// ${title}（${eight ? 8 : 4} 方向スプライトの絵。pixelSprite.js）
 //  scripts/import-sprite.mjs で ${srcNames} から書き出したもの（描き直したらもう一度書き出す）
 //  ${eight ? '正面・斜め前・真横・斜め後ろ・背面・天面の 8 方向' : '正面・真横・背面・天面の 4 方向で、斜め前・斜め後ろの絵はない（見る角度を 90° ごとに区切る）'}
-//  歩き: 各方向 ${frameCount} コマ。${poses.sit ? '立ち止まったら座り（静止）の絵' : '立ち止まったら 1 コマ目で止まる'}
+//  歩き: 各方向 ${frameCount} コマ。${poses.sit ? '立ち止まったら座り（静止）の絵' : '立ち止まったら 1 コマ目で止まる'}${poses.swim ? '\n//  泳ぎ: 海に入ったら泳ぎの絵（止まっていても水をかく）' : ''}${anyFlip ? '\n//  flipped(…) は番号のない絵の左右反転（2 コマ目に使う）' : ''}
 //  横の絵は左側から見た絵（顔が画面の左）。どの絵も左から ${cx} 列目が中心
-
+${anyFlip ? "\nimport { flipped } from '../../pixelSprite.js'\n" : ''}
 ${frames.map(f => `// ${f.label}\nconst ${varName(f)} = ${f.json}\n`).join('\n')}
 export default {
-  count: ${count},   // 何匹出すか
+  count: ${count},   // 何匹出すか${poses.swim ? '\n  swimSink: 0.35,   // 泳ぐとき、側面の絵の高さのこの割合だけ海面より下に沈める' : ''}
   cx: ${cx},
   drawnSide: 'left',
   poses: {
 ${Object.entries(poses).map(([pose, views]) => `    ${pose}: {
-${pose === 'walk' ? '      fps: 4,\n' : ''}      views: {
-${need.map(v => `        ${v}: [${views[v].map(varName).join(', ')}],`).join('\n')}
+${pose !== 'sit' ? '      fps: 4,\n' : ''}      views: {
+${need.map(v => `        ${v}: [${views[v].map(frameRef).join(', ')}],`).join('\n')}
       },
     },`).join('\n')}
   },
