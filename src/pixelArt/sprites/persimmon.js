@@ -960,6 +960,7 @@ const swimTop1 = {
 
 export default {
   count: 1,   // 何匹出すか
+  near: true,   // 見た目の確認用にスポーン地点の近くに出す
   swimSink: 0.35,   // 泳ぐとき、側面の絵の高さのこの割合だけ海面より下に沈める
   cx: 12,
   drawnSide: 'left',
