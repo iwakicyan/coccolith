@@ -1072,26 +1072,27 @@ function fadeCut(fn) {
     }, half)
   }))
 }
-// sabちゃんが持つもの（花か缶のどちらか 1 つ）。新しく持つと前に持っていたものは捨てる
-// 位置は sabちゃんのローカル（+z が前、+y が上、単位は sabchan.group の拡大前）
-let held = null   // { obj, dispose, kan }
-function hold(obj, dispose, { kan = false } = {}) {
-  if (held) { sabchan.group.remove(held.obj); held.dispose() }
+// sabちゃんが持つもの。花と缶を 1 つずつ一緒に持てる（花は右、缶は左）。同じ種類を新しく持つと前のものは捨てる
+// 位置は sabちゃんのローカル（+z が前、+y が上、単位は sabchan.group の拡大前。前が +z なので、後ろから見て右が -x・左が +x）
+const held = { flower: null, kan: null }   // それぞれ { obj, dispose }
+function hold(kind, obj, dispose) {
+  const prev = held[kind]
+  if (prev) { sabchan.group.remove(prev.obj); prev.dispose() }
   obj.traverse(o => { if (o.isMesh) o.visible = !sabHidden })   // 主観で体を隠しているときは一緒に隠す（缶は updateHeldInView で見せる）
   sabchan.group.add(obj)
-  held = { obj, dispose, kan }
+  held[kind] = { obj, dispose }
 }
 flowerStand.onTake = () => {
   const f = flowerStand.take()
   if (!f) return
   // 体の前の右寄りで、少し外へ傾けて持つ
   f.scale.setScalar(flowerStand.size / sabchan.group.scale.x)   // 台の上と同じ大きさ
-  f.position.set(1.3, -4.4, 3.5)   // 襟（半径 3.75）の前に根元を付ける
-  f.rotation.set(0.2, 0, -0.2)
-  hold(f, () => f.children[1].geometry.dispose())
+  f.position.set(-1.3, -4.4, 3.5)   // 襟（半径 3.75）の前の右に根元を付ける
+  f.rotation.set(0.2, 0, 0.2)
+  hold('flower', f, () => f.children[1].geometry.dispose())
 }
 // 自販機の取り出し口から取った缶（k は取り出し口と同じ倍率）を、襟の輪の左寄りのやや上に立てて持つ（後ろからの視点でも少し見える）
-const KAN_HOLD = { pos: [4.4, -1.4, 1.6], rot: [0.1, 0, -0.2] }   // 缶の底面の真ん中の位置と向き（sabちゃんのローカル。前が +z なので、後ろから見て左が +x）
+const KAN_HOLD = { pos: [4.4, -1.4, 1.6], rot: [0.1, 0, -0.2] }   // 缶の底面の真ん中の位置と向き（sabちゃんのローカル）
 function holdKan(k, jihanki) {
   k.scale.multiplyScalar(jihanki.parent.scale.x / sabchan.group.scale.x)   // 取り出し口と同じ大きさ（自販機の wrapper の倍率を掛ける）
   k.position.fromArray(KAN_HOLD.pos)
@@ -1099,7 +1100,7 @@ function holdKan(k, jihanki) {
   k.userData.holdPose = { position: k.position.clone(), quaternion: k.quaternion.clone(), scale: k.scale.clone() }
   k.userData.worldScale = k.scale.x * sabchan.group.scale.x
   k.userData.inView = false
-  hold(k, () => k.traverse(o => { if (o.isMesh) { o.geometry.dispose(); if (!o.material.map) o.material.dispose() } }), { kan: true })
+  hold('kan', k, () => k.traverse(o => { if (o.isMesh) { o.geometry.dispose(); if (!o.material.map) o.material.dispose() } }))
 }
 
 // 主観で sabちゃんの体を隠しているときは、持っている缶だけ見せて、画面の左下に見切れるように置く（毎フレーム、描く直前にカメラから置き直す）
@@ -1107,8 +1108,8 @@ function holdKan(k, jihanki) {
 const KAN_VIEW = { depth: 0.7, x: -0.78, y: -0.95, rot: [0.15, 0.35, 0.25] }
 const _kvOff = new THREE.Matrix4(), _kvInv = new THREE.Matrix4(), _kvPos = new THREE.Vector3(), _kvQ = new THREE.Quaternion(), _kvS = new THREE.Vector3(), _kvE = new THREE.Euler(), _kvUp = new THREE.Vector3()
 function updateHeldInView() {
-  if (!held?.kan) return
-  const k = held.obj
+  if (!held.kan) return
+  const k = held.kan.obj
   if (!sabHidden) {
     if (k.userData.inView) {   // 後ろからの視点に戻ったら、手で持つ位置へ
       const p = k.userData.holdPose
