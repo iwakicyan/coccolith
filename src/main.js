@@ -1119,7 +1119,8 @@ function updateHeldInView() {
   }
   if (!k.userData.inView) { k.traverse(o => { if (o.isMesh) o.visible = true }); k.userData.inView = true }
   camera.updateMatrixWorld()
-  const halfH = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) / camera.zoom * KAN_VIEW.depth, halfW = halfH * camera.aspect
+  // ズームは見ない（ズームしたら画面の外へ出てよい。真ん中へ寄せない）
+  const halfH = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * KAN_VIEW.depth, halfW = halfH * camera.aspect
   const ws = k.userData.worldScale
   _kvQ.setFromEuler(_kvE.fromArray(KAN_VIEW.rot))
   _kvUp.set(0, 1, 0).applyQuaternion(_kvQ)
