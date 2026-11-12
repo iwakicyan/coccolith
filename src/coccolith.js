@@ -18,6 +18,7 @@ import { createLight01, createLight01Pole } from '../my-3d-parts/landmark/light0
 import { createHoisun, createHoason } from '../my-3d-parts/landmark/hoisun.js'
 import { createGojunoto } from '../my-3d-parts/landmark/gojunoto.js'
 import { createCakestand } from '../my-3d-parts/landmark/cakestand.js'
+import { createJihanki } from '../my-3d-parts/landmark/jihanki.js'
 import { mergeStatic } from '../my-3d-parts/parts/mergeStatic.js'
 import { addDoorGlow, addGroundGlow, addArchDoorGlow } from './doorGlow.js'
 import { openPixelScene } from './pixelScene.js'
@@ -741,6 +742,28 @@ export function createCoccolith({ renderer = null } = {}) {
   colliders.push(coinbox)
   // 台（光る接地ライン）と投入口（コインの演出で使う）以外をまとめる
   mergeStatic(coinbox, { keep: o => o === coinbox.userData.glowSpot.mesh || o === coinbox.userData.slot })
+
+  // --- 自販機（my-3d-parts/landmark/jihanki.js）: 高さ 2m で 3 か所に置く ------------
+  //   向き face: 正面（ローカル +Z）を向ける方角。ユーザーの言う「東」は lon が減る向き（コンパスの E とは逆）なので、
+  //   東 = [0, -1]・北東 = [1, -1]（[lat の増える向き, lon の増える向き] を地面の上の m で）
+  const JIHANKI_H = 2, JIHANKI_SINK = 0.1   // 高さ (m)・地面にめり込ませる量 (m)
+  const JIHANKI_SPOTS = [
+    { lat: 25.2, lon:  -86.7, face: [0, -1] },   // 東向き
+    { lat: 65.0, lon:  118.0, face: [0, -1] },   // 東向き
+    { lat: 55.0, lon: -169.3, face: [1, -1] },   // 北東向き
+  ]
+  for (const { lat, lon, face: [fn, fe] } of JIHANKI_SPOTS) {
+    const wrapper = new THREE.Group()
+    const jihanki = createJihanki()
+    wrapper.add(jihanki)
+    wrapper.scale.setScalar(JIHANKI_H / 1.8)   // 部品は高さ 1.8m
+    placeOnSurface(group, wrapper, lat, lon, R_C + LAND_LIFT - JIHANKI_SINK)
+    const dDeg = THREE.MathUtils.radToDeg(1 / (R_C + LAND_LIFT))   // 1m ぶんの角度
+    jihanki.rotation.y = headingTo(wrapper, lat + fn * dDeg, lon + fe * dDeg / Math.cos(THREE.MathUtils.degToRad(lat)))
+    landmarkShadow(jihanki, wrapper)
+    colliders.push(jihanki)
+    mergeStatic(jihanki)
+  }
 
   // --- ランドマーク: SShall (lat=27.0, lon=161.0) ------------
   // 2倍で高さ約15m（塔の円錐屋根の先）。原点は塔の中心。正面（扉のある側・ローカル +Z）を西（経度-方向）へ向ける
