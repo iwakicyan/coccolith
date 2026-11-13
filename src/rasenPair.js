@@ -24,7 +24,7 @@ export const PLANK = {
   DROP: 0.02,      // 板の上面を踊り場より下げる量 (m)（重ねたところがちらつかないように）
   COLOR: { plank: 0x4a4a4a, under: 0x000000, line: 0x161616 },   // under: 板の裏（下面）
   // 欄干：橋 bridge01 の柱（先端に正十二面体の玉が付いた四角柱）と同じ形・色・大きさ（coccolith では橋を 3 倍にしてあるので 3 倍）を、板の両側に並べる
-  POST: { SPACING: 1, SCALE: 3, COLOR: 0x4a4a50 },
+  POST: { SPACING: 10, SCALE: 3, COLOR: 0x4a4a50 },
 }
 const BP = BRIDGE01_SIZE.POST
 export const PLANK_POST_INSET = (BP.INSET + BP.ROD_W / 2) * PLANK.POST.SCALE   // 板の縁から欄干の棒の内側の面まで (m)
@@ -123,7 +123,7 @@ export function createRasenPair(group, a, b, baseR, placeOnSurface) {
   group.add(mesh)
 
   // 欄干：板の両側の縁から INSET だけ内側に、SPACING ごとに星の外向きに立てる（ea から eb まで）
-  //   全部で 600 本ほどあるので 1 つのメッシュにまとめる。昼と夜の境をまたぐので、夜の側（x < 0）の棒は法線を星の外向きにして
+  //   全部で 60 本ほど。1 つのメッシュにまとめる。昼と夜の境をまたぐので、夜の側（x < 0）の棒は法線を星の外向きにして
   //   下から当たる太陽で光らないようにする（昼の側は面ごとの平らな陰影）
   {
     const k = PLANK.POST.SCALE
