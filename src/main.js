@@ -521,7 +521,7 @@ function steerTo(target, dt) {
 //   進んだあと rasenHold で芯からの距離・板の中心線からの距離を戻す（まっすぐ進むと外へずれていくので）
 let _holdR = 0, _holdSide = 0, _holdOn = null
 // 段の上をまっすぐ上り下りしているあいだは、視点（カメラの向き）と sabちゃんの見た目の向きを RASEN_CAM_YAW だけ芯柱の側へ回す（RASEN_CAM_TAU でなめらかに。進む向きは螺旋に沿ったまま）
-const RASEN_CAM_YAW = THREE.MathUtils.degToRad(30)
+const RASEN_CAM_YAW = THREE.MathUtils.degToRad(36)
 const RASEN_CAM_TAU = 0.5   // (s)
 let rasenCamYaw = 0, _rasenCoreSide = 0   // 今の回す角度 / 芯柱が左（+1）か右（-1）か（段の上でなければ 0）
 const _rasenCore = new THREE.Vector3(), _rasenLeft = new THREE.Vector3(), _camFwd = new THREE.Vector3()
