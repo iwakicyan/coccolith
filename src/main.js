@@ -416,7 +416,8 @@ function getSmoothGroundHeight(dir, dt) {
     // 螺旋階段：前の足の高さから登れる段があれば、地面より高いときはその上に立つ
     const stair = groundRawPrev !== null ? rasenGround(dir, groundRawPrev - 1) : null
     rasenRail = stair !== null && stair + 1 - rawH > RASEN_RAIL_H
-    if (stair !== null && stair + 1 > rawH) { rawH = stair + 1; rideUnder = null }
+    rasenOn = stair !== null && stair + 1 > rawH
+    if (rasenOn) { rawH = stair + 1; rideUnder = null }
   }
   if (groundRawPrev !== null) {
     const jump  = rawH - groundRawPrev
@@ -481,7 +482,9 @@ const _rasenMat = rasen.matrixWorld.clone(), _rasenInv = _rasenMat.clone().inver
 const _rasenDir = new THREE.Vector3().setFromMatrixPosition(_rasenMat).normalize()
 const _rasenNear = Math.cos(50 / (R_C + LAND_LIFT))   // 階段から 50m 以内だけ測る
 const _rasenP = new THREE.Vector3()
-let rasenRail = false
+let rasenRail = false, rasenOn = false   // 外の縁から落ちない高さの段にいるか / 段の上にいるか
+const RASEN_STEER_TAU = 0.12   // 段の上で前後に進むとき、向きを螺旋の向きへ寄せる速さ (s)
+const _rasenT = new THREE.Vector3()
 // dir の向きで、星の中心から feetR (m) の足の高さから登れる段の上面の、星の中心からの距離。無ければ null
 function rasenGround(dir, feetR) {
   if (dir.dot(_rasenDir) < _rasenNear) return null
@@ -490,6 +493,17 @@ function rasenGround(dir, feetR) {
   if (f === null) return null
   _rasenP.y = f
   return _rasenP.applyMatrix4(_rasenMat).length()
+}
+// 段の上で前後に進んでいて回していないときは、向き（pFwd）を螺旋に沿う向き（上り・下りの近い方）へ寄せる
+//   まっすぐ進むだけで螺旋に沿って登り降りできる。左右の移動・向きを回すのはそのまま効く
+function rasenSteer(dt) {
+  if (!rasenOn) return
+  _rasenP.copy(pDir).multiplyScalar(groundRawPrev - 1).applyMatrix4(_rasenInv)
+  const a = Math.atan2(-_rasenP.z, _rasenP.x)
+  _rasenT.set(-Math.sin(a), 0, -Math.cos(a)).transformDirection(_rasenMat)   // 上りの向き（角度が増える向き）
+  _rasenT.addScaledVector(pDir, -_rasenT.dot(pDir)).normalize()
+  if (_rasenT.dot(pFwd) < 0) _rasenT.negate()   // 下りを向いていれば下りの向きへ
+  pFwd.lerp(_rasenT, 1 - Math.exp(-dt / RASEN_STEER_TAU)).normalize()
 }
 // 高い段にいるとき、踏み板の外の縁（体の半径と余白を引いた内側）より外へ出たら戻す
 function rasenKeepInside() {
@@ -1732,8 +1746,9 @@ function animate() {
       outFpPitch = Math.max(-FP_PITCH_MAX, Math.min(FP_PITCH_MAX, outFpPitch + gyroD.pitch))
     }
 
-    const axisWS = _sabRight.crossVectors(pDir, pFwd)
     const fbIn = (keys['KeyW'] ? 1 : 0) - (keys['KeyS'] ? 1 : 0) - vJoy.ly
+    if (Math.abs(fbIn) > 0.01 && Math.abs(turnIn) <= 0.01) rasenSteer(dt)   // 螺旋階段の上では向きを螺旋に沿わせる
+    const axisWS = _sabRight.crossVectors(pDir, pFwd)
     if (Math.abs(fbIn) > 0.01) { pDir.applyAxisAngle(axisWS, da * Math.max(-1, Math.min(1, fbIn))); pDir.normalize() }
     const lrIn = (keys['KeyD'] ? 1 : 0) - (keys['KeyA'] ? 1 : 0) + vJoy.lx
     if (Math.abs(lrIn) > 0.01) { pDir.applyAxisAngle(pFwd,   da * Math.max(-1, Math.min(1, lrIn))); pDir.normalize() }
