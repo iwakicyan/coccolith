@@ -520,13 +520,21 @@ function steerTo(target, dt) {
 // 前後に進んでいて回していないとき：段の上では螺旋に沿う向き（踏み板の縁と直角）、板の上では板に沿う向きにする
 //   進んだあと rasenHold で芯からの距離・板の中心線からの距離を戻す（まっすぐ進むと外へずれていくので）
 let _holdR = 0, _holdSide = 0, _holdOn = null
+// 段の上をまっすぐ上り下りしているあいだは、視点（カメラの向き）を RASEN_CAM_YAW だけ芯柱の側へ回す（RASEN_CAM_TAU でなめらかに）
+const RASEN_CAM_YAW = THREE.MathUtils.degToRad(30)
+const RASEN_CAM_TAU = 0.5   // (s)
+let rasenCamYaw = 0, _rasenCoreSide = 0   // 今の回す角度 / 芯柱が左（+1）か右（-1）か（段の上でなければ 0）
+const _rasenCore = new THREE.Vector3(), _rasenLeft = new THREE.Vector3(), _camFwd = new THREE.Vector3()
 function rasenSteer(dt) {
   _holdOn = rasenOn ?? (plankOn ? _plank : null)
+  _rasenCoreSide = 0
   if (rasenOn) {
     _rasenP.copy(pDir).multiplyScalar(groundRawPrev - 1).applyMatrix4(rasenOn.inv)
     _holdR = Math.hypot(_rasenP.x, _rasenP.z)
     const a = Math.atan2(-_rasenP.z, _rasenP.x)
+    _rasenCore.set(-_rasenP.x, 0, -_rasenP.z).transformDirection(rasenOn.mat)   // 芯柱の向き
     steerTo(_rasenT.set(-Math.sin(a), 0, -Math.cos(a)).transformDirection(rasenOn.mat), dt)   // 上りの向き（角度が増える向き）
+    _rasenCoreSide = Math.sign(_rasenCore.dot(_rasenLeft.crossVectors(pDir, pFwd)))
   } else if (plankOn) {
     _holdSide = _plank.side(pDir)
     steerTo(_plank.along(pDir, _rasenT), dt)
@@ -1786,6 +1794,8 @@ function animate() {
 
     const fbIn = (keys['KeyW'] ? 1 : 0) - (keys['KeyS'] ? 1 : 0) - vJoy.ly
     const rasenSteered = Math.abs(fbIn) > 0.01 && Math.abs(turnIn) <= 0.01 && rasenSteer(dt)   // 螺旋階段・板の上では向きを螺旋・板に沿わせる
+    const camYawTarget = rasenSteered ? RASEN_CAM_YAW * _rasenCoreSide : 0   // 段の上をまっすぐ上り下りしているあいだは視点を芯柱の側へ
+    rasenCamYaw += (camYawTarget - rasenCamYaw) * (1 - Math.exp(-dt / RASEN_CAM_TAU))
     const axisWS = _sabRight.crossVectors(pDir, pFwd)
     if (Math.abs(fbIn) > 0.01) { pDir.applyAxisAngle(axisWS, da * Math.max(-1, Math.min(1, fbIn))); pDir.normalize() }
     const lrIn = (keys['KeyD'] ? 1 : 0) - (keys['KeyA'] ? 1 : 0) + vJoy.lx
@@ -1828,10 +1838,13 @@ function animate() {
 
     animateSabParts(now)
 
+    // カメラの向き（ふだんは sabちゃんの前。螺旋階段を上り下りしているあいだは芯柱の側へ rasenCamYaw 回す）
+    _camFwd.copy(pFwd).applyAxisAngle(pDir, rasenCamYaw)
+
     if (outdoorView.fp) {
       // --- 主観カメラ: 足元の地面から FP_EYE_H の高さから前を見る ---
       camera.position.copy(pDir).multiplyScalar(groundH + FP_EYE_H)
-      _lookTarget.copy(pFwd).multiplyScalar(Math.cos(outFpPitch)).addScaledVector(pDir, Math.sin(outFpPitch)).add(camera.position)
+      _lookTarget.copy(_camFwd).multiplyScalar(Math.cos(outFpPitch)).addScaledVector(pDir, Math.sin(outFpPitch)).add(camera.position)
       camera.up.copy(pDir)
       camera.lookAt(_lookTarget)
     } else {
@@ -1839,7 +1852,7 @@ function animate() {
       // pitch を仰角オフセットとして使用（上限・下限クランプ）
       const camAngle = Math.max(0.05, Math.min(Math.PI * 0.45, CAM_BASE_ANGLE + pitch))
       camera.position.copy(sabPos)
-        .addScaledVector(pFwd, -CAM_DIST * Math.cos(camAngle))
+        .addScaledVector(_camFwd, -CAM_DIST * Math.cos(camAngle))
         .addScaledVector(pDir, CAM_DIST * Math.sin(camAngle))
       camera.up.copy(pDir)
       // 胴体あたり（頭部中心から足方向へ少し）を注視
