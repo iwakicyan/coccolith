@@ -1,5 +1,7 @@
 import * as THREE from 'three'
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import { createRasen, RASEN } from '../my-3d-parts/landmark/rasen.js'
+import { BRIDGE01_SIZE } from '../my-3d-parts/landmark/bridge01.js'
 
 // ============================================================
 //  螺旋階段 2 本と、その踊り場どうしを渡す板（documents/sketch/柱.PNG の左）
@@ -21,7 +23,11 @@ export const PLANK = {
   OVERLAP: 0.2,    // 踊り場の上へ重ねる長さ (m)（継ぎ目にすき間が見えないように）
   DROP: 0.02,      // 板の上面を踊り場より下げる量 (m)（重ねたところがちらつかないように）
   COLOR: { plank: 0x4a4a4a, under: 0x000000, line: 0x161616 },   // under: 板の裏（下面）
+  // 欄干：橋 bridge01 の柱（先端に正十二面体の玉が付いた四角柱）と同じ形・色・大きさ（coccolith では橋を 3 倍にしてあるので 3 倍）を、板の両側に並べる
+  POST: { SPACING: 1, SCALE: 3, COLOR: 0x4a4a50 },
 }
+const BP = BRIDGE01_SIZE.POST
+export const PLANK_POST_INSET = (BP.INSET + BP.ROD_W / 2) * PLANK.POST.SCALE   // 板の縁から欄干の棒の内側の面まで (m)
 
 const MID = (RASEN.CORE_R + RASEN.R) / 2    // 踏み板の幅の真ん中の、芯からの距離
 const WIDTH = RASEN.R - RASEN.CORE_R        // 板の幅 = 踏み板の幅
@@ -115,6 +121,44 @@ export function createRasenPair(group, a, b, baseR, placeOnSurface) {
   line.userData.outline = true
   mesh.add(line)
   group.add(mesh)
+
+  // 欄干：板の両側の縁から INSET だけ内側に、SPACING ごとに星の外向きに立てる（ea から eb まで）
+  //   全部で 600 本ほどあるので 1 つのメッシュにまとめる。昼と夜の境をまたぐので、夜の側（x < 0）の棒は法線を星の外向きにして
+  //   下から当たる太陽で光らないようにする（昼の側は面ごとの平らな陰影）
+  {
+    const k = PLANK.POST.SCALE
+    const rod = new THREE.BoxGeometry(BP.ROD_W * k, BP.ROD_L * k, BP.ROD_W * k).translate(0, (BP.ROD_L / 2 - BP.SINK) * k, 0)
+    const knob = new THREE.DodecahedronGeometry(BP.KNOB_R * k).translate(0, (BP.ROD_L - BP.SINK) * k, 0)
+    const post = mergeGeometries([rod.toNonIndexed(), knob])   // 正十二面体は初めから頂点を面ごとに分けてある
+    post.deleteAttribute('uv')
+    const sideAng = (WIDTH / 2 - BP.INSET * k) / topR
+    const count = Math.floor(span * topR / PLANK.POST.SPACING)
+    const geos = [], m = new THREE.Matrix4(), q = new THREE.Quaternion(), yAxis = new THREE.Vector3(0, 1, 0), one = new THREE.Vector3(1, 1, 1)
+    for (let i = 0; i <= count; i++) {
+      const phi = span * i / count
+      c.copy(u0).multiplyScalar(Math.cos(phi)).addScaledVector(u1, Math.sin(phi))
+      for (const sd of [1, -1]) {
+        d.copy(c).multiplyScalar(Math.cos(sideAng)).addScaledVector(n, sd * Math.sin(sideAng)).normalize()
+        const up = d.clone()
+        q.setFromUnitVectors(yAxis, up)
+        // 棒の面を板の向きにそろえる（棒のローカル z を板の進む向きへ）
+        const fwd = new THREE.Vector3(0, 0, 1).applyQuaternion(q), along = new THREE.Vector3().crossVectors(n, up).normalize()
+        const twist = Math.atan2(new THREE.Vector3().crossVectors(fwd, along).dot(up), fwd.dot(along))
+        q.premultiply(new THREE.Quaternion().setFromAxisAngle(up, twist))
+        m.compose(d.clone().multiplyScalar(rTop), q, one)
+        const g = post.clone().applyMatrix4(m)
+        if (up.x < 0) {
+          const nr = g.attributes.normal
+          for (let j = 0; j < nr.count; j++) nr.setXYZ(j, up.x, up.y, up.z)
+        }
+        geos.push(g)
+      }
+    }
+    const posts = new THREE.Mesh(mergeGeometries(geos), new THREE.MeshLambertMaterial({ color: PLANK.POST.COLOR }))
+    posts.name = '螺旋階段の板の欄干'
+    posts.castShadow = true
+    group.add(posts)
+  }
 
   // 板の上を歩く
   //   floor(dir, feetR, up): dir の向きの板の上面の、星の中心からの距離。板の外か、足（feetR）から up より高ければ null

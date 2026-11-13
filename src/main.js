@@ -36,6 +36,7 @@ import { createTsue } from '../my-3d-parts/parts/tsue.js'
 import { createIta, ITA_FACE, ITA_WIDTH } from '../my-3d-parts/parts/ita.js'
 import { KAN } from '../my-3d-parts/parts/kan.js'
 import { rasenFloor, RASEN } from '../my-3d-parts/landmark/rasen.js'
+import { PLANK_POST_INSET } from './rasenPair.js'
 import { addBoardNotes, openBoardNotes, isBoardNotesOpen, noteCoinTarget } from './boardNotes.js'
 import { addGroundGlow } from './doorGlow.js'
 
@@ -544,7 +545,7 @@ function rasenHold() {
 function rasenKeepInside() {
   if (!rasenRail) return
   const pad = COLLIDER_MARGIN + SAB_BODY_R
-  if (plankOn) { _plank.keepOn(pDir, pad); return }
+  if (plankOn) { _plank.keepOn(pDir, pad + PLANK_POST_INSET); return }   // 板の上では欄干の内側まで
   _rasenP.copy(pDir).multiplyScalar(groundRawPrev - 1).applyMatrix4(rasenOn.inv)
   const max = RASEN.R - pad
   const r = Math.hypot(_rasenP.x, _rasenP.z)
