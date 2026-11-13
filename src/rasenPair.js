@@ -80,6 +80,13 @@ export function createRasenPair(group, a, b, baseR, placeOnSurface) {
   const M = PLANK.SEGS
   const beta = (WIDTH / 2) / topR   // 幅の半分の角度
   const rTop = topR - PLANK.DROP, rBot = rTop - PLANK.T
+  // 板の上面の、角度 phi での星の中心からの距離。分割した区間は平らなので、区間の真ん中ほど弧より下がる（8 分割で約 0.4m）
+  const segAng = (phi1 - phi0) / M
+  const surfR = phi => {
+    const k = Math.min(M - 1, Math.max(0, Math.floor((phi - phi0) / segAng)))
+    const mid = phi0 + (k + 0.5) * segAng
+    return rTop * Math.cos(segAng / 2) / Math.cos(phi - mid)
+  }
   const pos = [], idx = [], under = []   // under: 板の裏（下面）の三角形
   const c = new THREE.Vector3(), d = new THREE.Vector3()
   for (let k = 0; k <= M; k++) {
@@ -145,7 +152,7 @@ export function createRasenPair(group, a, b, baseR, placeOnSurface) {
         const fwd = new THREE.Vector3(0, 0, 1).applyQuaternion(q), along = new THREE.Vector3().crossVectors(n, up).normalize()
         const twist = Math.atan2(new THREE.Vector3().crossVectors(fwd, along).dot(up), fwd.dot(along))
         q.premultiply(new THREE.Quaternion().setFromAxisAngle(up, twist))
-        m.compose(d.clone().multiplyScalar(rTop), q, one)
+        m.compose(d.clone().multiplyScalar(surfR(phi)), q, one)
         const g = post.clone().applyMatrix4(m)
         if (up.x < 0) {
           const nr = g.attributes.normal
@@ -169,7 +176,8 @@ export function createRasenPair(group, a, b, baseR, placeOnSurface) {
     if (Math.abs(side) > halfAng) return null
     const phi = Math.atan2(dir.dot(u1), dir.dot(u0))
     if (phi < phi0 || phi > phi1) return null
-    return rTop <= feetR + up ? rTop : null
+    const r = surfR(phi)
+    return r <= feetR + up ? r : null
   }
   // side(dir): 中心線から左（+）右（-）への角度 / setSide(dir, side): dir をその角度へ寄せる / along(dir, out): ea から eb へ進む向き（大円に沿う）
   const side = dir => Math.asin(Math.max(-1, Math.min(1, dir.dot(n))))
