@@ -19,7 +19,7 @@ import { BRIDGE01_SIZE } from '../my-3d-parts/landmark/bridge01.js'
 
 export const PLANK = {
   T: 0.3,          // 板の厚さ (m)
-  SEGS: 10,        // 板の長さ方向の分割数
+  SEGS: 8,         // 板の長さ方向の分割数
   OVERLAP: 0.2,    // 踊り場の上へ重ねる長さ (m)（継ぎ目にすき間が見えないように）
   DROP: 0.02,      // 板の上面を踊り場より下げる量 (m)（重ねたところがちらつかないように）
   COLOR: { plank: 0x4a4a4a, under: 0x000000, line: 0x161616 },   // under: 板の裏（下面）
