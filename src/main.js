@@ -520,7 +520,7 @@ function steerTo(target, dt) {
 // 前後に進んでいて回していないとき：段の上では螺旋に沿う向き（踏み板の縁と直角）、板の上では板に沿う向きにする
 //   進んだあと rasenHold で芯からの距離・板の中心線からの距離を戻す（まっすぐ進むと外へずれていくので）
 let _holdR = 0, _holdSide = 0, _holdOn = null
-// 段の上をまっすぐ上り下りしているあいだは、視点（カメラの向き）を RASEN_CAM_YAW だけ芯柱の側へ回す（RASEN_CAM_TAU でなめらかに）
+// 段の上をまっすぐ上り下りしているあいだは、視点（カメラの向き）と sabちゃんの見た目の向きを RASEN_CAM_YAW だけ芯柱の側へ回す（RASEN_CAM_TAU でなめらかに。進む向きは螺旋に沿ったまま）
 const RASEN_CAM_YAW = THREE.MathUtils.degToRad(30)
 const RASEN_CAM_TAU = 0.5   // (s)
 let rasenCamYaw = 0, _rasenCoreSide = 0   // 今の回す角度 / 芯柱が左（+1）か右（-1）か（段の上でなければ 0）
@@ -1820,8 +1820,10 @@ function animate() {
     }
 
     // --- sabちゃん配置 ---
-    // local Y → pDir (惑星法線=上)、local Z → pFwd (進行方向=前)
-    sabchan.group.setRotationFromMatrix(_rotM.makeBasis(_sabRight.crossVectors(pDir, pFwd), pDir, pFwd))
+    // 見た目の向きとカメラの向き（ふだんは進む向き pFwd。螺旋階段を上り下りしているあいだは芯柱の側へ rasenCamYaw 回す）
+    _camFwd.copy(pFwd).applyAxisAngle(pDir, rasenCamYaw)
+    // local Y → pDir (惑星法線=上)、local Z → _camFwd (前)
+    sabchan.group.setRotationFromMatrix(_rotM.makeBasis(_sabRight.crossVectors(pDir, _camFwd), pDir, _camFwd))
     // 2分に1回、1秒かけてy軸360°スピン
     const spinPhase = (now / 1000) % 120
     if (spinPhase < 1.0) {
@@ -1837,9 +1839,6 @@ function animate() {
     updateLampLight(sabPos)
 
     animateSabParts(now)
-
-    // カメラの向き（ふだんは sabちゃんの前。螺旋階段を上り下りしているあいだは芯柱の側へ rasenCamYaw 回す）
-    _camFwd.copy(pFwd).applyAxisAngle(pDir, rasenCamYaw)
 
     if (outdoorView.fp) {
       // --- 主観カメラ: 足元の地面から FP_EYE_H の高さから前を見る ---
