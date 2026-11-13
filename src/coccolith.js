@@ -514,6 +514,7 @@ export function createCoccolith({ renderer = null } = {}) {
   // 実寸（高さ 80m・踏み板の外半径 8m・1 段 約 0.3m）。地面に 0.3m めり込ませる。向きは北へそろえるだけ
   // sabちゃんが踏み板を登れる（main.js。床の高さは rasenFloor で測る。螺旋は上下に重なるので terrainMeshes には入れない）
   // 当たり判定は芯柱と柱 3 本（userData.colliders）
+  // 夜の側（x < 0）で、惑星の反対側の太陽が下から当たって踏み板の裏が明るくなるので、太陽の光は受けない（userData.noSun → main.js の ignoreSun）
   const RASEN_SINK = 0.3   // 地面にめり込ませる量 (m)
   const rasenWrapper = new THREE.Group()
   const rasen = createRasen()
@@ -521,6 +522,7 @@ export function createCoccolith({ renderer = null } = {}) {
   placeOnSurface(group, rasenWrapper, 50.0, -70.0, R_C + LAND_LIFT - RASEN_SINK)
   rasen.rotation.y = northAngle(rasenWrapper)
   landmarkShadow(rasen, rasenWrapper)
+  rasenWrapper.userData.noSun = true
   colliders.push(...rasen.userData.colliders)
   mergeStatic(rasen)
 
