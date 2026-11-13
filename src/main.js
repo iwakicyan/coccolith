@@ -483,7 +483,8 @@ const _rasenDir = new THREE.Vector3().setFromMatrixPosition(_rasenMat).normalize
 const _rasenNear = Math.cos(50 / (R_C + LAND_LIFT))   // 階段から 50m 以内だけ測る
 const _rasenP = new THREE.Vector3()
 let rasenRail = false, rasenOn = false   // 外の縁から落ちない高さの段にいるか / 段の上にいるか
-const RASEN_STEER_TAU = 0.12   // 段の上で前後に進むとき、向きを螺旋の向きへ寄せる速さ (s)
+const RASEN_STEER_TAU  = 0.12   // 段の上で前後に進むとき、向きを螺旋の向きへ寄せる速さ (s)
+const RASEN_STEER_SNAP = 0.9    // 向きの差がこれ（cos）より小さければ、ぴったり螺旋の向きにする
 const _rasenT = new THREE.Vector3()
 // dir の向きで、星の中心から feetR (m) の足の高さから登れる段の上面の、星の中心からの距離。無ければ null
 function rasenGround(dir, feetR) {
@@ -494,16 +495,29 @@ function rasenGround(dir, feetR) {
   _rasenP.y = f
   return _rasenP.applyMatrix4(_rasenMat).length()
 }
-// 段の上で前後に進んでいて回していないときは、向き（pFwd）を螺旋に沿う向き（上り・下りの近い方）へ寄せる
-//   まっすぐ進むだけで螺旋に沿って登り降りできる。左右の移動・向きを回すのはそのまま効く
+// 段の上で前後に進んでいて回していないときは、向き（pFwd）を螺旋に沿う向き（踏み板の縁と直角。上り・下りの近い方）にする
+//   まっすぐ進むだけで、芯からの距離を変えずに螺旋に沿って登り降りできる（rasenHoldRadius）。左右の移動・向きを回すのはそのまま効く
+//   向きが大きくずれているとき（段に乗った直後・回した直後）は RASEN_STEER_TAU で寄せ、近づいたらぴったり合わせる
+let _rasenR = 0   // 寄せたときの芯からの距離 (m)
 function rasenSteer(dt) {
-  if (!rasenOn) return
+  if (!rasenOn) return false
   _rasenP.copy(pDir).multiplyScalar(groundRawPrev - 1).applyMatrix4(_rasenInv)
+  _rasenR = Math.hypot(_rasenP.x, _rasenP.z)
   const a = Math.atan2(-_rasenP.z, _rasenP.x)
   _rasenT.set(-Math.sin(a), 0, -Math.cos(a)).transformDirection(_rasenMat)   // 上りの向き（角度が増える向き）
   _rasenT.addScaledVector(pDir, -_rasenT.dot(pDir)).normalize()
   if (_rasenT.dot(pFwd) < 0) _rasenT.negate()   // 下りを向いていれば下りの向きへ
-  pFwd.lerp(_rasenT, 1 - Math.exp(-dt / RASEN_STEER_TAU)).normalize()
+  if (_rasenT.dot(pFwd) > RASEN_STEER_SNAP) pFwd.copy(_rasenT)
+  else pFwd.lerp(_rasenT, 1 - Math.exp(-dt / RASEN_STEER_TAU)).normalize()
+  return true
+}
+// 進んだあと、芯からの距離を rasenSteer のときの距離へ戻す（まっすぐ進むと円の外へずれていくので）
+function rasenHoldRadius() {
+  _rasenP.copy(pDir).multiplyScalar(groundRawPrev - 1).applyMatrix4(_rasenInv)
+  const r = Math.hypot(_rasenP.x, _rasenP.z)
+  if (r < 1e-6) return
+  _rasenP.x *= _rasenR / r; _rasenP.z *= _rasenR / r
+  pDir.copy(_rasenP.applyMatrix4(_rasenMat)).normalize()
 }
 // 高い段にいるとき、踏み板の外の縁（体の半径と余白を引いた内側）より外へ出たら戻す
 function rasenKeepInside() {
@@ -1747,11 +1761,12 @@ function animate() {
     }
 
     const fbIn = (keys['KeyW'] ? 1 : 0) - (keys['KeyS'] ? 1 : 0) - vJoy.ly
-    if (Math.abs(fbIn) > 0.01 && Math.abs(turnIn) <= 0.01) rasenSteer(dt)   // 螺旋階段の上では向きを螺旋に沿わせる
+    const rasenSteered = Math.abs(fbIn) > 0.01 && Math.abs(turnIn) <= 0.01 && rasenSteer(dt)   // 螺旋階段の上では向きを螺旋に沿わせる
     const axisWS = _sabRight.crossVectors(pDir, pFwd)
     if (Math.abs(fbIn) > 0.01) { pDir.applyAxisAngle(axisWS, da * Math.max(-1, Math.min(1, fbIn))); pDir.normalize() }
     const lrIn = (keys['KeyD'] ? 1 : 0) - (keys['KeyA'] ? 1 : 0) + vJoy.lx
     if (Math.abs(lrIn) > 0.01) { pDir.applyAxisAngle(pFwd,   da * Math.max(-1, Math.min(1, lrIn))); pDir.normalize() }
+    else if (rasenSteered) rasenHoldRadius()   // 左右に動かしていなければ、芯からの距離を変えずに螺旋に沿って進む
 
     resolveColliders()
     rasenKeepInside()
