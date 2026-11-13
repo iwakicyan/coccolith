@@ -17,10 +17,10 @@ import { createRasen, RASEN } from '../my-3d-parts/landmark/rasen.js'
 
 export const PLANK = {
   T: 0.3,          // 板の厚さ (m)
-  SEG_LEN: 4,      // 板の長さ方向の分割 (m)
+  SEG_LEN: 20,     // 板の長さ方向の分割 (m)
   OVERLAP: 0.2,    // 踊り場の上へ重ねる長さ (m)（継ぎ目にすき間が見えないように）
   DROP: 0.02,      // 板の上面を踊り場より下げる量 (m)（重ねたところがちらつかないように）
-  COLOR: { plank: 0x4a4a4a, line: 0x161616 },
+  COLOR: { plank: 0x4a4a4a, under: 0x000000, line: 0x161616 },   // under: 板の裏（下面）
 }
 
 const MID = (RASEN.CORE_R + RASEN.R) / 2    // 踏み板の幅の真ん中の、芯からの距離
@@ -74,7 +74,7 @@ export function createRasenPair(group, a, b, baseR, placeOnSurface) {
   const M = Math.max(2, Math.ceil((phi1 - phi0) * topR / PLANK.SEG_LEN))
   const beta = (WIDTH / 2) / topR   // 幅の半分の角度
   const rTop = topR - PLANK.DROP, rBot = rTop - PLANK.T
-  const pos = [], idx = []
+  const pos = [], idx = [], under = []   // under: 板の裏（下面）の三角形
   const c = new THREE.Vector3(), d = new THREE.Vector3()
   for (let k = 0; k <= M; k++) {
     const phi = phi0 + (phi1 - phi0) * k / M
@@ -87,13 +87,15 @@ export function createRasenPair(group, a, b, baseR, placeOnSurface) {
   }
   for (let k = 0; k < M; k++) {
     const p = k * 4, q = p + 4
-    for (let e = 0; e < 4; e++) { const e1 = (e + 1) % 4; idx.push(p + e, p + e1, q + e1, p + e, q + e1, q + e) }
+    for (let e = 0; e < 4; e++) { const e1 = (e + 1) % 4; (e === 2 ? under : idx).push(p + e, p + e1, q + e1, p + e, q + e1, q + e) }   // e = 2: 右下→左下 = 裏
   }
   idx.push(0, 2, 1, 0, 3, 2)
   const L = M * 4; idx.push(L, L + 1, L + 2, L, L + 2, L + 3)
   const indexed = new THREE.BufferGeometry()
   indexed.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3))
-  indexed.setIndex(idx)
+  indexed.setIndex([...idx, ...under])
+  indexed.addGroup(0, idx.length, 0)                // 上面・側面・両端
+  indexed.addGroup(idx.length, under.length, 1)     // 裏
   const geo = indexed.toNonIndexed()
   // 法線はぜんぶ星の外向き（地面と同じ当たり方）。板は昼と夜の境をまたぐので、夜の側で下から太陽が当たって裏が光らないように
   {
@@ -104,7 +106,10 @@ export function createRasenPair(group, a, b, baseR, placeOnSurface) {
     }
     geo.setAttribute('normal', new THREE.BufferAttribute(nrm, 3))
   }
-  const mesh = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ color: PLANK.COLOR.plank }))
+  const mesh = new THREE.Mesh(geo, [
+    new THREE.MeshLambertMaterial({ color: PLANK.COLOR.plank }),
+    new THREE.MeshLambertMaterial({ color: PLANK.COLOR.under }),
+  ])
   mesh.name = '螺旋階段の板'
   const line = new THREE.LineSegments(new THREE.EdgesGeometry(indexed, 20), new THREE.LineBasicMaterial({ color: PLANK.COLOR.line }))
   line.userData.outline = true
