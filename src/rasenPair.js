@@ -17,7 +17,7 @@ import { createRasen, RASEN } from '../my-3d-parts/landmark/rasen.js'
 
 export const PLANK = {
   T: 0.3,          // 板の厚さ (m)
-  SEG_LEN: 20,     // 板の長さ方向の分割 (m)
+  SEGS: 10,        // 板の長さ方向の分割数
   OVERLAP: 0.2,    // 踊り場の上へ重ねる長さ (m)（継ぎ目にすき間が見えないように）
   DROP: 0.02,      // 板の上面を踊り場より下げる量 (m)（重ねたところがちらつかないように）
   COLOR: { plank: 0x4a4a4a, under: 0x000000, line: 0x161616 },   // under: 板の裏（下面）
@@ -71,7 +71,7 @@ export function createRasenPair(group, a, b, baseR, placeOnSurface) {
   const span = ea.angleTo(eb)
   const ov = PLANK.OVERLAP / topR
   const phi0 = -ov, phi1 = span + ov
-  const M = Math.max(2, Math.ceil((phi1 - phi0) * topR / PLANK.SEG_LEN))
+  const M = PLANK.SEGS
   const beta = (WIDTH / 2) / topR   // 幅の半分の角度
   const rTop = topR - PLANK.DROP, rBot = rTop - PLANK.T
   const pos = [], idx = [], under = []   // under: 板の裏（下面）の三角形

@@ -474,7 +474,9 @@ for (const ride of rides) {
 // 今の足の高さから「登れるいちばん高い面」を測って地面と比べる（段は rasenFloor（my-3d-parts/landmark/rasen.js）、板は plank.floor）
 // 地面から RASEN_RAIL_H より高いところにいるあいだは、踏み板の外の縁・板の左右の縁から落ちないように内側へ押し戻す（手すりの代わり）
 // 前後に進んで向きを回していないときは、向きを螺旋・板に沿わせ、芯からの距離・板の中心線からの距離を変えずに進む
-const RASEN_UP     = 0.45   // 一度に上がれる段差 (m)。1 段（約 0.3m）より大きく、1 周（約 7.3m）よりずっと小さく
+const RASEN_UP     = 2.0    // 一度に上がれる段差 (m)。1 周（約 7.3m）よりずっと小さく
+                            //   地面から横や斜めに踏み込んでも、sabちゃんの背の高さ（浮かせる分を入れて約 2m）までの段には乗る（低い段を通り抜けないように）
+const RASEN_SPEED_K = 1 / 1.5   // 段の上の移動速度（地面の速さに対する倍率）。移動速度の設定 1.5 倍で、地面の 1 倍の速さになる
 const RASEN_RAIL_H = 1.0    // この高さ (m) より上では縁から落ちない
 const RASEN_STEER_TAU  = 0.12   // 前後に進むとき、向きを螺旋・板の向きへ寄せる速さ (s)
 const RASEN_STEER_SNAP = 0.9    // 向きの差がこれ（cos）より小さければ、ぴったり合わせる
@@ -1770,7 +1772,7 @@ function animate() {
   } else {
     // --- 通常モード: sabちゃん追従3人称 ---
     if (rideUnder) { pDir.applyQuaternion(rideUnder.delta).normalize(); pFwd.applyQuaternion(rideUnder.delta).normalize() }
-    const da = (SPEED * moveSpeed.k / R_C) * dt
+    const da = (SPEED * moveSpeed.k / R_C) * dt * (rasenOn ? RASEN_SPEED_K : 1)   // 螺旋階段の段の上ではゆっくり
 
     const backInv = outdoorView.fp ? handleInvert.outFp : handleInvert.back
     const turnIn = (keys['KeyQ'] ? 1 : 0) - (keys['KeyE'] ? 1 : 0) - joyYaw * invSign(backInv.x)
