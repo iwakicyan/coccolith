@@ -18,7 +18,8 @@ import { createLight01, createLight01Pole } from '../my-3d-parts/landmark/light0
 import { createHoisun, createHoason } from '../my-3d-parts/landmark/hoisun.js'
 import { createGojunoto } from '../my-3d-parts/landmark/gojunoto.js'
 import { createCakestand } from '../my-3d-parts/landmark/cakestand.js'
-import { createRasen } from '../my-3d-parts/landmark/rasen.js'
+import { RASEN } from '../my-3d-parts/landmark/rasen.js'
+import { createRasenPair } from './rasenPair.js'
 import { createJihanki } from '../my-3d-parts/landmark/jihanki.js'
 import { mergeStatic } from '../my-3d-parts/parts/mergeStatic.js'
 import { addDoorGlow, addGroundGlow, addArchDoorGlow } from './doorGlow.js'
@@ -510,21 +511,27 @@ export function createCoccolith({ renderer = null } = {}) {
     halfD: cakestand.userData.footprint.halfD * cakestandWrapper.scale.x + 1,
   }
 
-  // --- ランドマーク: 螺旋階段 rasen (lat=50.0, lon=-70.0) ------------
-  // 実寸（高さ 80m・踏み板の外半径 8m・1 段 約 0.3m）。地面に 0.3m めり込ませる。向きは北へそろえるだけ
-  // sabちゃんが踏み板を登れる（main.js。床の高さは rasenFloor で測る。螺旋は上下に重なるので terrainMeshes には入れない）
+  // --- ランドマーク: 螺旋階段 rasen ×2 (lat=50.0, lon=-70.0 と lat=24.0, lon=-110.0) と、踊り場どうしを渡す板 ------------
+  // 実寸（高さ 80m・踏み板の外半径 8m・1 段 約 0.3m）。地面に 0.3m めり込ませる
+  // 2 本とも踊り場の終わりの縁（切れ目）を板と直角にそろえて、板（踏み板と同じ幅・約 315m）を渡す（src/rasenPair.js）
+  //   板は踊り場の高さのまま、2 本を結ぶ大円に沿って曲げる（星の丸みに沿うので、歩くと水平でまっすぐ）
+  // sabちゃんが踏み板を登り、板を渡れる（main.js。螺旋は上下に重なり、板は地面の上を覆うので、どちらも terrainMeshes には入れない）
   // 当たり判定は芯柱と柱 3 本（userData.colliders）
-  // 夜の側（x < 0）で、惑星の反対側の太陽が下から当たって踏み板の裏が明るくなるので、太陽の光は受けない（userData.noSun → main.js の ignoreSun）
+  // 1 本目は夜の側（x < 0）で、惑星の反対側の太陽が下から当たって踏み板の裏が明るくなるので、太陽の光は受けない（userData.noSun → main.js の ignoreSun）
+  //   2 本目は昼の側（x > 0）なので影を落とす。板は昼と夜の境をまたぐので、法線をぜんぶ星の外向きにしてある（地面と同じ当たり方）
+  //   2 本目は草地の中に建つので、下敷きになる草は生やさない
   const RASEN_SINK = 0.3   // 地面にめり込ませる量 (m)
-  const rasenWrapper = new THREE.Group()
-  const rasen = createRasen()
-  rasenWrapper.add(rasen)
-  placeOnSurface(group, rasenWrapper, 50.0, -70.0, R_C + LAND_LIFT - RASEN_SINK)
-  rasen.rotation.y = northAngle(rasenWrapper)
-  landmarkShadow(rasen, rasenWrapper)
-  rasenWrapper.userData.noSun = true
-  colliders.push(...rasen.userData.colliders)
-  mergeStatic(rasen)
+  const RASEN_AT = [{ lat: 50.0, lon: -70.0 }, { lat: 24.0, lon: -110.0 }]
+  const rasenPair = createRasenPair(group, RASEN_AT[0], RASEN_AT[1], R_C + LAND_LIFT - RASEN_SINK, placeOnSurface)
+  rasenPair.stairs.forEach((stair, i) => {
+    const wrapper = rasenPair.wrappers[i]
+    landmarkShadow(stair, wrapper)
+    if (wrapper.position.x < 0) wrapper.userData.noSun = true
+    colliders.push(...stair.userData.colliders)
+    mergeStatic(stair)
+  })
+  rasenPair.plank.mesh.castShadow = true
+  const rasenHole = { ...RASEN_AT[1], halfW: RASEN.R + 2, halfD: RASEN.R + 2 }
 
   // --- 草地フィールド ---
   const GRASS_AREAS = [
@@ -533,7 +540,7 @@ export function createCoccolith({ renderer = null } = {}) {
     [{lat:66,lon:-145},{lat:56,lon:-176.5},{lat:42,lon:-145},{lat:53.6,lon:-128.4}],
     [{lat:59.9,lon:157.6},{lat:59.9,lon:80.2},{lat:44.4,lon:117.3}],
   ]
-  for (const poly of GRASS_AREAS) group.add(createGrassField(poly, noise3D, GRASS_KIND_1, [gojunotoHole]))
+  for (const poly of GRASS_AREAS) group.add(createGrassField(poly, noise3D, GRASS_KIND_1, [gojunotoHole, rasenHole]))
 
   // --- 下葉: forest1 ×3 のあたりの草地は、立てた草の代わりにドット絵を地面に貼る（shitabaGround.js） ---
   //   範囲は前の草地と同じポリゴンを 5m 内側へ寄せたところ（草地の境目のぼかしの真ん中くらい）
@@ -1055,7 +1062,7 @@ export function createCoccolith({ renderer = null } = {}) {
   ebWrapper.setRotationFromMatrix(new THREE.Matrix4().makeBasis(ebRight, ebN, ebFwd))
   group.add(ebWrapper)
 
-  return { group, terrainMeshes, oceanMesh, colliders, lamps, coinSlot: coinbox.userData.slot, flowerStand, jihankis, rasen }
+  return { group, terrainMeshes, oceanMesh, colliders, lamps, coinSlot: coinbox.userData.slot, flowerStand, jihankis, rasenPair }
 }
 
 // 島[GF] (lat 0-36°N, lon 72-108°E) に岩を InstancedMesh で散布
