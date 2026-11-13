@@ -18,6 +18,7 @@ import { createLight01, createLight01Pole } from '../my-3d-parts/landmark/light0
 import { createHoisun, createHoason } from '../my-3d-parts/landmark/hoisun.js'
 import { createGojunoto } from '../my-3d-parts/landmark/gojunoto.js'
 import { createCakestand } from '../my-3d-parts/landmark/cakestand.js'
+import { createRasen } from '../my-3d-parts/landmark/rasen.js'
 import { createJihanki } from '../my-3d-parts/landmark/jihanki.js'
 import { mergeStatic } from '../my-3d-parts/parts/mergeStatic.js'
 import { addDoorGlow, addGroundGlow, addArchDoorGlow } from './doorGlow.js'
@@ -508,6 +509,20 @@ export function createCoccolith({ renderer = null } = {}) {
     halfW: cakestand.userData.footprint.halfW * cakestandWrapper.scale.x + 1,
     halfD: cakestand.userData.footprint.halfD * cakestandWrapper.scale.x + 1,
   }
+
+  // --- ランドマーク: 螺旋階段 rasen (lat=50.0, lon=-70.0) ------------
+  // 実寸（高さ 80m・踏み板の外半径 8m・1 段 約 0.3m）。地面に 0.3m めり込ませる。向きは北へそろえるだけ
+  // sabちゃんが踏み板を登れる（main.js。床の高さは rasenFloor で測る。螺旋は上下に重なるので terrainMeshes には入れない）
+  // 当たり判定は芯柱と柱 3 本（userData.colliders）
+  const RASEN_SINK = 0.3   // 地面にめり込ませる量 (m)
+  const rasenWrapper = new THREE.Group()
+  const rasen = createRasen()
+  rasenWrapper.add(rasen)
+  placeOnSurface(group, rasenWrapper, 50.0, -70.0, R_C + LAND_LIFT - RASEN_SINK)
+  rasen.rotation.y = northAngle(rasenWrapper)
+  landmarkShadow(rasen, rasenWrapper)
+  colliders.push(...rasen.userData.colliders)
+  mergeStatic(rasen)
 
   // --- 草地フィールド ---
   const GRASS_AREAS = [
@@ -1038,7 +1053,7 @@ export function createCoccolith({ renderer = null } = {}) {
   ebWrapper.setRotationFromMatrix(new THREE.Matrix4().makeBasis(ebRight, ebN, ebFwd))
   group.add(ebWrapper)
 
-  return { group, terrainMeshes, oceanMesh, colliders, lamps, coinSlot: coinbox.userData.slot, flowerStand, jihankis }
+  return { group, terrainMeshes, oceanMesh, colliders, lamps, coinSlot: coinbox.userData.slot, flowerStand, jihankis, rasen }
 }
 
 // 島[GF] (lat 0-36°N, lon 72-108°E) に岩を InstancedMesh で散布

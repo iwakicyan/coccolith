@@ -35,6 +35,7 @@ import { createSneakerWalkers } from './sneaker.js'
 import { createTsue } from '../my-3d-parts/parts/tsue.js'
 import { createIta, ITA_FACE, ITA_WIDTH } from '../my-3d-parts/parts/ita.js'
 import { KAN } from '../my-3d-parts/parts/kan.js'
+import { rasenFloor, RASEN } from '../my-3d-parts/landmark/rasen.js'
 import { addBoardNotes, openBoardNotes, isBoardNotesOpen, noteCoinTarget } from './boardNotes.js'
 import { addGroundGlow } from './doorGlow.js'
 
@@ -98,7 +99,7 @@ scene.add(new THREE.AmbientLight(0x334455, 1.0))
 
 
 // --- 天体 ---------------------------------------------------
-const { group: coccolith, terrainMeshes, oceanMesh, colliders, lamps, coinSlot, flowerStand, jihankis } = createCoccolith({ renderer })
+const { group: coccolith, terrainMeshes, oceanMesh, colliders, lamps, coinSlot, flowerStand, jihankis, rasen } = createCoccolith({ renderer })
 terrainMeshes.forEach(m => m.receiveShadow = true)
 // 地形に当たり判定の索引（BVH。three-mesh-bvh）をつけ、地面を測るレイキャストで三角形を総当たりしないようにする
 // （1 回 0.4ms → 0.008ms。索引を作るのは起動時に 6ms ほど）
@@ -409,8 +410,14 @@ const _groundPrevDir = new THREE.Vector3()
 function getSmoothGroundHeight(dir, dt) {
   // 前のフレームから動いていなければ（1mm 未満）測り直さず、前の高さを使う
   const still = groundRawPrev !== null && _groundPrevDir.angleTo(dir) * groundRawPrev < 0.001
-  const rawH = still ? groundRawPrev : getGroundHeight(dir)
-  if (!still) rideUnder = rideOfMesh.get(_groundHitObj) ?? null
+  let rawH = still ? groundRawPrev : getGroundHeight(dir)
+  if (!still) {
+    rideUnder = rideOfMesh.get(_groundHitObj) ?? null
+    // 螺旋階段：前の足の高さから登れる段があれば、地面より高いときはその上に立つ
+    const stair = groundRawPrev !== null ? rasenGround(dir, groundRawPrev - 1) : null
+    rasenRail = stair !== null && stair + 1 - rawH > RASEN_RAIL_H
+    if (stair !== null && stair + 1 > rawH) { rawH = stair + 1; rideUnder = null }
+  }
   if (groundRawPrev !== null) {
     const jump  = rawH - groundRawPrev
     const moved = _groundPrevDir.angleTo(dir) * rawH
@@ -463,6 +470,38 @@ for (const ride of rides) {
   }
   terrainMeshes.push(...ride.walkable)
 }
+// --- 螺旋階段 rasen を登る ---
+// 螺旋は上下に重なるので、上から地面を測るレイ（getGroundHeight）では測れない。terrainMeshes には入れず、
+// 今の足の高さから rasenFloor（my-3d-parts/landmark/rasen.js）で「登れるいちばん高い段」を測って地面と比べる
+// 地面から RASEN_RAIL_H より高い段にいるあいだは、踏み板の外の縁から落ちないように内側へ押し戻す（手すりの代わり）
+const RASEN_UP     = 0.45   // 一度に上がれる段差 (m)。1 段（約 0.3m）より大きく、1 周（約 7.3m）よりずっと小さく
+const RASEN_RAIL_H = 1.0    // この高さ (m) より上の段では外の縁から落ちない
+rasen.updateWorldMatrix(true, false)
+const _rasenMat = rasen.matrixWorld.clone(), _rasenInv = _rasenMat.clone().invert()
+const _rasenDir = new THREE.Vector3().setFromMatrixPosition(_rasenMat).normalize()
+const _rasenNear = Math.cos(50 / (R_C + LAND_LIFT))   // 階段から 50m 以内だけ測る
+const _rasenP = new THREE.Vector3()
+let rasenRail = false
+// dir の向きで、星の中心から feetR (m) の足の高さから登れる段の上面の、星の中心からの距離。無ければ null
+function rasenGround(dir, feetR) {
+  if (dir.dot(_rasenDir) < _rasenNear) return null
+  _rasenP.copy(dir).multiplyScalar(feetR).applyMatrix4(_rasenInv)
+  const f = rasenFloor(_rasenP.x, _rasenP.z, _rasenP.y, RASEN_UP)
+  if (f === null) return null
+  _rasenP.y = f
+  return _rasenP.applyMatrix4(_rasenMat).length()
+}
+// 高い段にいるとき、踏み板の外の縁（体の半径と余白を引いた内側）より外へ出たら戻す
+function rasenKeepInside() {
+  if (!rasenRail) return
+  _rasenP.copy(pDir).multiplyScalar(groundRawPrev - 1).applyMatrix4(_rasenInv)
+  const max = RASEN.R - COLLIDER_MARGIN - SAB_BODY_R
+  const r = Math.hypot(_rasenP.x, _rasenP.z)
+  if (r <= max) return
+  _rasenP.x *= max / r; _rasenP.z *= max / r
+  pDir.copy(_rasenP.applyMatrix4(_rasenMat)).normalize()
+}
+
 let rideUnder = null   // sabちゃんの足元の台（getSmoothGroundHeight で測ったとき。台の上でなければ null）
 // 歩く生き物（pixelSprite.js）を台に乗せて運ぶための窓口
 //   near(dir): どれかの台の近くか / measure(dir): 地面の高さを測り、足元の台が回った分（delta）を on に入れる（台の上でなければ null）
@@ -1700,6 +1739,7 @@ function animate() {
     if (Math.abs(lrIn) > 0.01) { pDir.applyAxisAngle(pFwd,   da * Math.max(-1, Math.min(1, lrIn))); pDir.normalize() }
 
     resolveColliders()
+    rasenKeepInside()
     for (const ride of rides) ride.collide?.(pDir, COLLIDER_MARGIN + SAB_BODY_R)   // gondeer のティアラ（橋の手すりと同じ余白）
 
     pFwd.addScaledVector(pDir, -pFwd.dot(pDir))
