@@ -433,7 +433,7 @@ function getSmoothGroundHeight(dir, dt) {
 
 // --- 上に乗れる動く台（rides）: gondola・gondeer ---
 // どちらも地面の高さを軌道に沿って測ってから、自分を地形のレイキャスト対象に加える（先に加えると自分の上を測ってしまう）
-//   gondola: A・B の停留所のあいだの細い楕円を行き来する（gondola.js）
+//   gondola: A・B の停留所のあいだの細い楕円を、停泊せずに回り続ける（gondola.js）
 //     2・3 台目は GONDOLA_TOURS の地点を結んだ道を GONDOLA_TOUR_SPEED で往復する（端で 80 秒かけて 180° 振り返る。createGondolaTourRide）
 //   gondeer: GONDEER_SPEED (m/s) で道に沿って動く（gondeer.js）。体の高さの 70% を地面に埋める
 //     1 体目は緯度 58° の円を東へ周遊、2・3 体目は dots の敷かれた Route1・Route2 を往復する（端で 2 分かけて 180° 振り返る）

@@ -4,7 +4,8 @@ import { dirOf } from './coccolith.js'
 
 // ============================================================
 //  gondola（my-3d-parts/parts/gondola.js）を、2 つの停留所のあいだの細い楕円の上で行き来させる
-//    A（GONDOLA_A）で 3 分停泊 → 楕円の片側を 2 分で B へ → B で 3 分停泊 → もう片側を 2 分で A へ（1 周 10 分）
+//    停泊せずに楕円を回り続ける：A（GONDOLA_A）→ 楕円の片側を 2 分で B へ → もう片側を 2 分で A へ（1 周 4 分）
+//    STOP_MS を 0 より大きくすると、A・B でその時間だけ停泊し、動き出しと着く前はゆっくりになる
 //    時刻は端末の時計（Date.now()）から決めるので、いつ開いても・だれが見ても同じ場所にいる
 //    体の下半分を地面に埋め、天面（いちばん高いところ）を地表（海の上なら海面）から GONDOLA_LIFT だけ上にする（海の上で全身が水に沈まないように）。地面の高さは起動時に軌道に沿って測っておく
 //    上は歩ける（userData.walkable を地形と同じレイキャスト対象にする。main.js）。乗っている sabちゃんは update が返す回転で一緒に運ぶ
@@ -15,7 +16,7 @@ export const GONDOLA_B = { lat: -73, lon: -133 }
 const GONDOLA_SCALE = 9                 // モデル単位 → m（幅 27m・長さ 36m・高さ 14.3m）
 const GONDOLA_HALF_W = 8                // 楕円の短いほうの半径 (m)。行きと帰りの道が 16m 離れる（長いほうは A〜B の約 64m）
 const GONDOLA_LIFT = 2                  // 天面を地表（海の上は海面）より浮かせる量 (m)。0 で天面と地表が同じ高さ
-const STOP_MS = 3 * 60 * 1000           // 停泊
+const STOP_MS = 0                       // 停泊（0 なら止まらずに同じ調子で回り続ける）
 const MOVE_MS = 2 * 60 * 1000           // 片道
 const PERIOD_MS = 2 * (STOP_MS + MOVE_MS)
 const SAMPLES = 240                     // 地面の高さを測っておく点の数（楕円 1 周ぶん。約 1m おき）
@@ -25,6 +26,7 @@ const smooth = t => t * t * (3 - 2 * t)   // 動き出しと着く前はゆっ�
 // 時刻 → 楕円の上の角度 θ（0 = A、π = B。θ が増える向きに進む）と、動いているか
 function thetaAt(ms) {
   const t = ((ms % PERIOD_MS) + PERIOD_MS) % PERIOD_MS
+  if (STOP_MS === 0) return { theta: 2 * Math.PI * t / PERIOD_MS, moving: true }
   if (t < STOP_MS) return { theta: 0, moving: false }
   if (t < STOP_MS + MOVE_MS) return { theta: Math.PI * smooth((t - STOP_MS) / MOVE_MS), moving: true }
   if (t < 2 * STOP_MS + MOVE_MS) return { theta: Math.PI, moving: false }
