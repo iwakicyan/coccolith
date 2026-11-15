@@ -48,8 +48,8 @@ const SEA_COLOR       = 0x1a4a52 // 海底色
 const MOUNTAIN_COLOR  = 0x9D9899 // 山頂（hillLift最大値）
 export const R_OCEAN = 364      // 海面球の半径 (m)
 const SEA_FLOOR_DROP = 2        // 海底を R_C からさらに下げる量 (m)  → 海底半径 356m、海の深さ 8m
-const OCEAN_COLOR_A = 0x629ec1
-const OCEAN_COLOR_B = 0x5782B8
+export const OCEAN_COLOR_A = 0x629ec1
+export const OCEAN_COLOR_B = 0x5782B8
 
 // ---- 道路 -------------------------------------------------------
 const ROAD_HALF_WIDTH = 17.5   // 道幅35m の半分 (m)

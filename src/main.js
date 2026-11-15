@@ -12,7 +12,7 @@ import { initVisitCounter } from './visitCounter.js'
 import { isFlowerCutOpen } from './flowerCut.js'
 import { isPixelSceneOpen, openPixelScene } from './pixelScene.js'
 import { TREEHOUSE_PIXEL_LAYERS, TREEHOUSE_PIXEL_TEXT } from './pixelArt/treehouse.js'
-import { createCoccolith, R_OCEAN, GOJUNOTO_AT, CAKESTAND_AT, ROUTES, dirOf } from './coccolith.js'
+import { createCoccolith, R_OCEAN, OCEAN_COLOR_A, OCEAN_COLOR_B, GOJUNOTO_AT, CAKESTAND_AT, ROUTES, dirOf } from './coccolith.js'
 import { createMigration } from './migration.js'
 import { createVeth } from './veth.js'
 import { createCloud1, createFlatCloud } from './cloud1.js'
@@ -32,6 +32,7 @@ import { createLightHeads } from './lightHeads.js'
 import { createPixelSpriteWalkers, createPixelSpriteFlyers, WATCH_DIST as SPRITE_WATCH_DIST } from './pixelSprite.js'
 import { createBluedogWalkers } from './bluedog.js'
 import { createSneakerWalkers } from './sneaker.js'
+import { createAwadamaFloaters } from './awadama.js'
 import { createTsue } from '../my-3d-parts/parts/tsue.js'
 import { createIta, ITA_FACE, ITA_WIDTH } from '../my-3d-parts/parts/ita.js'
 import { KAN } from '../my-3d-parts/parts/kan.js'
@@ -1595,6 +1596,28 @@ const sneakers = createSneakerWalkers({
   waterLevel: R_OCEAN + TIDE_SHIFT,
 })
 
+// その向きの海面の実際の高さ（星の中心から m）。海面球は 48×24 の多面体なので、面の真ん中では R_OCEAN より最大 0.8m ほど低い
+// 潮で oceanMesh.position だけずれているので、外から中心へレイを飛ばして当たった点で測る
+const _seaOrigin = new THREE.Vector3(), _seaRayDir = new THREE.Vector3(), _seaHits = []
+function seaSurfaceHeight(dir) {
+  _seaOrigin.copy(dir).multiplyScalar(R_OCEAN * 1.5)
+  raycaster.set(_seaOrigin, _seaRayDir.copy(dir).negate())
+  _seaHits.length = 0
+  oceanMesh.raycast(raycaster, _seaHits)
+  if (_seaHits.length === 0) return R_OCEAN + dir.dot(oceanMesh.position)
+  _seaHits.sort((a, b) => a.distance - b.distance)
+  return _seaHits[0].point.length()
+}
+
+// 泡玉（my-3d-parts/parts/awadama.js の 3D モデル。awadama.js）: 高さ 1m・からだは海面と同じ色・陰影なし、sabちゃんから 100m 以内の海に 8 つまで、プカッと浮かんでしばらく揺れたらパッと消える
+const awadamas = createAwadamaFloaters({
+  scene, count: 8, height: 1, radius: R_C,
+  getGround: dir => getGroundHeight(dir) - 1,
+  getSeaLevel: seaSurfaceHeight,
+  shade: false,   // 光を受けず陰影がつかない（色そのまま）
+  colors: { 'からだ': new THREE.Color(OCEAN_COLOR_A).lerp(new THREE.Color(OCEAN_COLOR_B), 0.5).getHex() },   // からだは海面の 2 色の帯の真ん中の色
+})
+
 // 杖（my-3d-parts/parts/tsue.js）: TSUE_LINES の線ごとに、始点から TSUE_GAP (m) ごとに植える
 //   線は 2 点を結ぶ大円。along: 'lat' の線は大円でなく、緯度の円に沿って経度を進める（両端の緯度は同じにする）
 //   flip: true の線は杖を上の軸まわりに 180° 回して、葉を逆の側へ向ける
@@ -1926,6 +1949,7 @@ function animate() {
     for (const w of spriteWalkers) w.update(dt, camera, sabForSprites)
     bluedogs.update(dt)
     sneakers.update(dt)
+    awadamas.update(dt, pDir)
     for (const f of spriteFlyers) f.update(dt, camera)
     horizonCull.update(camera)
   }
