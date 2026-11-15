@@ -33,6 +33,7 @@ import { createPixelSpriteWalkers, createPixelSpriteFlyers, WATCH_DIST as SPRITE
 import { createBluedogWalkers } from './bluedog.js'
 import { createSneakerWalkers } from './sneaker.js'
 import { createAwadamaFloaters } from './awadama.js'
+import { createSparkleFountain } from './sparkleFountain.js'
 import { createTsue } from '../my-3d-parts/parts/tsue.js'
 import { createIta, ITA_FACE, ITA_WIDTH } from '../my-3d-parts/parts/ita.js'
 import { KAN } from '../my-3d-parts/parts/kan.js'
@@ -1618,6 +1619,17 @@ const awadamas = createAwadamaFloaters({
   colors: { 'からだ': new THREE.Color(OCEAN_COLOR_A).lerp(new THREE.Color(OCEAN_COLOR_B), 0.5).getHex() },   // からだは海面の 2 色の帯の真ん中の色
 })
 
+// 光の粒の立ちのぼり（sparkleFountain.js）: SPARKLE_AT の各地点を中心に半径 50m ほど（縁はノイズでギザギザ）の地中 6m（海なら海面の下）から、丸いぽわぽわした光の粒が立ちのぼる
+//   edgeSeed: 縁のギザギザの形（場所ごとに変える）
+const SPARKLE_AT = [
+  { lat: -11, lon: -136, edgeSeed: 7 },
+  { lat: -11, lon: -31, edgeSeed: 23 },
+]
+const sparkleFountains = SPARKLE_AT.map(({ lat, lon, edgeSeed }) => {
+  const dir = dirOf(lat, lon)
+  return createSparkleFountain({ scene, dir, ground: Math.max(getGroundHeight(dir) - 1, R_OCEAN), edgeSeed })
+})
+
 // 杖（my-3d-parts/parts/tsue.js）: TSUE_LINES の線ごとに、始点から TSUE_GAP (m) ごとに植える
 //   線は 2 点を結ぶ大円。along: 'lat' の線は大円でなく、緯度の円に沿って経度を進める（両端の緯度は同じにする）
 //   flip: true の線は杖を上の軸まわりに 180° 回して、葉を逆の側へ向ける
@@ -1950,6 +1962,7 @@ function animate() {
     bluedogs.update(dt)
     sneakers.update(dt)
     awadamas.update(dt, pDir)
+    for (const f of sparkleFountains) f.update(now / 1000, camera, renderer)
     for (const f of spriteFlyers) f.update(dt, camera)
     horizonCull.update(camera)
   }
