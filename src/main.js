@@ -1577,8 +1577,8 @@ let sabStillT = 0
 // 環境音（sfx.js の setAmbience）: 風はいつも、波は sabちゃんのまわりに海があるほど大きく。室内では風を小さくして波は消す
 //   海の近さは AMB_SAMPLE_T 秒おきに、sabちゃんの足元と、まわり 8 方向 × AMB_SAMPLE_D (m) の地点が海かどうかで測る（近い海ほど大きい）
 const AMB_SAMPLE_T = 0.25
-const AMB_SAMPLE_D = [6, 14, 24, 34]
-const AMB_WAVE_FAR = 40   // この距離の海は 0 として数える (m)
+const AMB_SAMPLE_D = [2, 4, 6, 8, 10, 12]
+const AMB_WAVE_FAR = 12.5 // この距離の海は 0 として数える (m)。12m より遠い海は聞こえない
 let ambT = 0, ambWave = 0
 const _ambSide = new THREE.Vector3(), _ambAxis = new THREE.Vector3(), _ambDir = new THREE.Vector3(), _ambRight = new THREE.Vector3()
 const isSeaAt = dir => R_OCEAN + dir.dot(oceanMesh.position) > getGroundHeight(dir) - 1
@@ -1598,7 +1598,7 @@ function measureWaveNear() {
     }
   }
   _groundHitObj = keepHit
-  return near * near
+  return near
 }
 let sabMoveIn = 0   // 屋外で前後・左右に動かしている強さ（0〜1。俯瞰中は 0）。後ろからの視点のときだけ「フォン…フォン…」と鳴らす（sfx.js）
 function giveKan(group, walker) {
