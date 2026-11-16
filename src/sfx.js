@@ -5,13 +5,21 @@
 //  coinToWater(): 水面にコインを投げ込んだとき（チャリン → ちゃぽん）
 //  bubbleRise():  泡玉が浮かんできたとき（ぷくっ）
 //  bubblePop():   泡玉をタッチして消したとき（ぽんっ）
+//  initSoundButton(btn): HUD の歯車の横のスピーカーを、音のオン・オフの切り替えにする（選んだほうは localStorage に残す）
 // ============================================================
 
+import { t, onLangChange } from './i18n.js'
+
 const VOLUME = 0.5   // 全体の音量
+const SOUND_KEY = 'coccolith.sound'
+
+let muted = false
+try { muted = localStorage.getItem(SOUND_KEY) === '0' } catch { /* 読めなければ音を出す */ }
 
 let ctx = null, master = null, noiseBuf = null
 
 function audio() {
+  if (muted) return null
   if (!ctx) {
     const AC = window.AudioContext || window.webkitAudioContext
     if (!AC) return null
@@ -28,11 +36,11 @@ function audio() {
   return ctx
 }
 // 最初のタッチ・キーで起こしておく（タップの中で鳴らす音は、そのときに起こしても間に合う）
-for (const ev of ['pointerdown', 'keydown']) window.addEventListener(ev, () => audio(), { capture: true, passive: true })
+for (const ev of ['pointerdown', 'keydown']) window.addEventListener(ev, () => { if (!muted) audio() }, { capture: true, passive: true })
 // ページが裏へ行ったら止め、戻ったら起こす
 document.addEventListener('visibilitychange', () => {
   if (!ctx) return
-  if (document.hidden) ctx.suspend(); else ctx.resume()
+  if (document.hidden || muted) ctx.suspend(); else ctx.resume()
 })
 
 // 音量の山（立ち上がり attack 秒 → 指数で減って dur 秒で消える）を付けた GainNode
@@ -91,6 +99,27 @@ export function bubbleRise() {
 export function bubblePop() {
   if (!audio()) return
   // ぽんっ（短く跳ね上がる音 + はじけるパチッ）
-  tone({ f0: 520, f1: 1500, dur: 0.09, peak: 0.35, glide: 0.05 })
-  noise({ freq: 3500, q: 0.7, dur: 0.05, peak: 0.12, type: 'highpass' })
+  tone({ f0: 780, f1: 2200, dur: 0.09, peak: 0.35, glide: 0.05 })
+  noise({ freq: 5000, q: 0.7, dur: 0.05, peak: 0.12, type: 'highpass' })
+}
+
+// スピーカー（音を出しているとき）と、斜線を引いたスピーカー（消しているとき）
+const SPEAKER = 'M2.5 6 L5 6 L8.5 3 L8.5 13 L5 10 L2.5 10 Z'
+const ICON_ON  = `<svg viewBox="0 0 16 16" aria-hidden="true"><path d="${SPEAKER}"/><path d="M10.8 5.8 Q12 8 10.8 10.2"/><path d="M12.6 4.2 Q14.8 8 12.6 11.8"/></svg>`
+const ICON_OFF = `<svg viewBox="0 0 16 16" aria-hidden="true"><path d="${SPEAKER}"/><path d="M11 6 L15 10 M15 6 L11 10"/></svg>`
+
+export function initSoundButton(btn) {
+  const draw = () => {
+    btn.innerHTML = muted ? ICON_OFF : ICON_ON
+    btn.setAttribute('aria-label', t(muted ? 'soundOn' : 'soundOff'))
+    btn.setAttribute('aria-pressed', muted)
+  }
+  onLangChange(draw)
+  btn.addEventListener('click', () => {
+    muted = !muted
+    try { localStorage.setItem(SOUND_KEY, muted ? '0' : '1') } catch { /* 残せなくても今回は効く */ }
+    if (ctx) { if (muted) ctx.suspend(); else ctx.resume() }
+    else if (!muted) audio()
+    draw()
+  })
 }

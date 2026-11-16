@@ -1071,6 +1071,7 @@ initJoysticks()
 
 // --- HUD ----------------------------------------------------
 initFullscreenButton(document.getElementById('fs-btn'))
+sfx.initSoundButton(document.getElementById('sound-btn'))
 initSettings(document.getElementById('settings-btn'), document.getElementById('settings'), { onOutdoorView: updateTabBtn })
 onLangChange(updateTabBtnLabel)
 updateTabBtn()   // 前回の設定が屋外の主観なら、始めから sabちゃんを隠す
