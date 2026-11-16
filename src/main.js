@@ -1216,6 +1216,7 @@ flowerStand.onTake = () => {
   f.position.set(-1.3, -4.4, 3.5)   // 襟（半径 3.75）の前の右に根元を付ける
   f.rotation.set(0.2, 0, 0.2)
   hold('flower', f, () => f.children[1].geometry.dispose())
+  sfx.kanTake()   // 缶を取ったときと同じコトッ
 }
 // 自販機の取り出し口から取った缶を、襟の輪の左寄りのやや上に立てて持つ（後ろからの視点でも少し見える）
 const KAN_HOLD = { pos: [4.4, -1.4, 1.6], rot: [0.1, 0, -0.2], height: 0.36 }   // 缶の底面の真ん中の位置と向き（sabちゃんのローカル）・缶の高さ (m。自販機の大きさによらない)
