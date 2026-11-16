@@ -1,10 +1,11 @@
 import * as THREE from 'three'
-import { createAwadama } from '../my-3d-parts/parts/awadama.js'
+import { createAwadama, AWADAMA_KINDS } from '../my-3d-parts/parts/awadama.js'
 
 // ============================================================
 //  泡玉（my-3d-parts/parts/awadama.js）を、sabちゃんのまわりの海にプカッと浮かべて、しばらく揺れたらパッと消す
 //  1 つずつ：待つ（見えない）→ 浮かぶ（水の中から飛び出して少し行き過ぎ、戻って浮く）→ 揺れる（上下にゆらゆら・少し傾く）→ パッと消える → 待つ …
 //  出る場所は sabちゃんから SPAWN_DIST の範囲の、水深が MIN_DEPTH 以上の海。顔の向きはランダム
+//  ふだん出るのはもとの kirakira だけ。コインを投げ込んで呼んだときは AWADAMA_KINDS の 8 種類からランダム（続けて同じ種類にはしない）
 //  海面の高さは出たときに getSeaLevel で測る（海面球は多面体なので、その場所の実際の面の高さ。出ている数秒のあいだの潮の動きは小さいので測り直さない）
 // ============================================================
 
@@ -36,19 +37,29 @@ const X = new THREE.Vector3(1, 0, 0), Z = new THREE.Vector3(0, 0, 1)
 export function createAwadamaFloaters({ scene, count = 5, height = 1, radius, getGround, getSeaLevel, colors = null, shade = true }) {
   const bubbles = []
   const tinted = new Map()   // 部品のマテリアル -> TINT を掛けた写し
-  function addBubble(timer) {
-    const holder = new THREE.Group(); holder.name = '泡玉'
-    holder.add(createAwadama({ height, colors, shade }))
-    // 陰影なしのときは TINT を掛けたマテリアルにする（部品のマテリアルは変えずに写し、泡玉どうしでは使い回す）
-    if (!shade) holder.traverse(o => {
+  const KINDS = Object.keys(AWADAMA_KINDS)
+  let lastKind = 'kirakira'
+  // b の泡玉を kind の種類にする（同じなら何もしない）。colors（からだの色の差し替え）は、からだが水色の種類のときだけ使う
+  function setKind(b, kind) {
+    if (b.kind === kind) return
+    b.kind = kind
+    b.holder.clear()
+    const model = createAwadama({ kind, height, colors: AWADAMA_KINDS[kind].body == null ? colors : null, shade })
+    // 陰影なしのときは TINT を掛けたマテリアルにする（部品のマテリアルは変えずに写し、泡玉どうしでは使い回す。どの種類もマテリアルは同じなので、新しいシェーダーは要らない）
+    if (!shade) model.traverse(o => {
       if (!o.isMesh) return
       if (!tinted.has(o.material)) { const m = o.material.clone(); m.color.multiply(TINT); tinted.set(o.material, m) }
       o.material = tinted.get(o.material)
     })
+    b.holder.add(model)
+  }
+  function addBubble(timer) {
+    const holder = new THREE.Group(); holder.name = '泡玉'
     // 最初は星の中心に置いて見えるままにする（起動時の compileAsync でシェーダーを作っておく）。最初の update で隠す
     scene.add(holder)
-    const b = { holder, phase: 'wait', timer, t: 0, life: 0, summoned: false,
+    const b = { holder, kind: null, phase: 'wait', timer, t: 0, life: 0, summoned: false,
       dir: new THREE.Vector3(), fwd: new THREE.Vector3(), seed: Math.random() * 10 }
+    setKind(b, 'kirakira')
     bubbles.push(b)
     return b
   }
@@ -88,6 +99,10 @@ export function createAwadamaFloaters({ scene, count = 5, height = 1, radius, ge
   function summon(dir, faceDir) {
     const b = bubbles.find(o => o.phase === 'wait' && o.summoned) || bubbles.find(o => o.phase === 'wait') || addBubble(0)
     if (bubbles.indexOf(b) >= count) b.summoned = true
+    // 種類はランダム（前に呼んだのとは違うもの）
+    const others = KINDS.filter(k => k !== lastKind)
+    lastKind = others[Math.floor(Math.random() * others.length)]
+    setKind(b, lastKind)
     b.dir.copy(dir).normalize()
     b.sea = getSeaLevel(b.dir)
     b.fwd.copy(faceDir).addScaledVector(b.dir, -faceDir.dot(b.dir))
@@ -118,6 +133,7 @@ export function createAwadamaFloaters({ scene, count = 5, height = 1, radius, ge
         b.timer -= dt
         if (b.timer > 0) continue
         if (!pickSpot(b, sabDir)) { b.timer = rand(WAIT); continue }
+        setKind(b, 'kirakira')   // 呼ばれて別の種類になっていたら戻す
         b.phase = 'rise'; b.t = 0; b.life = rand(FLOAT); b.holder.visible = true
       }
       // t は出てからの時間（浮かぶ → 揺れるを通しで数える。揺れが途中で跳ばないように）
