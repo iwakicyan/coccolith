@@ -35,6 +35,8 @@ import { createSneakerWalkers } from './sneaker.js'
 import { createAwadamaFloaters } from './awadama.js'
 import { createSparkleFountain } from './sparkleFountain.js'
 import { createTsue } from '../my-3d-parts/parts/tsue.js'
+import { createEda } from '../my-3d-parts/parts/eda.js'
+import { createBirdFlock } from './birdFlight.js'
 import { createIta, ITA_FACE, ITA_WIDTH } from '../my-3d-parts/parts/ita.js'
 import { KAN } from '../my-3d-parts/parts/kan.js'
 import { rasenFloor, RASEN } from '../my-3d-parts/landmark/rasen.js'
@@ -1678,6 +1680,33 @@ const sparkleFountains = SPARKLE_AT.map(({ lat, lon, edgeSeed }) => {
   }
 }
 
+// 枝（my-3d-parts/parts/eda.js）: 北極の上空に、地面と平行に寝かせて浮かべる
+//   作業台の +z（正面）を下（地面）へ向ける。EDA_SCALE 倍（モデルの主枝の長さ 5 → 約 5×EDA_SCALE m）、地面から EDA_ALT (m) の高さ
+//   EDA_SPIN は上の軸まわりの向き（度）。動かないので 1 メッシュ。影は落とさない
+let edaBranch
+{
+  const EDA_SCALE = 24, EDA_ALT = 400, EDA_SPIN = 0
+  const up = new THREE.Vector3(0, 1, 0)
+  const eda = createEda({ scale: EDA_SCALE })
+  eda.name = 'eda'
+  eda.rotation.set(Math.PI / 2, THREE.MathUtils.degToRad(EDA_SPIN), 0, 'YXZ')   // +z → -y（下）
+  eda.position.copy(up).multiplyScalar(getGroundHeight(up) - 1 + EDA_ALT)
+  eda.traverse(o => { if (o.isMesh) { o.castShadow = false; o.receiveShadow = false } })
+  scene.add(eda)
+  edaBranch = eda
+}
+
+// 枝にとまる鳥（birdFlight.js）: 鳥が枝の主枝にしばらくとまり、coccolith を大円に沿って一周して、またとまる
+//   群れごとに大きさ・色・とまり場所の組（eda.js の PERCH_TS）を決める。群れごとにまとめて描く（描画 3 回ずつ）
+const BIRD_BLUE = '#5a7e9c', BIRD_PINK = '#a87485'
+const birdFlocks = [
+  createBirdFlock({ scene, eda: edaBranch, count: 30, length: 5, set: 0, seed: 1 }),   // 白い鳥
+  createBirdFlock({ scene, eda: edaBranch, count: 20, length: 3, set: 1, seed: 2,      // 青い鳥（頭・翼・尾羽）
+    colors: { '頭': BIRD_BLUE, '翼': BIRD_BLUE, '尾羽': BIRD_BLUE } }),
+  createBirdFlock({ scene, eda: edaBranch, count: 20, length: 3, set: 2, seed: 3,      // ピンクの鳥（頭・翼・尾羽）。脇枝・先の二股にとまる
+    colors: { '頭': BIRD_PINK, '翼': BIRD_PINK, '尾羽': BIRD_PINK } }),
+]
+
 // 空を飛ぶドット絵スプライト（pixelSprite.js）: pixelArt/flyers/ の絵を全部読み込み、雲より上を count 機ずつ飛ばす
 // 絵を足すときは scripts/import-sprite.mjs で書き出す（名前に 真下・下方・水平・上から があれば flyers/ に入る）
 const FLYER_H = R_C + LAND_LIFT + 80   // 飛ぶ高さ（惑星中心から m。陸から 80m、雲生き物より 70m 上）
@@ -1962,6 +1991,7 @@ function animate() {
     bluedogs.update(dt)
     sneakers.update(dt)
     awadamas.update(dt, pDir)
+    for (const f of birdFlocks) f.update(dt)
     for (const f of sparkleFountains) f.update(now / 1000, camera, renderer)
     for (const f of spriteFlyers) f.update(dt, camera)
     horizonCull.update(camera)
