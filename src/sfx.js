@@ -9,6 +9,7 @@
 //  kanDrop():     自販機の取り出し口に缶が出たとき（ガチャン）
 //  kanTake():     取り出し口の缶・台の上の花を取ったとき（コトッ）
 //  setMoving(k): sabちゃんが動いている強さ（0〜1）を毎フレーム渡す。動いている間「フォン…フォン…」と鳴らす
+//  setAmbience({ wind, wave }): 環境音の大きさ（0〜1）を毎フレーム渡す。風（いつも小さくサー…）と波（海の近くでザザー…と寄せては返す）
 //  initSoundButton(btn): HUD の歯車の横のスピーカーを、音のオン・オフの切り替えにする（選んだほうは localStorage に残す）
 // ============================================================
 
@@ -173,6 +174,73 @@ export function setMoving(k) {
   if (humNext <= now + 0.05) {
     hum(Math.max(humNext, now), Math.min(1, k))
     humNext = Math.max(humNext, now) + HUM_PERIOD
+  }
+}
+
+// --- 環境音（風・波） ---
+// どちらもノイズを流し続け、フィルタと音量をゆっくり動かして作る。大きさは setAmbience で渡した値へなめらかに寄せる
+const WIND_VOL = 0.05     // 風のいちばん大きいときの音量
+const WAVE_VOL = 0.12     // 波のいちばん大きいとき（海のすぐそば）の音量
+const WAVE_GAP = [5.5, 8] // 波が寄せてから次に寄せるまで (s)
+const AMB_TAU  = 0.8      // 大きさを寄せる速さ（時定数 s）
+let amb = null            // { windLevel, waveLevel, waveEnv, waveFilter }
+let waveNext = 0
+
+function loopNoise(buf, offset) {
+  const s = ctx.createBufferSource()
+  s.buffer = buf; s.loop = true
+  s.start(0, offset)
+  return s
+}
+function startAmbience() {
+  // 4 秒のノイズを繰り返して流す（短いと繰り返しが聞こえる）
+  const buf = ctx.createBuffer(1, ctx.sampleRate * 4, ctx.sampleRate)
+  const d = buf.getChannelData(0)
+  for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1
+  const lfo = (freq, depth, param) => {
+    const o = ctx.createOscillator(); o.frequency.value = freq
+    const g = ctx.createGain(); g.gain.value = depth
+    o.connect(g).connect(param); o.start()
+  }
+
+  // 風: こもったサー…。音量と明るさを、周期の違うゆっくりした揺れでふくらませたりしぼめたりする
+  const windFilter = ctx.createBiquadFilter(); windFilter.type = 'bandpass'; windFilter.frequency.value = 420; windFilter.Q.value = 0.7
+  const windSwell = ctx.createGain(); windSwell.gain.value = 0.6
+  const windLevel = ctx.createGain(); windLevel.gain.value = 0
+  loopNoise(buf, 0).connect(windFilter).connect(windSwell).connect(windLevel).connect(master)
+  lfo(0.07, 0.25, windSwell.gain)
+  lfo(0.17, 0.12, windSwell.gain)
+  lfo(0.05, 160, windFilter.frequency)
+
+  // 波: 寄せるたびに waveEnv の音量とフィルタを上げて下げる（ザザー…）
+  const waveFilter = ctx.createBiquadFilter(); waveFilter.type = 'lowpass'; waveFilter.frequency.value = 400; waveFilter.Q.value = 0.5
+  const waveEnv = ctx.createGain(); waveEnv.gain.value = 0.12
+  const waveLevel = ctx.createGain(); waveLevel.gain.value = 0
+  loopNoise(buf, 2).connect(waveFilter).connect(waveEnv).connect(waveLevel).connect(master)
+  amb = { windLevel, waveLevel, waveEnv, waveFilter }
+}
+// 1 回の波を at（ctx.currentTime）に寄せる。強さは毎回少し変える
+function waveSwash(at) {
+  const k = 0.7 + Math.random() * 0.3
+  const { waveEnv: g, waveFilter: f } = amb
+  g.gain.setValueAtTime(0.12, at)
+  g.gain.linearRampToValueAtTime(k, at + 1.6)              // 寄せる
+  g.gain.exponentialRampToValueAtTime(0.12, at + 1.6 + 3.2) // 引いていく
+  f.frequency.setValueAtTime(400, at)
+  f.frequency.linearRampToValueAtTime(900 + 500 * k, at + 1.5)
+  f.frequency.exponentialRampToValueAtTime(400, at + 1.6 + 3.2)
+}
+export function setAmbience({ wind = 0, wave = 0 }) {
+  if (!ctx || muted || document.hidden) return   // 最初のタッチ・キーで音が起きるまでは何もしない
+  if (!amb) startAmbience()
+  const now = ctx.currentTime
+  amb.windLevel.gain.setTargetAtTime(WIND_VOL * wind, now, AMB_TAU)
+  amb.waveLevel.gain.setTargetAtTime(WAVE_VOL * wave, now, AMB_TAU)
+  // 波は聞こえていてもいなくても寄せ続ける（近づいたとき途中から聞こえるように）
+  if (waveNext <= now + 0.1) {
+    const at = Math.max(waveNext, now + 0.05)
+    waveSwash(at)
+    waveNext = at + WAVE_GAP[0] + Math.random() * (WAVE_GAP[1] - WAVE_GAP[0])
   }
 }
 

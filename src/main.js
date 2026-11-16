@@ -1574,6 +1574,32 @@ const sabForSprites = { dir: pDir, fwd: pFwd, kan: false, still: false }
 const SAB_STILL_SPEED = 0.5, SAB_STILL_TIME = 0.3
 const _sabPrevDir = new THREE.Vector3().copy(pDir)
 let sabStillT = 0
+// 環境音（sfx.js の setAmbience）: 風はいつも、波は sabちゃんのまわりに海があるほど大きく。室内では風を小さくして波は消す
+//   海の近さは AMB_SAMPLE_T 秒おきに、sabちゃんの足元と、まわり 8 方向 × AMB_SAMPLE_D (m) の地点が海かどうかで測る（近い海ほど大きい）
+const AMB_SAMPLE_T = 0.25
+const AMB_SAMPLE_D = [6, 14, 24, 34]
+const AMB_WAVE_FAR = 40   // この距離の海は 0 として数える (m)
+let ambT = 0, ambWave = 0
+const _ambSide = new THREE.Vector3(), _ambAxis = new THREE.Vector3(), _ambDir = new THREE.Vector3(), _ambRight = new THREE.Vector3()
+const isSeaAt = dir => R_OCEAN + dir.dot(oceanMesh.position) > getGroundHeight(dir) - 1
+function measureWaveNear() {
+  const keepHit = _groundHitObj   // getGroundHeight が書き換えるので戻しておく
+  let near = isSeaAt(pDir) ? 1 : 0
+  _ambRight.crossVectors(pDir, pFwd).normalize()
+  for (const d of AMB_SAMPLE_D) {
+    const c = 1 - d / AMB_WAVE_FAR
+    if (c <= near) break   // これより遠い所では今より大きくならない
+    for (let i = 0; i < 8; i++) {
+      const a = i / 8 * Math.PI * 2
+      _ambSide.copy(pFwd).multiplyScalar(Math.cos(a)).addScaledVector(_ambRight, Math.sin(a))
+      _ambAxis.crossVectors(pDir, _ambSide).normalize()
+      _ambDir.copy(pDir).applyAxisAngle(_ambAxis, d / R_C)
+      if (isSeaAt(_ambDir)) { near = c; break }
+    }
+  }
+  _groundHitObj = keepHit
+  return near * near
+}
 let sabMoveIn = 0   // 屋外で前後・左右に動かしている強さ（0〜1。俯瞰中は 0）。後ろからの視点のときだけ「フォン…フォン…」と鳴らす（sfx.js）
 function giveKan(group, walker) {
   if (!held.kan) return false
@@ -2051,6 +2077,8 @@ function animate() {
 
   sfx.setMoving(!interior && !overviewMode && !outdoorView.fp && !transitioning && !viewCut ? sabMoveIn : 0)
   sabMoveIn = 0
+  if (!interior && (ambT -= dt) <= 0) { ambT = AMB_SAMPLE_T; ambWave = measureWaveNear() }
+  sfx.setAmbience(interior ? { wind: 0.25, wave: 0 } : { wind: 1, wave: overviewMode ? ambWave * 0.5 : ambWave })
   coinIntro.update(dt, sabchan.group.position)
   coinDrop.update(dt)
   updateDoorGlow(now)
