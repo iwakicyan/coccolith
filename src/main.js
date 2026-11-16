@@ -1134,7 +1134,8 @@ const jihankiTargets = jihankis.map(j => ({
   drop: () => {
     setCoinCount(coinCount - 1)
     j.userData.kanOut = true
-    setTimeout(() => fadeCut(() => j.userData.dispenseKan()), COIN_INSERT_TIME * 1000)
+    sfx.coinToSlot()
+    setTimeout(() => fadeCut(() => { j.userData.dispenseKan(); sfx.kanDrop() }), COIN_INSERT_TIME * 1000)
   },
 }))
 for (const g of _glowSpots) if (g.jihanki) g.enabled = () => !g.jihanki.userData.kanOut
@@ -1150,6 +1151,7 @@ for (const j of jihankis) {
       if (!k) return
       j.userData.kanOut = false
       holdKan(k)
+      sfx.kanTake()
     },
   })
 }

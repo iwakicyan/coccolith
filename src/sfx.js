@@ -5,6 +5,9 @@
 //  coinToWater(): 水面にコインを投げ込んだとき（チャリン → ちゃぽん）
 //  bubbleRise():  泡玉が浮かんできたとき（ぷくっ）
 //  bubblePop():   泡玉をタッチして消したとき（ぽんっ）
+//  coinToSlot():  自販機の投入口にコインを入れたとき（チャリン → コロコロ → ピッ）
+//  kanDrop():     自販機の取り出し口に缶が出たとき（ガコン）
+//  kanTake():     取り出し口の缶を取ったとき（コトッ）
 //  initSoundButton(btn): HUD の歯車の横のスピーカーを、音のオン・オフの切り替えにする（選んだほうは localStorage に残す）
 // ============================================================
 
@@ -101,6 +104,35 @@ export function bubblePop() {
   // ぽんっ（短く跳ね上がる音 + はじけるパチッ）
   tone({ f0: 780, f1: 2200, dur: 0.09, peak: 0.35, glide: 0.05 })
   noise({ freq: 5000, q: 0.7, dur: 0.05, peak: 0.12, type: 'highpass' })
+}
+
+export function coinToSlot() {
+  if (!audio()) return
+  // チャリン（入れたとき）
+  tone({ type: 'triangle', f0: 2349, dur: 0.25, peak: 0.12 })
+  tone({ type: 'sine', f0: 3520, dur: 0.18, peak: 0.06 })
+  // コロコロ（中を転がり落ちる小さい金属音。だんだん間が詰まって低くなる）
+  const ticks = [0.16, 0.25, 0.32, 0.37, 0.41]
+  ticks.forEach((at, i) => tone({ at, type: 'triangle', f0: 1900 - i * 150, dur: 0.05, peak: 0.07 - i * 0.008 }))
+  // ピッ（受け付けた電子音）
+  tone({ at: 0.6, type: 'square', f0: 1760, dur: 0.09, peak: 0.05, attack: 0.002 })
+}
+
+export function kanDrop() {
+  if (!audio()) return
+  // ガコン（重い低い音 + 金属の箱に当たる響き）
+  tone({ f0: 160, f1: 55, dur: 0.3, peak: 0.6, glide: 0.18 })
+  noise({ freq: 400, q: 0.9, dur: 0.12, peak: 0.25, type: 'lowpass' })
+  tone({ type: 'triangle', f0: 620, f1: 480, dur: 0.18, peak: 0.08 })
+  // 中で少し転がって止まる
+  tone({ at: 0.22, f0: 130, f1: 80, dur: 0.12, peak: 0.2 })
+}
+
+export function kanTake() {
+  if (!audio()) return
+  // コトッ（短い軽い音）
+  tone({ type: 'triangle', f0: 900, f1: 600, dur: 0.07, peak: 0.15, glide: 0.04 })
+  noise({ freq: 2500, q: 1.5, dur: 0.03, peak: 0.06 })
 }
 
 // スピーカー（音を出しているとき）と、斜線を引いたスピーカー（消しているとき）
