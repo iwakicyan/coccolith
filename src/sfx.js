@@ -181,6 +181,7 @@ export function setMoving(k) {
 // どちらもノイズを流し続け、フィルタと音量をゆっくり動かして作る。大きさは setAmbience で渡した値へなめらかに寄せる
 const WIND_VOL = 0.05     // 風のいちばん大きいときの音量
 const WAVE_VOL = 0.12     // 波のいちばん大きいとき（海のすぐそば）の音量
+const WAVE_LOW = 0.4      // 波が引いたときの大きさ（寄せたときは 0.65〜0.8）
 const WAVE_GAP = [5.5, 8] // 波が寄せてから次に寄せるまで (s)
 const AMB_TAU  = 0.8      // 大きさを寄せる速さ（時定数 s）
 let amb = null            // { windLevel, waveLevel, waveEnv, waveFilter }
@@ -208,27 +209,27 @@ function startAmbience() {
   const windSwell = ctx.createGain(); windSwell.gain.value = 0.6
   const windLevel = ctx.createGain(); windLevel.gain.value = 0
   loopNoise(buf, 0).connect(windFilter).connect(windSwell).connect(windLevel).connect(master)
-  lfo(0.07, 0.25, windSwell.gain)
-  lfo(0.17, 0.12, windSwell.gain)
+  lfo(0.07, 0.1, windSwell.gain)
+  lfo(0.17, 0.05, windSwell.gain)
   lfo(0.05, 160, windFilter.frequency)
 
   // 波: 寄せるたびに waveEnv の音量とフィルタを上げて下げる（ザザー…）
   const waveFilter = ctx.createBiquadFilter(); waveFilter.type = 'lowpass'; waveFilter.frequency.value = 400; waveFilter.Q.value = 0.5
-  const waveEnv = ctx.createGain(); waveEnv.gain.value = 0.12
+  const waveEnv = ctx.createGain(); waveEnv.gain.value = WAVE_LOW
   const waveLevel = ctx.createGain(); waveLevel.gain.value = 0
   loopNoise(buf, 2).connect(waveFilter).connect(waveEnv).connect(waveLevel).connect(master)
   amb = { windLevel, waveLevel, waveEnv, waveFilter }
 }
 // 1 回の波を at（ctx.currentTime）に寄せる。強さは毎回少し変える
 function waveSwash(at) {
-  const k = 0.7 + Math.random() * 0.3
+  const k = 0.65 + Math.random() * 0.15
   const { waveEnv: g, waveFilter: f } = amb
-  g.gain.setValueAtTime(0.12, at)
+  g.gain.setValueAtTime(WAVE_LOW, at)
   g.gain.linearRampToValueAtTime(k, at + 1.6)              // 寄せる
-  g.gain.exponentialRampToValueAtTime(0.12, at + 1.6 + 3.2) // 引いていく
-  f.frequency.setValueAtTime(400, at)
-  f.frequency.linearRampToValueAtTime(900 + 500 * k, at + 1.5)
-  f.frequency.exponentialRampToValueAtTime(400, at + 1.6 + 3.2)
+  g.gain.exponentialRampToValueAtTime(WAVE_LOW, at + 1.6 + 3.2) // 引いていく
+  f.frequency.setValueAtTime(500, at)
+  f.frequency.linearRampToValueAtTime(700 + 400 * k, at + 1.5)
+  f.frequency.exponentialRampToValueAtTime(500, at + 1.6 + 3.2)
 }
 export function setAmbience({ wind = 0, wave = 0 }) {
   if (!ctx || muted || document.hidden) return   // 最初のタッチ・キーで音が起きるまでは何もしない
