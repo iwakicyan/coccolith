@@ -1103,7 +1103,7 @@ function setCoinCount(n) {
   coinNumEl.classList.add('bump')
   setTimeout(() => coinNumEl.classList.remove('bump'), 120)
 }
-const collectCoin = () => setCoinCount(coinCount + 1)
+const collectCoin = () => { setCoinCount(coinCount + 1); sfx.coinToSlot() }   // 拾ったときも投入口と同じチャリンッ
 // URL で立ち位置の指定があればそこから始める（撮影モードではランダムな地点）
 scene.updateMatrixWorld(true)   // 地表レイキャスト用に初回描画前のワールド行列を確定
 // 地面が満潮の海面より低ければ海中。撮影モードではそういう地点を避ける
@@ -1160,7 +1160,7 @@ for (const j of jihankis) {
 const coinDrop = createCoinDrop({
   boxEl: coinBoxEl, scene, camera, renderer, slot: coinSlot,
   getCount: () => coinCount,
-  onDrop: () => { setCoinCount(coinCount - 1); coinboxUsed = true; setTimeout(() => fadeCut(() => flowerStand.place()), COIN_INSERT_TIME * 1000) },
+  onDrop: () => { setCoinCount(coinCount - 1); sfx.coinToSlot(); coinboxUsed = true; setTimeout(() => fadeCut(() => flowerStand.place()), COIN_INSERT_TIME * 1000) },
   enabled: () => !coinboxUsed && !transitioning && !overviewMode && !interior,
   // 板の紙にも入れられる（入れるとその書き込みの順位が 1 つ上がる。boardNotes.js）
   targets: [noteCoinTarget({
