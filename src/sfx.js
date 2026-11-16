@@ -135,15 +135,15 @@ export function kanTake() {
 }
 
 // --- 動いている間の「フォン…フォン…」 ---
-const HUM_PERIOD = 0.6    // 1 つの「フォン」から次まで (s)
+const HUM_PERIOD = 0.9    // 1 つの「フォン」から次まで (s)
 const HUM_MIN    = 0.1    // これより弱い入力では鳴らさない
 let humNext = 0           // 次の「フォン」を鳴らす時刻（ctx.currentTime）。止まっているときは 0
 function hum(at, k) {
   const t0 = at - ctx.currentTime
   // ふわっと立ち上がって、少し下がりながら消える丸い音
-  tone({ at: t0, f0: 300, f1: 230, dur: 0.42, peak: 0.1 * k, attack: 0.09 })
-  tone({ at: t0, type: 'triangle', f0: 600, f1: 470, dur: 0.3, peak: 0.025 * k, attack: 0.09 })
-  noise({ at: t0, freq: 700, q: 0.6, dur: 0.35, peak: 0.03 * k, attack: 0.1, type: 'lowpass' })
+  tone({ at: t0, f0: 400, f1: 310, dur: 0.75, peak: 0.1 * k, attack: 0.18 })
+  tone({ at: t0, type: 'triangle', f0: 800, f1: 620, dur: 0.55, peak: 0.022 * k, attack: 0.18 })
+  noise({ at: t0, freq: 900, q: 0.6, dur: 0.6, peak: 0.03 * k, attack: 0.2, type: 'lowpass' })
 }
 export function setMoving(k) {
   if (k < HUM_MIN || document.hidden) { humNext = 0; return }
