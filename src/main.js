@@ -34,6 +34,7 @@ import { createPixelSpriteWalkers, createPixelSpriteFlyers, WATCH_DIST as SPRITE
 import { createBluedogWalkers } from './bluedog.js'
 import { createSneakerWalkers } from './sneaker.js'
 import { createAwadamaFloaters } from './awadama.js'
+import { createCoin } from './coin.js'
 import { createWaterRipples } from './waterRipple.js'
 import * as sfx from './sfx.js'
 import { createSparkleFountain } from './sparkleFountain.js'
@@ -1669,11 +1670,12 @@ const awadamas = createAwadamaFloaters({
   getSeaLevel: seaSurfaceHeight,
   shade: false,   // 光を受けず陰影がつかない（色そのまま）
   colors: { 'からだ': new THREE.Color(OCEAN_COLOR_A).lerp(new THREE.Color(OCEAN_COLOR_B), 0.5).getHex() },   // からだは海面の 2 色の帯の真ん中の色
+  makeCoin: r => createCoin({ renderer, radius: r }),   // コインをくわえた泡玉のコイン（半径はモデル単位のまま。泡玉ごと縮む）
 })
 
 // --- 水面にコインを投げ込む ----------------------------------
 // コインを持っているとき、近くの水面（カメラから WATER_REACH 以内・水深 WATER_MIN_DEPTH 以上）は手のカーソルになり、
-// 押すとコインが 1 枚減って、そこに水色の波紋（waterRipple.js）が 3 つ広がり、WATER_SUMMON_DELAY 秒後に泡玉が 1 つ浮かんでくる（8 種類からランダム。awadama.js の summon）
+// 押すとコインが 1 枚減って、そこに水色の波紋（waterRipple.js）が 3 つ広がり、WATER_SUMMON_DELAY 秒後に泡玉が 1 つ浮かんでくる（10 種類からランダム。awadama.js の summon）
 const WATER_REACH = 40          // (m)
 const WATER_MIN_DEPTH = 0.6     // (m) 浅瀬では泡玉が浮かべないので投げ込めない
 const WATER_SUMMON_DELAY = 2    // (s)

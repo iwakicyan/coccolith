@@ -5,7 +5,7 @@ import { createAwadama, AWADAMA_KINDS } from '../my-3d-parts/parts/awadama.js'
 //  泡玉（my-3d-parts/parts/awadama.js）を、sabちゃんのまわりの海にプカッと浮かべて、しばらく揺れたらパッと消す
 //  1 つずつ：待つ（見えない）→ 浮かぶ（水の中から飛び出して少し行き過ぎ、戻って浮く）→ 揺れる（上下にゆらゆら・少し傾く）→ パッと消える → 待つ …
 //  出る場所は sabちゃんから SPAWN_DIST の範囲の、水深が MIN_DEPTH 以上の海。顔の向きはランダム
-//  ふだん出るのはもとの kirakira だけ。コインを投げ込んで呼んだときは AWADAMA_KINDS の 8 種類からランダム（続けて同じ種類にはしない）
+//  ふだん出るのはもとの kirakira だけ。コインを投げ込んで呼んだときは AWADAMA_KINDS の 10 種類からランダム（続けて同じ種類にはしない）
 //  海面の高さは出たときに getSeaLevel で測る（海面球は多面体なので、その場所の実際の面の高さ。出ている数秒のあいだの潮の動きは小さいので測り直さない）
 // ============================================================
 
@@ -34,7 +34,8 @@ const X = new THREE.Vector3(1, 0, 0), Z = new THREE.Vector3(0, 0, 1)
 
 // count: 泡玉の数 / height: 高さ (m) / radius: 星の半径 (m) / colors: パーツの色の差し替え / shade: 陰影をつけるか（どちらも createAwadama と同じ）
 // getGround(dir): その向きの地面の高さ（星の中心から m）/ getSeaLevel(dir): その向きの海面の高さ（星の中心から m）
-export function createAwadamaFloaters({ scene, count = 5, height = 1, radius, getGround, getSeaLevel, colors = null, shade = true }) {
+// makeCoin(radius): kind 'coin' の泡玉にくわえさせるコイン（Object3D。表が +z）を作る。null ならコインなし
+export function createAwadamaFloaters({ scene, count = 5, height = 1, radius, getGround, getSeaLevel, colors = null, shade = true, makeCoin = null }) {
   const bubbles = []
   const tinted = new Map()   // 部品のマテリアル -> TINT を掛けた写し
   const KINDS = Object.keys(AWADAMA_KINDS)
@@ -51,6 +52,9 @@ export function createAwadamaFloaters({ scene, count = 5, height = 1, radius, ge
       if (!tinted.has(o.material)) { const m = o.material.clone(); m.color.multiply(TINT); tinted.set(o.material, m) }
       o.material = tinted.get(o.material)
     })
+    // コインは陰影のある金属のまま（TINT は掛けない）
+    const slot = model.userData.coin
+    if (slot && makeCoin) slot.anchor.add(makeCoin(slot.radius))
     b.holder.add(model)
   }
   function addBubble(timer) {
