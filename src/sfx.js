@@ -142,18 +142,22 @@ const HUM_DELAY  = 0.2    // ディレイの間隔 (s)
 const HUM_FEEDBACK = 0.55 // 繰り返すたびに残る割合
 const HUM_WET    = 0.6    // ディレイの音の大きさ（元の音に対して）
 let humNext = 0           // 次の「フォン」を鳴らす時刻（ctx.currentTime）。止まっているときは 0
-const HUM_MUFFLE_HZ = 260  // 水中でフォーンをこもらせるときのフィルタ (Hz)
-let humMuffle = null
+const HUM_MUFFLE_HZ = 200  // 水中でフォーンをこもらせるときのフィルタ (Hz)。2 段に重ねて高い音をばっさり落とす
+const HUM_WATER_PITCH = 0.65  // 水中ではフォーンの音程をこの倍率に下げる（ボワ…と重く）
+let humMuffle = null   // 2 段のローパス [1 段目, 2 段目]
 let underwater = false    // カメラが水中にあるか（setAmbience で受け取る）
 let humBus = null         // 「フォン」の行き先。元の音 + ディレイ（繰り返すたびにこもる。間隔は揺らさない（揺らすと繰り返しの音程がずれる））
 function humOut() {
   if (humBus) return humBus
   humBus = ctx.createGain()
   // 水中ではこもらせる（元の音もディレイも、このフィルタを通して出す）
-  humMuffle = ctx.createBiquadFilter(); humMuffle.type = 'lowpass'; humMuffle.Q.value = 0.5
-  humMuffle.frequency.value = underwater ? HUM_MUFFLE_HZ : 20000
-  humMuffle.connect(master)
-  humBus.connect(humMuffle)
+  humMuffle = [0, 1].map(() => {
+    const f = ctx.createBiquadFilter(); f.type = 'lowpass'; f.Q.value = 1.1
+    f.frequency.value = underwater ? HUM_MUFFLE_HZ : 20000
+    return f
+  })
+  humMuffle[0].connect(humMuffle[1]).connect(master)
+  humBus.connect(humMuffle[0])
   const delay = ctx.createDelay(1)
   delay.delayTime.value = HUM_DELAY
   const fb = ctx.createGain(); fb.gain.value = HUM_FEEDBACK
@@ -161,15 +165,17 @@ function humOut() {
   const wet = ctx.createGain(); wet.gain.value = HUM_WET
   humBus.connect(delay)
   delay.connect(lp).connect(fb).connect(delay)
-  lp.connect(wet).connect(humMuffle)
+  lp.connect(wet).connect(humMuffle[0])
   return humBus
 }
 function hum(at, k) {
   const t0 = at - ctx.currentTime
   const out = humOut()
-  // ふわっと立ち上がって消える丸い音。音程は変えない（下げると、ディレイで重なる前の音と音程がずれる）
-  tone({ at: t0, f0: 230, dur: 1.1, peak: 0.065 * k, attack: 0.18, out })
-  tone({ at: t0, type: 'triangle', f0: 460, dur: 0.8, peak: 0.014 * k, attack: 0.18, out })
+  // ふわっと立ち上がって消える丸い音。鳴っている間は音程を変えない（変えると、ディレイで重なる前の音と音程がずれる）
+  // 水中では音程を下げ、こもって小さくなる分を少し大きくする
+  const p = underwater ? HUM_WATER_PITCH : 1, v = underwater ? 1.6 : 1
+  tone({ at: t0, f0: 230 * p, dur: 1.1, peak: 0.065 * k * v, attack: 0.18, out })
+  tone({ at: t0, type: 'triangle', f0: 460 * p, dur: 0.8, peak: 0.014 * k * v, attack: 0.18, out })
   noise({ at: t0, freq: 600, q: 0.6, dur: 0.9, peak: 0.02 * k, attack: 0.2, type: 'lowpass', out })
 }
 export function setMoving(k) {
@@ -247,7 +253,7 @@ export function setAmbience({ wind = 0, wave = 0, water = false }) {
   if (water !== underwater) {
     underwater = water
     for (const [g, v] of [[amb.windLevel.gain, windV], [amb.waveLevel.gain, waveV]]) { g.cancelScheduledValues(now); g.setValueAtTime(v, now) }
-    if (humMuffle) { humMuffle.frequency.cancelScheduledValues(now); humMuffle.frequency.setValueAtTime(water ? HUM_MUFFLE_HZ : 20000, now) }
+    if (humMuffle) for (const f of humMuffle) { f.frequency.cancelScheduledValues(now); f.frequency.setValueAtTime(water ? HUM_MUFFLE_HZ : 20000, now) }
   }
   amb.windLevel.gain.setTargetAtTime(windV, now, AMB_TAU)
   amb.waveLevel.gain.setTargetAtTime(waveV, now, AMB_TAU)
