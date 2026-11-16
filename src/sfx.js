@@ -141,9 +141,9 @@ let humNext = 0           // 次の「フォン」を鳴らす時刻（ctx.curre
 function hum(at, k) {
   const t0 = at - ctx.currentTime
   // ふわっと立ち上がって、少し下がりながら消える丸い音
-  tone({ at: t0, f0: 400, f1: 310, dur: 0.75, peak: 0.1 * k, attack: 0.18 })
-  tone({ at: t0, type: 'triangle', f0: 800, f1: 620, dur: 0.55, peak: 0.022 * k, attack: 0.18 })
-  noise({ at: t0, freq: 900, q: 0.6, dur: 0.6, peak: 0.03 * k, attack: 0.2, type: 'lowpass' })
+  tone({ at: t0, f0: 260, f1: 200, dur: 0.75, peak: 0.1 * k, attack: 0.18 })
+  tone({ at: t0, type: 'triangle', f0: 520, f1: 400, dur: 0.55, peak: 0.022 * k, attack: 0.18 })
+  noise({ at: t0, freq: 600, q: 0.6, dur: 0.6, peak: 0.03 * k, attack: 0.2, type: 'lowpass' })
 }
 export function setMoving(k) {
   if (k < HUM_MIN || document.hidden) { humNext = 0; return }
