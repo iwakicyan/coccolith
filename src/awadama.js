@@ -36,7 +36,7 @@ const X = new THREE.Vector3(1, 0, 0), Z = new THREE.Vector3(0, 0, 1)
 export function createAwadamaFloaters({ scene, count = 5, height = 1, radius, getGround, getSeaLevel, colors = null, shade = true }) {
   const bubbles = []
   const tinted = new Map()   // 部品のマテリアル -> TINT を掛けた写し
-  for (let i = 0; i < count; i++) {
+  function addBubble(timer) {
     const holder = new THREE.Group(); holder.name = '泡玉'
     holder.add(createAwadama({ height, colors, shade }))
     // 陰影なしのときは TINT を掛けたマテリアルにする（部品のマテリアルは変えずに写し、泡玉どうしでは使い回す）
@@ -47,9 +47,12 @@ export function createAwadamaFloaters({ scene, count = 5, height = 1, radius, ge
     })
     // 最初は星の中心に置いて見えるままにする（起動時の compileAsync でシェーダーを作っておく）。最初の update で隠す
     scene.add(holder)
-    bubbles.push({ holder, phase: 'wait', timer: rand(WAIT) * (i + 1) / count, t: 0, life: 0,
-      dir: new THREE.Vector3(), fwd: new THREE.Vector3(), seed: Math.random() * 10 })
+    const b = { holder, phase: 'wait', timer, t: 0, life: 0, summoned: false,
+      dir: new THREE.Vector3(), fwd: new THREE.Vector3(), seed: Math.random() * 10 }
+    bubbles.push(b)
+    return b
   }
+  for (let i = 0; i < count; i++) addBubble(rand(WAIT) * (i + 1) / count)
 
   // sabちゃん（sabDir）から SPAWN_DIST の範囲で、水深のある海の地点を探す
   //   範囲の中で場所が偏らないよう、距離は面積に比例して選ぶ（真ん中に寄りすぎない）
@@ -80,11 +83,25 @@ export function createAwadamaFloaters({ scene, count = 5, height = 1, radius, ge
     b.holder.position.copy(b.dir).multiplyScalar(base + lift)
   }
 
+  // dir（星の中心からの向き）の海面から、すぐに 1 つ浮かばせる（水面にコインを投げ込んだとき）。顔は faceDir（sabちゃんのいる向き）へ向ける
+  //   待っている泡玉を使う。みんな出ていたら 1 つ増やす（増やしたものは、そのあとは呼ばれたときだけ出る）
+  function summon(dir, faceDir) {
+    const b = bubbles.find(o => o.phase === 'wait' && o.summoned) || bubbles.find(o => o.phase === 'wait') || addBubble(0)
+    if (bubbles.indexOf(b) >= count) b.summoned = true
+    b.dir.copy(dir).normalize()
+    b.sea = getSeaLevel(b.dir)
+    b.fwd.copy(faceDir).addScaledVector(b.dir, -faceDir.dot(b.dir))
+    if (b.fwd.lengthSq() < 1e-8) b.fwd.randomDirection().addScaledVector(b.dir, -b.fwd.dot(b.dir))
+    b.fwd.normalize()
+    b.phase = 'rise'; b.t = 0; b.life = rand(FLOAT); b.holder.visible = true
+  }
+
   // sabDir: sabちゃんのいる向き（星の中心から）
   function update(dt, sabDir) {
     for (const b of bubbles) {
       if (b.phase === 'wait') {
         b.holder.visible = false
+        if (b.summoned) continue   // 呼ばれたときだけ出る泡玉
         b.timer -= dt
         if (b.timer > 0) continue
         if (!pickSpot(b, sabDir)) { b.timer = rand(WAIT); continue }
@@ -109,5 +126,5 @@ export function createAwadamaFloaters({ scene, count = 5, height = 1, radius, ge
     }
   }
 
-  return { update, bubbles }
+  return { update, summon, bubbles }
 }

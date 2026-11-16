@@ -34,6 +34,7 @@ import { createPixelSpriteWalkers, createPixelSpriteFlyers, WATCH_DIST as SPRITE
 import { createBluedogWalkers } from './bluedog.js'
 import { createSneakerWalkers } from './sneaker.js'
 import { createAwadamaFloaters } from './awadama.js'
+import { createWaterRipples } from './waterRipple.js'
 import { createSparkleFountain } from './sparkleFountain.js'
 import { createTsue } from '../my-3d-parts/parts/tsue.js'
 import { createEda } from '../my-3d-parts/parts/eda.js'
@@ -292,10 +293,11 @@ canvas.addEventListener('pointerdown', e => {
   else if ((g = hitGlowSpot(e))) openGlowSpot(g)
   else if (giveKanByTap(e)) { /* 缶をあげた */ }
   else if (hitLightIcon(e)) toggleSabLight()
+  else if (throwCoinToWater(e)) { /* 水面にコインを投げ込んだ */ }
   else tapUsed = false
 })
 canvas.addEventListener('pointermove', e => {
-  if (e.pointerType === 'mouse') canvas.style.cursor = hitDoor(e) || hitLightIcon(e) ? 'pointer' : ''
+  if (e.pointerType === 'mouse') canvas.style.cursor = hitDoor(e) || hitLightIcon(e) || hitWater(e) ? 'pointer' : ''
 })
 
 // --- 3人称カメラ定数 -------------------------------------------
@@ -1635,6 +1637,45 @@ const awadamas = createAwadamaFloaters({
   colors: { 'からだ': new THREE.Color(OCEAN_COLOR_A).lerp(new THREE.Color(OCEAN_COLOR_B), 0.5).getHex() },   // からだは海面の 2 色の帯の真ん中の色
 })
 
+// --- 水面にコインを投げ込む ----------------------------------
+// コインを持っているとき、近くの水面（カメラから WATER_REACH 以内・水深 WATER_MIN_DEPTH 以上）は手のカーソルになり、
+// 押すとコインが 1 枚減って、そこに水色の波紋（waterRipple.js）が 3 つ広がり、WATER_SUMMON_DELAY 秒後に泡玉が 1 つ浮かんでくる
+const WATER_REACH = 40          // (m)
+const WATER_MIN_DEPTH = 0.6     // (m) 浅瀬では泡玉が浮かべないので投げ込めない
+const WATER_SUMMON_DELAY = 2    // (s)
+const waterRipples = createWaterRipples({ scene })
+const _waterRay = new THREE.Raycaster()
+const _waterHits = []
+// 指の下の水面の点（ワールド座標）。投げ込めないときは null
+function hitWater(e) {
+  if (coinCount <= 0 || transitioning || overviewMode || interior || viewCut) return null
+  _pointer.set((e.clientX / window.innerWidth) * 2 - 1, -(e.clientY / window.innerHeight) * 2 + 1)
+  _waterRay.setFromCamera(_pointer, camera)
+  _waterRay.far = WATER_REACH
+  _waterHits.length = 0
+  oceanMesh.raycast(_waterRay, _waterHits)
+  if (_waterHits.length === 0) return null
+  _waterHits.sort((a, b) => a.distance - b.distance)
+  const hit = _waterHits[0]
+  // 手前に陸があれば水面ではない
+  _waterRay.far = hit.distance
+  if (_waterRay.intersectObjects(terrainMeshes, false).length > 0) return null
+  const dir = _waterHit.copy(hit.point).normalize()
+  if (hit.point.length() - (getGroundHeight(dir) - 1) < WATER_MIN_DEPTH) return null
+  return hit.point
+}
+const _waterHit = new THREE.Vector3()
+function throwCoinToWater(e) {
+  const p = hitWater(e)
+  if (!p) return false
+  const point = p.clone()
+  setCoinCount(coinCount - 1)
+  waterRipples.spawn(point)
+  setTimeout(() => awadamas.summon(point.clone().normalize(), pDir), WATER_SUMMON_DELAY * 1000)
+  if (e.pointerType === 'mouse') canvas.style.cursor = coinCount > 0 ? 'pointer' : ''
+  return true
+}
+
 // 光の粒の立ちのぼり（sparkleFountain.js）: SPARKLE_AT の各地点を中心に半径 50m ほど（縁はノイズでギザギザ）の地中 6m（海なら海面の下）から、丸いぽわぽわした光の粒が立ちのぼる
 //   edgeSeed: 縁のギザギザの形（場所ごとに変える）
 const SPARKLE_AT = [
@@ -2005,6 +2046,7 @@ function animate() {
     bluedogs.update(dt)
     sneakers.update(dt)
     awadamas.update(dt, pDir)
+    waterRipples.update(dt)
     for (const f of birdFlocks) f.update(dt)
     for (const f of sparkleFountains) f.update(now / 1000, camera, renderer)
     for (const f of spriteFlyers) f.update(dt, camera)
