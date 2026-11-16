@@ -137,7 +137,7 @@ export function kanTake() {
 // --- 動いている間の「フォン…フォン…」 ---
 const HUM_PERIOD = 1.05   // 1 つの「フォン」から次まで (s)
 const HUM_MIN    = 0.1    // これより弱い入力では鳴らさない
-const HUM_DELAY  = 0.11   // ディレイの間隔 (s)。短めにして「ブワワワ…」と細かく繰り返す
+const HUM_DELAY  = 0.2    // ディレイの間隔 (s)
 const HUM_FEEDBACK = 0.55 // 繰り返すたびに残る割合
 const HUM_WET    = 0.6    // ディレイの音の大きさ（元の音に対して）
 let humNext = 0           // 次の「フォン」を鳴らす時刻（ctx.currentTime）。止まっているときは 0
