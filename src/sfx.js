@@ -9,7 +9,7 @@
 //  kanDrop():     自販機の取り出し口に缶が出たとき（ガチャン）
 //  kanTake():     取り出し口の缶・台の上の花を取ったとき（コトッ）
 //  setMoving(k): sabちゃんが動いている強さ（0〜1）を毎フレーム渡す。動いている間「フォン…フォン…」と鳴らす
-//  setAmbience({ wind, wave }): 環境音の大きさ（0〜1）を毎フレーム渡す。風（いつも小さくサー…）と波（海の近くでザザー…と寄せては返す）
+//  setAmbience({ wind, wave, water }): 環境音の大きさ（0〜1）を毎フレーム渡す。風（いつも小さくサー…）と波（海の近くでザザー…と寄せては返す）。water（カメラが水中）なら風・波を消してフォーンをこもらせる
 //  initSoundButton(btn): HUD の歯車の横のスピーカーを、音のオン・オフの切り替えにする（選んだほうは localStorage に残す）
 // ============================================================
 
@@ -142,11 +142,18 @@ const HUM_DELAY  = 0.2    // ディレイの間隔 (s)
 const HUM_FEEDBACK = 0.55 // 繰り返すたびに残る割合
 const HUM_WET    = 0.6    // ディレイの音の大きさ（元の音に対して）
 let humNext = 0           // 次の「フォン」を鳴らす時刻（ctx.currentTime）。止まっているときは 0
+const HUM_MUFFLE_HZ = 260  // 水中でフォーンをこもらせるときのフィルタ (Hz)
+let humMuffle = null
+let underwater = false    // カメラが水中にあるか（setAmbience で受け取る）
 let humBus = null         // 「フォン」の行き先。元の音 + ディレイ（繰り返すたびにこもる。間隔は揺らさない（揺らすと繰り返しの音程がずれる））
 function humOut() {
   if (humBus) return humBus
   humBus = ctx.createGain()
-  humBus.connect(master)
+  // 水中ではこもらせる（元の音もディレイも、このフィルタを通して出す）
+  humMuffle = ctx.createBiquadFilter(); humMuffle.type = 'lowpass'; humMuffle.Q.value = 0.5
+  humMuffle.frequency.value = underwater ? HUM_MUFFLE_HZ : 20000
+  humMuffle.connect(master)
+  humBus.connect(humMuffle)
   const delay = ctx.createDelay(1)
   delay.delayTime.value = HUM_DELAY
   const fb = ctx.createGain(); fb.gain.value = HUM_FEEDBACK
@@ -154,7 +161,7 @@ function humOut() {
   const wet = ctx.createGain(); wet.gain.value = HUM_WET
   humBus.connect(delay)
   delay.connect(lp).connect(fb).connect(delay)
-  lp.connect(wet).connect(master)
+  lp.connect(wet).connect(humMuffle)
   return humBus
 }
 function hum(at, k) {
@@ -231,12 +238,19 @@ function waveSwash(at) {
   f.frequency.linearRampToValueAtTime(560 + 150 * k, at + 1.5)
   f.frequency.exponentialRampToValueAtTime(500, at + 1.6 + 3.2)
 }
-export function setAmbience({ wind = 0, wave = 0 }) {
+// water: カメラが水中にあるか。水中では風・波をプツッと消し、フォーンをこもらせる（出入りした瞬間に切り替える）
+export function setAmbience({ wind = 0, wave = 0, water = false }) {
   if (!ctx || muted || document.hidden) return   // 最初のタッチ・キーで音が起きるまでは何もしない
   if (!amb) startAmbience()
   const now = ctx.currentTime
-  amb.windLevel.gain.setTargetAtTime(WIND_VOL * wind, now, AMB_TAU)
-  amb.waveLevel.gain.setTargetAtTime(WAVE_VOL * wave, now, AMB_TAU)
+  const windV = water ? 0 : WIND_VOL * wind, waveV = water ? 0 : WAVE_VOL * wave
+  if (water !== underwater) {
+    underwater = water
+    for (const [g, v] of [[amb.windLevel.gain, windV], [amb.waveLevel.gain, waveV]]) { g.cancelScheduledValues(now); g.setValueAtTime(v, now) }
+    if (humMuffle) { humMuffle.frequency.cancelScheduledValues(now); humMuffle.frequency.setValueAtTime(water ? HUM_MUFFLE_HZ : 20000, now) }
+  }
+  amb.windLevel.gain.setTargetAtTime(windV, now, AMB_TAU)
+  amb.waveLevel.gain.setTargetAtTime(waveV, now, AMB_TAU)
   // 波は聞こえていてもいなくても寄せ続ける（近づいたとき途中から聞こえるように）
   if (waveNext <= now + 0.1) {
     const at = Math.max(waveNext, now + 0.05)

@@ -1574,12 +1574,13 @@ const sabForSprites = { dir: pDir, fwd: pFwd, kan: false, still: false }
 const SAB_STILL_SPEED = 0.5, SAB_STILL_TIME = 0.3
 const _sabPrevDir = new THREE.Vector3().copy(pDir)
 let sabStillT = 0
-// 環境音（sfx.js の setAmbience）: 風はいつも、波は sabちゃんのまわりに海があるほど大きく。室内では風を小さくして波は消す。カメラが水中にあるときは両方消す
+// 環境音（sfx.js の setAmbience）: 風はいつも、波は sabちゃんのまわりに海があるほど大きく。室内では風を小さくして波は消す。カメラが水中にあるときは両方プツッと消し、動いている間のフォーンをこもらせる
 //   海の近さは AMB_SAMPLE_T 秒おきに、sabちゃんの足元と、まわり 8 方向 × AMB_SAMPLE_D (m) の地点が海かどうかで測る（近い海ほど大きい）
 const AMB_SAMPLE_T = 0.25
 const AMB_SAMPLE_D = [2, 4, 6, 8, 10, 12]
 const AMB_WAVE_FAR = 12.5 // この距離の海は 0 として数える (m)。12m より遠い海は聞こえない
-let ambT = 0, ambWave = 0, ambUnderwater = false   // ambUnderwater: カメラが海面より下にあるか（水中では風も波も消す）
+let ambT = 0, ambWave = 0
+const _ambCam = new THREE.Vector3()
 const _ambSide = new THREE.Vector3(), _ambAxis = new THREE.Vector3(), _ambDir = new THREE.Vector3(), _ambRight = new THREE.Vector3()
 const isSeaAt = dir => R_OCEAN + dir.dot(oceanMesh.position) > getGroundHeight(dir) - 1
 function measureWaveNear() {
@@ -2077,12 +2078,10 @@ function animate() {
 
   sfx.setMoving(!interior && !overviewMode && !outdoorView.fp && !transitioning && !viewCut ? sabMoveIn : 0)
   sabMoveIn = 0
-  if (!interior && (ambT -= dt) <= 0) {
-    ambT = AMB_SAMPLE_T
-    ambWave = measureWaveNear()
-    ambUnderwater = camera.position.length() < seaSurfaceHeight(_ambDir.copy(camera.position).normalize())
-  }
-  sfx.setAmbience(interior ? { wind: 0.25, wave: 0 } : ambUnderwater ? { wind: 0, wave: 0 } : { wind: 1, wave: overviewMode ? ambWave * 0.5 : ambWave })
+  if (!interior && (ambT -= dt) <= 0) { ambT = AMB_SAMPLE_T; ambWave = measureWaveNear() }
+  // 水中かは毎フレーム見る（潜った瞬間に音を切り替える）
+  const ambWater = !interior && camera.position.length() < seaSurfaceHeight(_ambCam.copy(camera.position).normalize())
+  sfx.setAmbience(interior ? { wind: 0.25, wave: 0 } : { wind: 1, wave: overviewMode ? ambWave * 0.5 : ambWave, water: ambWater })
   coinIntro.update(dt, sabchan.group.position)
   coinDrop.update(dt)
   updateDoorGlow(now)
