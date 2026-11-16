@@ -5,8 +5,8 @@
 //  coinToWater(): 水面にコインを投げ込んだとき（チャリン → ちゃぽん）
 //  bubbleRise():  泡玉が浮かんできたとき（ぷくっ）
 //  bubblePop():   泡玉をタッチして消したとき（ぽんっ）
-//  coinToSlot():  自販機の投入口にコインを入れたとき（チャリン → コロコロ → ピッ）
-//  kanDrop():     自販機の取り出し口に缶が出たとき（ガコン）
+//  coinToSlot():  自販機の投入口にコインを入れたとき（チャリンッ）
+//  kanDrop():     自販機の取り出し口に缶が出たとき（ガチャン）
 //  kanTake():     取り出し口の缶を取ったとき（コトッ）
 //  initSoundButton(btn): HUD の歯車の横のスピーカーを、音のオン・オフの切り替えにする（選んだほうは localStorage に残す）
 // ============================================================
@@ -108,24 +108,22 @@ export function bubblePop() {
 
 export function coinToSlot() {
   if (!audio()) return
-  // チャリン（入れたとき）
-  tone({ type: 'triangle', f0: 2349, dur: 0.25, peak: 0.12 })
-  tone({ type: 'sine', f0: 3520, dur: 0.18, peak: 0.06 })
-  // コロコロ（中を転がり落ちる小さい金属音。だんだん間が詰まって低くなる）
-  const ticks = [0.16, 0.25, 0.32, 0.37, 0.41]
-  ticks.forEach((at, i) => tone({ at, type: 'triangle', f0: 1900 - i * 150, dur: 0.05, peak: 0.07 - i * 0.008 }))
-  // ピッ（受け付けた電子音）
-  tone({ at: 0.6, type: 'square', f0: 1760, dur: 0.09, peak: 0.05, attack: 0.002 })
+  // チャリンッ（短い高い 2 つの音を重ねて金属っぽく）
+  tone({ type: 'triangle', f0: 2349, dur: 0.14, peak: 0.12 })
+  tone({ type: 'sine', f0: 3520, dur: 0.1, peak: 0.06 })
+  tone({ at: 0.05, type: 'triangle', f0: 2794, dur: 0.1, peak: 0.07 })
 }
 
 export function kanDrop() {
   if (!audio()) return
-  // ガコン（重い低い音 + 金属の箱に当たる響き）
-  tone({ f0: 160, f1: 55, dur: 0.3, peak: 0.6, glide: 0.18 })
-  noise({ freq: 400, q: 0.9, dur: 0.12, peak: 0.25, type: 'lowpass' })
-  tone({ type: 'triangle', f0: 620, f1: 480, dur: 0.18, peak: 0.08 })
-  // 中で少し転がって止まる
-  tone({ at: 0.22, f0: 130, f1: 80, dur: 0.12, peak: 0.2 })
+  // ガチャン（金属の箱に当たる明るめの音 + ジャッという響き）
+  tone({ f0: 420, f1: 180, dur: 0.16, peak: 0.35, glide: 0.1 })
+  noise({ freq: 1800, q: 0.9, dur: 0.14, peak: 0.22 })
+  tone({ type: 'triangle', f0: 1250, f1: 980, dur: 0.2, peak: 0.08 })
+  tone({ type: 'triangle', f0: 1870, dur: 0.14, peak: 0.05 })
+  // 少し跳ねて止まる
+  tone({ at: 0.12, f0: 360, f1: 240, dur: 0.08, peak: 0.15 })
+  noise({ at: 0.12, freq: 2200, q: 1.2, dur: 0.06, peak: 0.08 })
 }
 
 export function kanTake() {
