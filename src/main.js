@@ -35,6 +35,7 @@ import { createBluedogWalkers } from './bluedog.js'
 import { createSneakerWalkers } from './sneaker.js'
 import { createAwadamaFloaters } from './awadama.js'
 import { createWaterRipples } from './waterRipple.js'
+import * as sfx from './sfx.js'
 import { createSparkleFountain } from './sparkleFountain.js'
 import { createTsue } from '../my-3d-parts/parts/tsue.js'
 import { createEda } from '../my-3d-parts/parts/eda.js'
@@ -293,7 +294,7 @@ canvas.addEventListener('pointerdown', e => {
   else if ((g = hitGlowSpot(e))) openGlowSpot(g)
   else if (giveKanByTap(e)) { /* 缶をあげた */ }
   else if (hitLightIcon(e)) toggleSabLight()
-  else if ((g = hitAwadama(e))) awadamas.pop(g)
+  else if ((g = hitAwadama(e))) { awadamas.pop(g); sfx.bubblePop() }
   else if (throwCoinToWater(e)) { /* 水面にコインを投げ込んだ */ }
   else tapUsed = false
 })
@@ -1680,7 +1681,8 @@ function throwCoinToWater(e) {
   const point = p.clone()
   setCoinCount(coinCount - 1)
   waterRipples.spawn(point)
-  setTimeout(() => awadamas.summon(point.clone().normalize(), pDir), WATER_SUMMON_DELAY * 1000)
+  sfx.coinToWater()
+  setTimeout(() => { awadamas.summon(point.clone().normalize(), pDir); if (!interior) sfx.bubbleRise() }, WATER_SUMMON_DELAY * 1000)
   if (e.pointerType === 'mouse') canvas.style.cursor = coinCount > 0 ? 'pointer' : ''
   return true
 }
