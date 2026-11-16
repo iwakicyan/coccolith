@@ -8,6 +8,7 @@
 //  coinToSlot():  コイン箱・自販機の投入口にコインを入れたとき、コインを拾ったとき（チャリンッ）
 //  kanDrop():     自販機の取り出し口に缶が出たとき（ガチャン）
 //  kanTake():     取り出し口の缶・台の上の花を取ったとき（コトッ）
+//  setMoving(k): sabちゃんが動いている強さ（0〜1）を毎フレーム渡す。動いている間「フォン…フォン…」と鳴らす
 //  initSoundButton(btn): HUD の歯車の横のスピーカーを、音のオン・オフの切り替えにする（選んだほうは localStorage に残す）
 // ============================================================
 
@@ -131,6 +132,29 @@ export function kanTake() {
   // コトッ（短い軽い音）
   tone({ type: 'triangle', f0: 900, f1: 600, dur: 0.07, peak: 0.15, glide: 0.04 })
   noise({ freq: 2500, q: 1.5, dur: 0.03, peak: 0.06 })
+}
+
+// --- 動いている間の「フォン…フォン…」 ---
+const HUM_PERIOD = 0.6    // 1 つの「フォン」から次まで (s)
+const HUM_MIN    = 0.1    // これより弱い入力では鳴らさない
+let humNext = 0           // 次の「フォン」を鳴らす時刻（ctx.currentTime）。止まっているときは 0
+function hum(at, k) {
+  const t0 = at - ctx.currentTime
+  // ふわっと立ち上がって、少し下がりながら消える丸い音
+  tone({ at: t0, f0: 300, f1: 230, dur: 0.42, peak: 0.1 * k, attack: 0.09 })
+  tone({ at: t0, type: 'triangle', f0: 600, f1: 470, dur: 0.3, peak: 0.025 * k, attack: 0.09 })
+  noise({ at: t0, freq: 700, q: 0.6, dur: 0.35, peak: 0.03 * k, attack: 0.1, type: 'lowpass' })
+}
+export function setMoving(k) {
+  if (k < HUM_MIN || document.hidden) { humNext = 0; return }
+  if (!audio()) return
+  const now = ctx.currentTime
+  if (humNext === 0) humNext = now
+  // 先に 0.05 秒だけ予約しておく（フレームの間隔で途切れないように）
+  if (humNext <= now + 0.05) {
+    hum(Math.max(humNext, now), Math.min(1, k))
+    humNext = Math.max(humNext, now) + HUM_PERIOD
+  }
 }
 
 // スピーカー（音を出しているとき）と、斜線を引いたスピーカー（消しているとき）

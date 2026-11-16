@@ -1574,6 +1574,7 @@ const sabForSprites = { dir: pDir, fwd: pFwd, kan: false, still: false }
 const SAB_STILL_SPEED = 0.5, SAB_STILL_TIME = 0.3
 const _sabPrevDir = new THREE.Vector3().copy(pDir)
 let sabStillT = 0
+let sabMoveIn = 0   // 屋外で前後・左右に動かしている強さ（0〜1。俯瞰中は 0）。後ろからの視点のときだけ「フォン…フォン…」と鳴らす（sfx.js）
 function giveKan(group, walker) {
   if (!held.kan) return false
   group.follow(walker)
@@ -1933,6 +1934,7 @@ function animate() {
     const axisWS = _sabRight.crossVectors(pDir, pFwd)
     if (Math.abs(fbIn) > 0.01) { pDir.applyAxisAngle(axisWS, da * Math.max(-1, Math.min(1, fbIn))); pDir.normalize() }
     const lrIn = (keys['KeyD'] ? 1 : 0) - (keys['KeyA'] ? 1 : 0) + vJoy.lx
+    sabMoveIn = Math.min(1, Math.max(Math.abs(fbIn), Math.abs(lrIn)))
     if (Math.abs(lrIn) > 0.01) { pDir.applyAxisAngle(pFwd,   da * Math.max(-1, Math.min(1, lrIn))); pDir.normalize() }
     else if (rasenSteered) rasenHold()   // 左右に動かしていなければ、芯からの距離・板の中心線からの距離を変えずに進む
 
@@ -2047,6 +2049,8 @@ function animate() {
     if (!hudReady) { coinBoxEl.classList.add('ready'); hudReady = true }
   }
 
+  sfx.setMoving(!interior && !overviewMode && !outdoorView.fp && !transitioning && !viewCut ? sabMoveIn : 0)
+  sabMoveIn = 0
   coinIntro.update(dt, sabchan.group.position)
   coinDrop.update(dt)
   updateDoorGlow(now)
