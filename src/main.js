@@ -1675,7 +1675,7 @@ const awadamas = createAwadamaFloaters({
 
 // --- 水面にコインを投げ込む ----------------------------------
 // コインを持っているとき、近くの水面（カメラから WATER_REACH 以内・水深 WATER_MIN_DEPTH 以上）は手のカーソルになり、
-// 押すとコインが 1 枚減って、そこに水色の波紋（waterRipple.js）が 3 つ広がり、WATER_SUMMON_DELAY 秒後に泡玉が 1 つ浮かんでくる（10 種類からランダム。awadama.js の summon）
+// 押すとコインが 1 枚減って、そこに水色の波紋（waterRipple.js）が 3 つ広がり、WATER_SUMMON_DELAY 秒後に泡玉が 1 つ浮かんでくる（10 種類からランダム。コインをくわえたのと氷はレアで 5% ずつ。awadama.js の summon）
 const WATER_REACH = 40          // (m)
 const WATER_MIN_DEPTH = 0.6     // (m) 浅瀬では泡玉が浮かべないので投げ込めない
 const WATER_SUMMON_DELAY = 2    // (s)

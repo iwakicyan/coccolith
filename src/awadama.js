@@ -5,7 +5,7 @@ import { createAwadama, AWADAMA_KINDS } from '../my-3d-parts/parts/awadama.js'
 //  泡玉（my-3d-parts/parts/awadama.js）を、sabちゃんのまわりの海にプカッと浮かべて、しばらく揺れたらパッと消す
 //  1 つずつ：待つ（見えない）→ 浮かぶ（水の中から飛び出して少し行き過ぎ、戻って浮く）→ 揺れる（上下にゆらゆら・少し傾く）→ パッと消える → 待つ …
 //  出る場所は sabちゃんから SPAWN_DIST の範囲の、水深が MIN_DEPTH 以上の海。顔の向きはランダム
-//  ふだん出るのはもとの kirakira だけ。コインを投げ込んで呼んだときは AWADAMA_KINDS の 10 種類からランダム（続けて同じ種類にはしない）
+//  ふだん出るのはもとの kirakira だけ。コインを投げ込んで呼んだときは AWADAMA_KINDS の 10 種類からランダム。コインをくわえたのと氷はレアで 5% ずつ、ほかの 8 種類は残りを同じ割合で（続けて同じ種類にはしない）
 //  海面の高さは出たときに getSeaLevel で測る（海面球は多面体なので、その場所の実際の面の高さ。出ている数秒のあいだの潮の動きは小さいので測り直さない）
 // ============================================================
 
@@ -20,6 +20,7 @@ const SINK       = 0.5          // 浮いているとき水に沈んでいる割
 const BOB        = 0.06         // 上下の揺れ（高さに対して）
 const BOB_PERIOD = 2.4          // 上下の揺れの周期 (s)
 const TILT       = 0.07         // 傾きの揺れ (rad)
+const RARE       = { coin: 0.05, kori: 0.05 }   // コインで呼んだときのレアな種類と、出る確率（それぞれ）
 
 // 陰影なし（shade: false）のときに色に掛ける色。昼の色（そのまま）と夜の色（環境光 0x334455 を掛けた色）の真ん中で、昼も夜も同じにする
 const TINT = new THREE.Color(0x334455).lerp(new THREE.Color(1, 1, 1), 0.5)
@@ -103,10 +104,12 @@ export function createAwadamaFloaters({ scene, count = 5, height = 1, radius, ge
   function summon(dir, faceDir) {
     const b = bubbles.find(o => o.phase === 'wait' && o.summoned) || bubbles.find(o => o.phase === 'wait') || addBubble(0)
     if (bubbles.indexOf(b) >= count) b.summoned = true
-    // 種類はランダム（前に呼んだのとは違うもの）
-    const others = KINDS.filter(k => k !== lastKind)
-    lastKind = others[Math.floor(Math.random() * others.length)]
-    setKind(b, lastKind)
+    // 種類はランダム。RARE はそれぞれ決まった確率で出て、それ以外は前に呼んだのとは違うものから同じ割合で
+    let r = Math.random(), kind = null
+    for (const [k, p] of Object.entries(RARE)) { if (r < p) { kind = k; break } r -= p }
+    if (!kind) { const others = KINDS.filter(k => !(k in RARE) && k !== lastKind); kind = others[Math.floor(Math.random() * others.length)] }
+    lastKind = kind
+    setKind(b, kind)
     b.dir.copy(dir).normalize()
     b.sea = getSeaLevel(b.dir)
     b.fwd.copy(faceDir).addScaledVector(b.dir, -faceDir.dot(b.dir))
