@@ -1,11 +1,12 @@
 import * as THREE from 'three'
-import { createSneaker, createSneakerFlap, sneakerFlapAngle, SNEAKER_HEIGHT, SNEAKER_HOP } from '../my-3d-parts/parts/sneaker.js'
+import { createSneakerInstances, sneakerFlapAngle, SNEAKER_HEIGHT, SNEAKER_HOP } from '../my-3d-parts/parts/sneaker.js'
 import { createBlobShadows, polygonShadow } from './blobShadow.js'
 
 // ============================================================
 //  スニーカーの小鳥（my-3d-parts/parts/sneaker.js）を一足ずつ星の陸に出して、交互に飛ばす
 //  右足（黒い小鳥）→ 左足（白い小鳥）の順に、羽ばたきながら一歩ずつ飛び、それぞれ相手より LEAD だけ前に着地する（作業台の「飛ぶ」と同じ）
 //  何歩か飛んだら少し休む。一歩ごとに少しずつ向きを変え、着地点が海なら向きを変えて飛び直す
+//  全部の足をまとめて描く（createSneakerInstances。何足でも描画 9 回）。小鳥の自発光は GLOW
 //  影は太陽の影を使わず、靴の真下の地面にダークグレーの板を置く（blobShadow.js。飛んでいる間も地面に張り付く）
 // ============================================================
 
@@ -15,6 +16,7 @@ const TURN_STEP  = 0.25         // 一歩ごとに向きを変える量の上限
 const SHADOW_W   = 4.2          // 影の幅・長さ（モデル単位）
 const SHADOW_L   = 8.4
 const NEAR_DIST  = [3, 6]       // near のとき、スポーン地点から離す距離 (m)
+const GLOW       = 0.1          // 自発光（色に対する割合。部品の標準は 0.45）
 
 const rand = ([a, b]) => a + Math.random() * (b - a)
 const ease = s => (1 - Math.cos(Math.PI * s)) / 2
@@ -42,6 +44,9 @@ export function createSneakerWalkers({ scene, count = 1, height = 1, radius, get
   const GAP = SNEAKER_HOP.GAP * k, LEAD = SNEAKER_HOP.LEAD * k, HOP_H = SNEAKER_HOP.HEIGHT * k
   const shadows = createBlobShadows({ scene, count: count * 2, name: 'スニーカーの影', pts: polygonShadow(SHADOW_W * k, SHADOW_L * k) })
   const pairs = []
+  const inst = createSneakerInstances(count * 2, { height, glow: GLOW })
+  inst.group.name = 'スニーカー'
+  scene.add(inst.group)
 
   for (let i = 0; i < count; i++) {
     // 陸のランダムな地点と向き
@@ -50,15 +55,13 @@ export function createSneakerWalkers({ scene, count = 1, height = 1, radius, get
     else for (let n = 0; n < 200; n++) { dir.randomDirection(); if (!isWater(getGround(dir))) break }
     const heading = tangent(new THREE.Vector3().randomDirection(), dir)
     // 右足（-x 側。sign -1）は真ん中から右へ、左足（+x 側）は左へ GAP、さらに左足を LEAD だけ前に（右足から飛ぶ）
-    const feet = [['dark', -1], ['white', 1]].map(([bird, sign]) => {
-      const model = createSneaker({ bird, height, colors: colorsOf ? colorsOf(i) : null })
-      const holder = new THREE.Group(); holder.name = bird === 'dark' ? 'スニーカー（右）' : 'スニーカー（左）'
-      holder.add(model); scene.add(holder)
+    const feet = [['dark', -1], ['white', 1]].map(([bird, sign], j) => {
+      inst.setColors(i * 2 + j, bird, colorsOf ? colorsOf(i) : null)
       _side.crossVectors(dir, heading).normalize()
       let d = move(dir, _side, sign * GAP, radius)
       if (sign > 0) d = move(d, tangent(heading.clone(), d), LEAD, radius)
       const ground = getGround(d)
-      return { holder, flap: createSneakerFlap(model), sign, dir: d, fwd: tangent(heading.clone(), d), ground,
+      return { matrix: new THREE.Matrix4(), th: 0, sign, dir: d, fwd: tangent(heading.clone(), d), ground,
         from: null, to: null, fwd0: null, g0: 0, g1: 0 }
     })
     pairs.push({ feet, heading, next: 0, phase: 'rest', timer: rand(STOP_TIME), t: 0, left: 0 })
@@ -82,9 +85,10 @@ export function createSneakerWalkers({ scene, count = 1, height = 1, radius, get
   }
 
   function place(f, lift, pitch, index) {
-    f.holder.setRotationFromMatrix(_m.makeBasis(_axis.crossVectors(f.dir, f.fwd), f.dir, f.fwd))
-    if (pitch) f.holder.quaternion.multiply(_q.setFromAxisAngle(X, pitch))
-    f.holder.position.copy(f.dir).multiplyScalar(f.ground + lift)
+    f.matrix.makeBasis(_axis.crossVectors(f.dir, f.fwd), f.dir, f.fwd)
+    if (pitch) f.matrix.multiply(_m.makeRotationFromQuaternion(_q.setFromAxisAngle(X, pitch)))
+    f.matrix.setPosition(_side.copy(f.dir).multiplyScalar(f.ground + lift))
+    inst.set(index, f.matrix, f.th)
     shadows.set(index, f.dir, f.fwd, f.ground)
   }
 
@@ -114,10 +118,10 @@ export function createSneakerWalkers({ scene, count = 1, height = 1, radius, get
         if (s < 1) {
           lift = HOP_H * Math.sin(Math.PI * s)
           pitch = -SNEAKER_HOP.PITCH * Math.sin(2 * Math.PI * s)
-          f.flap.update(sneakerFlapAngle(s))
+          f.th = sneakerFlapAngle(s)
         } else {
           // 着地：次は相手の足。REST だけ待ってから飛ぶ（歩数を使い切ったら休む）
-          f.flap.stop()
+          f.th = 0
           p.next = 1 - p.next
           if (--p.left > 0) { p.phase = 'wait'; p.timer = SNEAKER_HOP.REST }
           else { p.phase = 'rest'; p.timer = rand(STOP_TIME) }
@@ -132,7 +136,9 @@ export function createSneakerWalkers({ scene, count = 1, height = 1, radius, get
       }
     }
     shadows.commit()
+    inst.commit()
   }
 
+  update(0)
   return { update, pairs }
 }
