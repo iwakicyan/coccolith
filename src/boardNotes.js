@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import { COUNTER_URL } from './visitCounter.js'
 import { t } from './i18n.js'
 import { ITA_FACE } from '../my-3d-parts/parts/ita.js'
@@ -57,7 +58,12 @@ const PLACE_TRIES = 32    // 貼る場所の候補の数
 const paperSize = text => PAPER_SIZES.find(s => [...text].length < s.max)
 // ピンの色（書く人が選ぶ。counter/worker.js の NOTE_PINS と同じ名前）
 const PINS = { red: '#ff3b30', blue: '#0a5cff', yellow: '#ffc21a', green: '#2fb84f' }
-const pinMats = Object.fromEntries(Object.entries(PINS).map(([k, c]) => [k, new THREE.MeshLambertMaterial({ color: c, emissive: c, emissiveIntensity: 0.45 })]))
+// ピンは板ごとに全部を 1 メッシュにまとめる（色は頂点の色。自発光も頂点の色 × 0.45）。当たりは持たない（コインは下の紙に当たる）
+const pinMat = new THREE.MeshLambertMaterial({ vertexColors: true, emissive: new THREE.Color(0.45, 0.45, 0.45) })
+pinMat.onBeforeCompile = sh => {
+  sh.fragmentShader = sh.fragmentShader.replace('vec3 totalEmissiveRadiance = emissive;', 'vec3 totalEmissiveRadiance = emissive * vColor;')
+}
+const pinColor = Object.fromEntries(Object.entries(PINS).map(([k, c]) => [k, new THREE.Color(c)]))
 const pinGeo = new THREE.SphereGeometry(0.035, 10, 6).scale(1, 1, 0.25)   // 平たくして、紙から出る厚み（0.002 + 0.009）を LAYER より薄くする
 const paperGeo = new THREE.PlaneGeometry(1, 1)   // 紙の大きさは scale で
 // id から 0〜1 の決まった値を出す（k で別の値）
@@ -116,10 +122,11 @@ export function addBoardNotes(ita, board, { minY = -Infinity } = {}) {
 
   const draw = notes => {
     for (const c of [...layer.children]) {
-      c.children[0].material.map.dispose()
-      c.children[0].material.dispose()
+      if (c.userData.pins) c.geometry.dispose()
+      else { c.children[0].material.map.dispose(); c.children[0].material.dispose() }
       layer.remove(c)
     }
+    const pins = []   // ピンの形（板の座標へ置いて色を塗ったもの）
     const shown = notes.slice(0, NOTES_ON_BOARD)
     // 場所を決める（まだ決めていないものだけ、古いものから）。外れた紙の場所は忘れる
     const ids = new Set(shown.map(n => n.id))
@@ -134,15 +141,28 @@ export function addBoardNotes(ita, board, { minY = -Infinity } = {}) {
       g.name = `紙 ${n.id}`
       const paper = new THREE.Mesh(paperGeo, new THREE.MeshLambertMaterial({ map: tex, emissive: 0xffffff, emissiveMap: tex, emissiveIntensity: 0.45 }))
       paper.scale.set(w, h, 1)
-      const pin = new THREE.Mesh(pinGeo, pinMats[n.pin] ?? pinMats.red)
-      pin.position.set(0, h / 2 - 0.07, 0.002)
-      paper.userData.note = pin.userData.note = { board, id: n.id }   // コインを入れる先
-      g.add(paper, pin)
+      paper.userData.note = { board, id: n.id }   // コインを入れる先
+      g.add(paper)
       const { x, y } = placed.get(n.id)
       g.position.set(x, y, F.z + (shown.length - i) * LAYER)   // 新しいもの（i が小さい）ほど手前
       g.rotation.z = (hash(n.id, 3) - 0.5) * 0.12   // ±3.4°
       layer.add(g)
+      // ピン：紙の上の真ん中（紙のグループの座標で (0, h/2 - 0.07, 0.002)）
+      g.updateMatrix()
+      const pg = pinGeo.clone().translate(0, h / 2 - 0.07, 0.002).applyMatrix4(g.matrix)
+      const c = pinColor[n.pin] ?? pinColor.red, cnt = pg.attributes.position.count, col = new Float32Array(cnt * 3)
+      for (let k = 0; k < cnt; k++) { col[k * 3] = c.r; col[k * 3 + 1] = c.g; col[k * 3 + 2] = c.b }
+      pg.setAttribute('color', new THREE.BufferAttribute(col, 3))
+      pins.push(pg)
     })
+    if (pins.length) {
+      const pinMesh = new THREE.Mesh(mergeGeometries(pins), pinMat)
+      pinMesh.name = 'ピン'
+      pinMesh.userData.pins = true
+      pinMesh.raycast = () => {}
+      layer.add(pinMesh)
+      for (const pg of pins) pg.dispose()
+    }
   }
 
   const entry = boards[board] ??= { notes: [], draws: [] }
