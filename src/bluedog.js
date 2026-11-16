@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import { createBluedog, createBluedogWalk, BLUEDOG_HEIGHT } from '../my-3d-parts/parts/bluedog.js'
+import { createBluedogInstances, BLUEDOG_HEIGHT } from '../my-3d-parts/parts/bluedog.js'
 import { createBlobShadows } from './blobShadow.js'
 
 // ============================================================
@@ -7,6 +7,7 @@ import { createBlobShadows } from './blobShadow.js'
 //  歩き方はドット絵の生き物（pixelSprite.js の createPixelSpriteWalkers）と同じ:
 //    歩く・立ち止まるを交互にくり返し、歩くあいだは少しずつ曲がる。PROBE_STEP 先の地面を測り、海なら向きを変える
 //  歩いているあいだは脚・体・しっぽを動かし（createBluedogWalk）、立ち止まるときはなめらかに元の形へ戻す
+//  全員をまとめて描く（createBluedogInstances。何匹でも描画 12 回）
 //  影は太陽の影（castShadow）を使わず、体の真下の地面にダークグレーの板を置く（頭と胴の形の 2 つの五角形をつないだ 8 角形）
 //    全員ぶんを 1 回で描く（blobShadow.js）。板は体の上下や脚の動きにはつられず、足元の地面に張り付く
 // ============================================================
@@ -30,7 +31,6 @@ const rand = ([a, b]) => a + Math.random() * (b - a)
 const _right = new THREE.Vector3()
 const _axis  = new THREE.Vector3()
 const _next  = new THREE.Vector3()
-const _m     = new THREE.Matrix4()
 
 // count: 数 / height: 高さ (m) / speed: 歩く速さ (m/s) / radius: 星の半径 (m)
 // getGround(dir): その向きの地面の高さ（星の中心から m）/ waterLevel: これより低い地面は海
@@ -44,14 +44,12 @@ export function createBluedogWalkers({ scene, count = 1, height = 1, speed = 0.8
   const shadows = createBlobShadows({ scene, count, name: 'bluedog の影',
     pts: SHADOW_PTS.map(([x, z]) => [x * SHADOW_W * k, (z * SHADOW_W + SHADOW_Z) * k]) })
 
+  // 体（全員ぶんをまとめて描く。影は落とさず、下の板で出す）
+  const inst = createBluedogInstances(count, { height })
+  inst.group.name = 'bluedog'
+  scene.add(inst.group)
+
   for (let i = 0; i < count; i++) {
-    const model = createBluedog({ height, merge: true })   // 動く部分ごとに 1 メッシュ＋輪郭線（1 匹で描画 12 回）
-    const holder = new THREE.Group()   // 星の上での位置と向き（local Y = 上、local Z = 前、原点 = 足元）
-    holder.name = 'bluedog'
-    holder.add(model)
-    model.traverse(o => { if (o.isMesh) o.castShadow = false })   // 影は下の板で出す
-    scene.add(holder)
-    const walk = createBluedogWalk(model)
 
     const dir = new THREE.Vector3()
     let ground
@@ -73,7 +71,7 @@ export function createBluedogWalkers({ scene, count = 1, height = 1, speed = 0.8
       ? new THREE.Vector3().copy(spawn.dir).sub(dir)
       : new THREE.Vector3().randomDirection()
     fwd.addScaledVector(dir, -fwd.dot(dir)).normalize()
-    dogs.push({ holder, walk, dir, fwd, ground, ground0: ground, ground1: null, travel: 0, turn: 0, turnTarget: 0,
+    dogs.push({ matrix: new THREE.Matrix4(), dir, fwd, ground, ground0: ground, ground1: null, travel: 0, turn: 0, turnTarget: 0,
       walking: false, timer: rand(STOP_TIME), animT: 0, amp: 0 })
   }
 
@@ -116,22 +114,18 @@ export function createBluedogWalkers({ scene, count = 1, height = 1, speed = 0.8
       // 脚の動き：歩いているあいだは大きさを 1 へ、止まったら 0 へ寄せる（0 になったら元の形に戻して止める）
       const target = d.walking ? 1 : 0
       d.amp += Math.sign(target - d.amp) * Math.min(Math.abs(target - d.amp), dt * AMP_RATE)
-      if (d.amp > 0) {
-        d.animT += dt * speed * STEP_RATE / height
-        d.walk.update(d.animT, d.amp)
-      } else if (d.animT) {
-        d.walk.stop()
-        d.animT = 0
-      }
+      if (d.amp > 0) d.animT += dt * speed * STEP_RATE / height
+      else d.animT = 0
 
       // 置く: local Y = 上、local Z = 前、原点 = 足元
-      d.holder.setRotationFromMatrix(_m.makeBasis(_right.crossVectors(d.dir, d.fwd), d.dir, d.fwd))
-      d.holder.position.copy(d.dir).multiplyScalar(d.ground)
+      d.matrix.makeBasis(_right.crossVectors(d.dir, d.fwd), d.dir, d.fwd).setPosition(_next.copy(d.dir).multiplyScalar(d.ground))
+      inst.set(i, d.matrix, d.animT, d.amp)
 
       // 影：足元の地面に、体と同じ向きで置く
       shadows.set(i, d.dir, d.fwd, d.ground)
     }
     shadows.commit()
+    inst.commit()
   }
 
   return { update, dogs }
