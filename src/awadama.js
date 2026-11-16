@@ -96,6 +96,19 @@ export function createAwadamaFloaters({ scene, count = 5, height = 1, radius, ge
     b.phase = 'rise'; b.t = 0; b.life = rand(FLOAT); b.holder.visible = true
   }
 
+  // ray（Raycaster）の先にいちばん近い、出ている泡玉。なければ null
+  function hit(ray) {
+    let best = null, bestD = Infinity
+    for (const b of bubbles) {
+      if (b.phase === 'wait') continue
+      const h = ray.intersectObject(b.holder, true)[0]
+      if (h && h.distance < bestD) { best = b; bestD = h.distance }
+    }
+    return best
+  }
+  // その場でパッと消す（タッチされたとき）
+  function pop(b) { b.phase = 'wait'; b.timer = rand(WAIT); b.holder.visible = false }
+
   // sabDir: sabちゃんのいる向き（星の中心から）
   function update(dt, sabDir) {
     for (const b of bubbles) {
@@ -121,10 +134,10 @@ export function createAwadamaFloaters({ scene, count = 5, height = 1, radius, ge
       } else if (b.phase === 'float') {
         place(b, bob, tx, tz)
         // 時間が来たらその場でパッと消える
-        if (b.t >= RISE + b.life) { b.phase = 'wait'; b.timer = rand(WAIT); b.holder.visible = false }
+        if (b.t >= RISE + b.life) pop(b)
       }
     }
   }
 
-  return { update, summon, bubbles }
+  return { update, summon, hit, pop, bubbles }
 }

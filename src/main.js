@@ -293,11 +293,12 @@ canvas.addEventListener('pointerdown', e => {
   else if ((g = hitGlowSpot(e))) openGlowSpot(g)
   else if (giveKanByTap(e)) { /* 缶をあげた */ }
   else if (hitLightIcon(e)) toggleSabLight()
+  else if ((g = hitAwadama(e))) awadamas.pop(g)
   else if (throwCoinToWater(e)) { /* 水面にコインを投げ込んだ */ }
   else tapUsed = false
 })
 canvas.addEventListener('pointermove', e => {
-  if (e.pointerType === 'mouse') canvas.style.cursor = hitDoor(e) || hitLightIcon(e) || hitWater(e) ? 'pointer' : ''
+  if (e.pointerType === 'mouse') canvas.style.cursor = hitDoor(e) || hitLightIcon(e) || hitAwadama(e) || hitWater(e) ? 'pointer' : ''
 })
 
 // --- 3人称カメラ定数 -------------------------------------------
@@ -1665,6 +1666,14 @@ function hitWater(e) {
   return hit.point
 }
 const _waterHit = new THREE.Vector3()
+// 指の下の泡玉（タッチすると消える）。カメラから WATER_REACH 以内のものだけ
+function hitAwadama(e) {
+  if (transitioning || overviewMode || interior || viewCut) return null
+  _pointer.set((e.clientX / window.innerWidth) * 2 - 1, -(e.clientY / window.innerHeight) * 2 + 1)
+  _waterRay.setFromCamera(_pointer, camera)
+  _waterRay.far = WATER_REACH
+  return awadamas.hit(_waterRay)
+}
 function throwCoinToWater(e) {
   const p = hitWater(e)
   if (!p) return false
