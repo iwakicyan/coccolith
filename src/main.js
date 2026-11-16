@@ -16,6 +16,7 @@ import { createCoccolith, R_OCEAN, OCEAN_COLOR_A, OCEAN_COLOR_B, GOJUNOTO_AT, CA
 import { createMigration } from './migration.js'
 import { createVeth } from './veth.js'
 import { createCloud1, createFlatCloud } from './cloud1.js'
+import { mergeStatic } from '../my-3d-parts/parts/mergeStatic.js'
 import { R_C, LAND_LIFT, ORBIT } from './constants.js'
 import { createGondolaRide, createGondolaTourRide } from './gondola.js'
 import { createGondeerRide, gondeerLatPath } from './gondeer.js'
@@ -311,7 +312,7 @@ const CLOUD_H = R_C + LAND_LIFT + 15
 const cloudOrbitAxis = new THREE.Vector3(0.3, 1, 0.1).normalize()
 
 const cloudGroup = new THREE.Group()
-const cloud = createCloud1()
+const cloud = mergeStatic(createCloud1())   // 玉は動かないので 1 メッシュにまとめる（描画・影とも 24 回 → 1 回）
 cloud.scale.setScalar(6)
 cloud.position.set(0, CLOUD_H, 0)
 cloudGroup.add(cloud)
@@ -330,7 +331,7 @@ const flatCloudDefs = [
 ]
 const flatCloudGroups = flatCloudDefs.map(({ axis, speed }, i) => {
   const grp = new THREE.Group()
-  const fc = createFlatCloud(i + 10)
+  const fc = mergeStatic(createFlatCloud(i + 10))   // 玉 4 つを 1 メッシュに
   fc.scale.set(15, 5, 15)
   fc.position.set(0, FLAT_CLOUD_H, 0)
   grp.add(fc)
@@ -347,7 +348,7 @@ const darkFlatCloudDefs = [
 ]
 darkFlatCloudDefs.forEach(({ axis, speed }, i) => {
   const grp = new THREE.Group()
-  const fc = createFlatCloud(20 + i, 0x9AA7BB)
+  const fc = mergeStatic(createFlatCloud(20 + i, 0x9AA7BB))
   fc.scale.set(15, 5, 15)
   fc.position.set(0, -FLAT_CLOUD_H, 0)
   grp.add(fc)
@@ -361,6 +362,19 @@ darkFlatCloudDefs.forEach(({ axis, speed }, i) => {
 // 向き: local +X → 進行方向 (接線 = axis × 惑星法線)
 //        local +Y → 惑星外向き (法線)
 const CREATURE_H = FLAT_CLOUD_H
+
+// 色・種類などが同じマテリアルを 1 つにそろえる（パーツごとに作ったマテリアルを mergeStatic でまとめられるように）
+function shareMaterials(root) {
+  const byKey = new Map()
+  root.traverse(o => {
+    if (!o.isMesh || Array.isArray(o.material)) return
+    const m = o.material
+    const key = [m.type, m.color?.getHex(), m.emissive?.getHex(), m.shininess, m.flatShading, m.transparent, m.opacity, m.side, m.vertexColors, m.map?.uuid].join('|')
+    if (!byKey.has(key)) byKey.set(key, m)
+    o.material = byKey.get(key)
+  })
+  return root
+}
 
 function randomSphereVec() {
   const u = Math.random() * 2 - 1
@@ -376,7 +390,7 @@ const creatures = [
   const axis  = randomSphereVec()
   const speed = 0.000575 + Math.random() * 0.000175   // 平雲と同速域
   const angle = Math.random() * Math.PI * 2           // 惑星上ランダム初期位置
-  const mesh  = factory()
+  const mesh  = mergeStatic(shareMaterials(factory()))   // 動くのは全体だけなので、同じ見た目のパーツを 1 メッシュにまとめる
   mesh.scale.setScalar(6)
   scene.add(mesh)
   return { axis, angle, speed, mesh }
