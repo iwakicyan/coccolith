@@ -48,27 +48,27 @@ document.addEventListener('visibilitychange', () => {
 })
 
 // 音量の山（立ち上がり attack 秒 → 指数で減って dur 秒で消える）を付けた GainNode
-function envelope(t0, peak, attack, dur) {
+function envelope(t0, peak, attack, dur, out = master) {
   const g = ctx.createGain()
   g.gain.setValueAtTime(0.0001, t0)
   g.gain.exponentialRampToValueAtTime(peak, t0 + attack)
   g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur)
-  g.connect(master)
+  g.connect(out)
   return g
 }
 // 音程のある音。f0 → f1 へ dur 秒かけて高さを変える
-function tone({ at = 0, type = 'sine', f0, f1 = f0, dur, peak = 0.3, attack = 0.005, glide = dur }) {
+function tone({ at = 0, type = 'sine', f0, f1 = f0, dur, peak = 0.3, attack = 0.005, glide = dur, out }) {
   const t0 = ctx.currentTime + at
   const o = ctx.createOscillator()
   o.type = type
   o.frequency.setValueAtTime(f0, t0)
   if (f1 !== f0) o.frequency.exponentialRampToValueAtTime(f1, t0 + glide)
-  o.connect(envelope(t0, peak, attack, dur))
+  o.connect(envelope(t0, peak, attack, dur, out))
   o.start(t0)
   o.stop(t0 + dur + 0.02)
 }
 // ノイズを帯域フィルタに通した音（シャッ・パチッ）
-function noise({ at = 0, freq, q = 1, dur, peak = 0.2, attack = 0.003, type = 'bandpass' }) {
+function noise({ at = 0, freq, q = 1, dur, peak = 0.2, attack = 0.003, type = 'bandpass', out }) {
   const t0 = ctx.currentTime + at
   const s = ctx.createBufferSource()
   s.buffer = noiseBuf
@@ -76,7 +76,7 @@ function noise({ at = 0, freq, q = 1, dur, peak = 0.2, attack = 0.003, type = 'b
   f.type = type
   f.frequency.value = freq
   f.Q.value = q
-  s.connect(f).connect(envelope(t0, peak, attack, dur))
+  s.connect(f).connect(envelope(t0, peak, attack, dur, out))
   s.start(t0)
   s.stop(t0 + dur + 0.02)
 }
@@ -137,13 +137,37 @@ export function kanTake() {
 // --- 動いている間の「フォン…フォン…」 ---
 const HUM_PERIOD = 1.05   // 1 つの「フォン」から次まで (s)
 const HUM_MIN    = 0.1    // これより弱い入力では鳴らさない
+const HUM_DELAY  = 0.11   // ディレイの間隔 (s)。短めにして「ブワワワ…」と細かく繰り返す
+const HUM_FEEDBACK = 0.55 // 繰り返すたびに残る割合
+const HUM_WET    = 0.6    // ディレイの音の大きさ（元の音に対して）
 let humNext = 0           // 次の「フォン」を鳴らす時刻（ctx.currentTime）。止まっているときは 0
+let humBus = null         // 「フォン」の行き先。元の音 + ディレイ（繰り返すたびにこもって、間隔が少し揺れる）
+function humOut() {
+  if (humBus) return humBus
+  humBus = ctx.createGain()
+  humBus.connect(master)
+  const delay = ctx.createDelay(1)
+  delay.delayTime.value = HUM_DELAY
+  const fb = ctx.createGain(); fb.gain.value = HUM_FEEDBACK
+  const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 900
+  const wet = ctx.createGain(); wet.gain.value = HUM_WET
+  humBus.connect(delay)
+  delay.connect(lp).connect(fb).connect(delay)
+  lp.connect(wet).connect(master)
+  // 間隔をゆっくり揺らして、ワウワウした感じにする
+  const lfo = ctx.createOscillator(); lfo.frequency.value = 3
+  const depth = ctx.createGain(); depth.gain.value = 0.012
+  lfo.connect(depth).connect(delay.delayTime)
+  lfo.start()
+  return humBus
+}
 function hum(at, k) {
   const t0 = at - ctx.currentTime
+  const out = humOut()
   // ふわっと立ち上がって、少し下がりながら消える丸い音
-  tone({ at: t0, f0: 260, f1: 200, dur: 1.1, peak: 0.065 * k, attack: 0.18 })
-  tone({ at: t0, type: 'triangle', f0: 520, f1: 400, dur: 0.8, peak: 0.014 * k, attack: 0.18 })
-  noise({ at: t0, freq: 600, q: 0.6, dur: 0.9, peak: 0.02 * k, attack: 0.2, type: 'lowpass' })
+  tone({ at: t0, f0: 260, f1: 200, dur: 1.1, peak: 0.065 * k, attack: 0.18, out })
+  tone({ at: t0, type: 'triangle', f0: 520, f1: 400, dur: 0.8, peak: 0.014 * k, attack: 0.18, out })
+  noise({ at: t0, freq: 600, q: 0.6, dur: 0.9, peak: 0.02 * k, attack: 0.2, type: 'lowpass', out })
 }
 export function setMoving(k) {
   if (k < HUM_MIN || document.hidden) { humNext = 0; return }
