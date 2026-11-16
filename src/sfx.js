@@ -141,7 +141,7 @@ const HUM_DELAY  = 0.11   // ディレイの間隔 (s)。短めにして「ブ�
 const HUM_FEEDBACK = 0.55 // 繰り返すたびに残る割合
 const HUM_WET    = 0.6    // ディレイの音の大きさ（元の音に対して）
 let humNext = 0           // 次の「フォン」を鳴らす時刻（ctx.currentTime）。止まっているときは 0
-let humBus = null         // 「フォン」の行き先。元の音 + ディレイ（繰り返すたびにこもって、間隔が少し揺れる）
+let humBus = null         // 「フォン」の行き先。元の音 + ディレイ（繰り返すたびにこもる。間隔は揺らさない（揺らすと繰り返しの音程がずれる））
 function humOut() {
   if (humBus) return humBus
   humBus = ctx.createGain()
@@ -154,19 +154,14 @@ function humOut() {
   humBus.connect(delay)
   delay.connect(lp).connect(fb).connect(delay)
   lp.connect(wet).connect(master)
-  // 間隔をゆっくり揺らして、ワウワウした感じにする
-  const lfo = ctx.createOscillator(); lfo.frequency.value = 3
-  const depth = ctx.createGain(); depth.gain.value = 0.012
-  lfo.connect(depth).connect(delay.delayTime)
-  lfo.start()
   return humBus
 }
 function hum(at, k) {
   const t0 = at - ctx.currentTime
   const out = humOut()
-  // ふわっと立ち上がって、少し下がりながら消える丸い音
-  tone({ at: t0, f0: 260, f1: 200, dur: 1.1, peak: 0.065 * k, attack: 0.18, out })
-  tone({ at: t0, type: 'triangle', f0: 520, f1: 400, dur: 0.8, peak: 0.014 * k, attack: 0.18, out })
+  // ふわっと立ち上がって消える丸い音。音程は変えない（下げると、ディレイで重なる前の音と音程がずれる）
+  tone({ at: t0, f0: 230, dur: 1.1, peak: 0.065 * k, attack: 0.18, out })
+  tone({ at: t0, type: 'triangle', f0: 460, dur: 0.8, peak: 0.014 * k, attack: 0.18, out })
   noise({ at: t0, freq: 600, q: 0.6, dur: 0.9, peak: 0.02 * k, attack: 0.2, type: 'lowpass', out })
 }
 export function setMoving(k) {
