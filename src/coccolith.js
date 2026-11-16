@@ -772,6 +772,30 @@ export function createCoccolith({ renderer = null } = {}) {
   //   向き face: 正面（ローカル +Z）を向ける方角。ユーザーの言う「東」は lon が減る向き（コンパスの E とは逆）なので、
   //   東 = [0, -1]・北東 = [1, -1]（[lat の増える向き, lon の増える向き] を地面の上の m で）
   const JIHANKI_H = 3, JIHANKI_SINK = 0.1   // 高さ (m)・地面にめり込ませる量 (m)
+  const JIHANKI_GLOW = 0.1   // 自発光（色に対する割合。部品の標準は 0.45。窓の缶・投入口も合わせる）
+  const JIHANKI_PART_GLOW = 0.45
+  // 頂点の色を使う白の Lambert（自発光も頂点の色 × JIHANKI_GLOW）。3 台で共有する
+  const jihankiMat = new THREE.MeshLambertMaterial({ vertexColors: true, emissive: new THREE.Color(JIHANKI_GLOW, JIHANKI_GLOW, JIHANKI_GLOW) })
+  jihankiMat.onBeforeCompile = sh => {
+    sh.fragmentShader = sh.fragmentShader.replace('vec3 totalEmissiveRadiance = emissive;', 'vec3 totalEmissiveRadiance = emissive * vColor;')
+  }
+  // keep のもの（とその中）を除いて、絵のない Lambert のパーツの色を頂点の色へ移し jihankiMat にする。残るマテリアルは自発光を JIHANKI_GLOW にそろえる
+  const jihankiFlatColors = (root, keep) => {
+    const rest = new Set()
+    const visit = o => {
+      if (o !== root && keep(o)) { o.traverse(c => { if (c.isMesh) rest.add(c.material) }); return }
+      const m = o.material
+      if (o.isMesh && m?.isMeshLambertMaterial && !m.map && !m.transparent && m.visible) {
+        const g = o.geometry.clone(), n = g.attributes.position.count, col = new Float32Array(n * 3)
+        for (let i = 0; i < n; i++) { col[i * 3] = m.color.r; col[i * 3 + 1] = m.color.g; col[i * 3 + 2] = m.color.b }
+        g.setAttribute('color', new THREE.BufferAttribute(col, 3))
+        o.geometry = g; o.material = jihankiMat
+      } else if (o.isMesh) rest.add(m)
+      for (const c of o.children) visit(c)
+    }
+    visit(root)
+    for (const m of rest) if (m?.isMeshLambertMaterial && m.emissive) m.emissive.multiplyScalar(JIHANKI_GLOW / JIHANKI_PART_GLOW)
+  }
   const JIHANKI_SPOTS = [
     { lat: 25.2, lon:  -86.7, face: [0, -1] },   // 東向き
     { lat: 65.0, lon:  118.0, face: [0, -1] },   // 東向き
@@ -797,7 +821,9 @@ export function createCoccolith({ renderer = null } = {}) {
     colliders.push(jihanki)
     jihankis.push(jihanki)
     // 投入口のメッシュ（コインの当たり）・投入口の面・取り出し口の置き場（缶の当たりを含む）・光る所はまとめない
+    // それ以外の色だけのパーツは、色を頂点の色に移して 1 つのマテリアルにそろえ、影を落とすもの・落とさないもので 1 メッシュずつにまとめる
     const keepSet = new Set([...slotMeshes, slot, tray, base])
+    jihankiFlatColors(jihanki, o => keepSet.has(o))
     mergeStatic(jihanki, { keep: o => keepSet.has(o) })
   }
 
