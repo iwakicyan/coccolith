@@ -181,7 +181,7 @@ export function setMoving(k) {
 // どちらもノイズを流し続け、フィルタと音量をゆっくり動かして作る。大きさは setAmbience で渡した値へなめらかに寄せる
 const WIND_VOL = 0.05     // 風のいちばん大きいときの音量
 const WAVE_VOL = 0.12     // 波のいちばん大きいとき（海のすぐそば）の音量
-const WAVE_LOW = 0.4      // 波が引いたときの大きさ（寄せたときは 0.65〜0.8）
+const WAVE_LOW = 0.58     // 波が引いたときの大きさ（寄せたときは 0.68〜0.74）。見た目にはほとんど打ち寄せないので、幅は小さく
 const WAVE_GAP = [5.5, 8] // 波が寄せてから次に寄せるまで (s)
 const AMB_TAU  = 0.8      // 大きさを寄せる速さ（時定数 s）
 let amb = null            // { windLevel, waveLevel, waveEnv, waveFilter }
@@ -222,13 +222,13 @@ function startAmbience() {
 }
 // 1 回の波を at（ctx.currentTime）に寄せる。強さは毎回少し変える
 function waveSwash(at) {
-  const k = 0.65 + Math.random() * 0.15
+  const k = 0.68 + Math.random() * 0.06
   const { waveEnv: g, waveFilter: f } = amb
   g.gain.setValueAtTime(WAVE_LOW, at)
   g.gain.linearRampToValueAtTime(k, at + 1.6)              // 寄せる
   g.gain.exponentialRampToValueAtTime(WAVE_LOW, at + 1.6 + 3.2) // 引いていく
   f.frequency.setValueAtTime(500, at)
-  f.frequency.linearRampToValueAtTime(700 + 400 * k, at + 1.5)
+  f.frequency.linearRampToValueAtTime(560 + 150 * k, at + 1.5)
   f.frequency.exponentialRampToValueAtTime(500, at + 1.6 + 3.2)
 }
 export function setAmbience({ wind = 0, wave = 0 }) {
