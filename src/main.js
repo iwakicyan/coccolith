@@ -1574,7 +1574,7 @@ const sabForSprites = { dir: pDir, fwd: pFwd, kan: false, still: false }
 const SAB_STILL_SPEED = 0.5, SAB_STILL_TIME = 0.3
 const _sabPrevDir = new THREE.Vector3().copy(pDir)
 let sabStillT = 0
-// 環境音（sfx.js の setAmbience）: 風はいつも、波は sabちゃんのまわりに海があるほど大きく。室内では風を小さくして波は消す。カメラが水中にあるときは両方プツッと消し、動いている間のフォーンをこもらせる
+// 環境音（sfx.js の setAmbience）: 風はいつも、波は sabちゃんのまわりに海があるほど大きく。室内では風を小さくして波は消す。俯瞰中とカメラが水中にあるときは両方プツッと消す（水中では動いている間のフォーンもこもらせる）
 //   海の近さは AMB_SAMPLE_T 秒おきに、sabちゃんの足元と、まわり 8 方向 × AMB_SAMPLE_D (m) の地点が海かどうかで測る（近い海ほど大きい）
 const AMB_SAMPLE_T = 0.25
 const AMB_SAMPLE_D = [2, 4, 6, 8, 10, 12]
@@ -2080,8 +2080,8 @@ function animate() {
   sabMoveIn = 0
   if (!interior && (ambT -= dt) <= 0) { ambT = AMB_SAMPLE_T; ambWave = measureWaveNear() }
   // 水中かは毎フレーム見る（潜った瞬間に音を切り替える）
-  const ambWater = !interior && camera.position.length() < seaSurfaceHeight(_ambCam.copy(camera.position).normalize())
-  sfx.setAmbience(interior ? { wind: 0.25, wave: 0 } : { wind: 1, wave: overviewMode ? ambWave * 0.5 : ambWave, water: ambWater })
+  const ambWater = !interior && !overviewMode && camera.position.length() < seaSurfaceHeight(_ambCam.copy(camera.position).normalize())
+  sfx.setAmbience(interior ? { wind: 0.25, wave: 0 } : { wind: 1, wave: ambWave, water: ambWater, silent: overviewMode })
   coinIntro.update(dt, sabchan.group.position)
   coinDrop.update(dt)
   updateDoorGlow(now)

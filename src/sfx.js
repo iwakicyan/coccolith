@@ -9,7 +9,7 @@
 //  kanDrop():     自販機の取り出し口に缶が出たとき（ガチャン）
 //  kanTake():     取り出し口の缶・台の上の花を取ったとき（コトッ）
 //  setMoving(k): sabちゃんが動いている強さ（0〜1）を毎フレーム渡す。動いている間「フォン…フォン…」と鳴らす
-//  setAmbience({ wind, wave, water }): 環境音の大きさ（0〜1）を毎フレーム渡す。風（いつも小さくサー…）と波（海の近くでザザー…と寄せては返す）。water（カメラが水中）なら風・波を消してフォーンをこもらせる
+//  setAmbience({ wind, wave, water }): 環境音の大きさ（0〜1）を毎フレーム渡す。風（いつも小さくサー…）と波（海の近くでザザー…と寄せては返す）。water（カメラが水中）なら風・波を消してフォーンをこもらせる。silent（俯瞰中）なら風・波を消す
 //  initSoundButton(btn): HUD の歯車の横のスピーカーを、音のオン・オフの切り替えにする（選んだほうは localStorage に残す）
 // ============================================================
 
@@ -245,14 +245,20 @@ function waveSwash(at) {
   f.frequency.exponentialRampToValueAtTime(500, at + 1.6 + 3.2)
 }
 // water: カメラが水中にあるか。水中では風・波をプツッと消し、フォーンをこもらせる（出入りした瞬間に切り替える）
-export function setAmbience({ wind = 0, wave = 0, water = false }) {
+// silent: 風・波をプツッと消す（俯瞰中）。消す・戻すのも出入りした瞬間に切り替える
+let ambSilent = false
+export function setAmbience({ wind = 0, wave = 0, water = false, silent = false }) {
   if (!ctx || muted || document.hidden) return   // 最初のタッチ・キーで音が起きるまでは何もしない
   if (!amb) startAmbience()
   const now = ctx.currentTime
-  const windV = water ? 0 : WIND_VOL * wind, waveV = water ? 0 : WAVE_VOL * wave
+  const off = water || silent
+  const windV = off ? 0 : WIND_VOL * wind, waveV = off ? 0 : WAVE_VOL * wave
+  if (off !== (underwater || ambSilent)) {
+    for (const [g, v] of [[amb.windLevel.gain, windV], [amb.waveLevel.gain, waveV]]) { g.cancelScheduledValues(now); g.setValueAtTime(v, now) }
+  }
+  ambSilent = silent
   if (water !== underwater) {
     underwater = water
-    for (const [g, v] of [[amb.windLevel.gain, windV], [amb.waveLevel.gain, waveV]]) { g.cancelScheduledValues(now); g.setValueAtTime(v, now) }
     if (humMuffle) for (const f of humMuffle) { f.frequency.cancelScheduledValues(now); f.frequency.setValueAtTime(water ? HUM_MUFFLE_HZ : 20000, now) }
   }
   amb.windLevel.gain.setTargetAtTime(windV, now, AMB_TAU)
