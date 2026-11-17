@@ -11,6 +11,8 @@ import { R_C } from './constants.js'
 //    触手：かさの少し前の時刻の位置をなぞるので、のぼるときは遅れてついてきて、波が下へ伝わる
 //    高さ：道に沿って GROUND_N 点、道の幅ぶんの地面のいちばん高い所を測っておき、その上 HEIGHT（真ん中では TRAVEL_H）(m) を漂う
 //    色を足し合わせて光らせる（AdditiveBlending）
+//  うろうろするクラゲ（createKurageWander）：星のあちこちのランダムな所で、地面から ROAM_H (m) の低い所をうろうろする
+//    動きは JS で毎フレーム進める（地面の高さを測りながら進むので）。泳ぎ・触手・形はシェーダーで同じに描く
 // ============================================================
 
 const COUNT    = 100            // クラゲの数
@@ -31,6 +33,9 @@ const LAG      = 0.16           // 触手の粒 1 つごとの遅れ (s)
 const HALO     = 2.2            // かさのまわりのぼんやりした光が届く所（ドームの大きさに対して。ふちが 0.9）
 const SPACING  = 0.32           // 触手の粒の間隔（かさの大きさに対して）
 const GROUND_N = 64             // 道に沿って地面の高さを測る点の数
+const ROAM_H   = 2              // うろうろするクラゲの、地面からのかさの高さ (m)
+const ROAM_V   = [0.3, 0.6]     // うろうろする速さ (m/s)
+const ROAM_R   = 25             // 出た所からこれより離れたら戻ってくる (m)
 const COLORS   = [0xbfeeff, 0xffd0f0, 0xdcd0ff, 0xc8fff0, 0xfff0d8]   // クラゲの色（順番に使う）
 
 const rand = ([a, b]) => a + Math.random() * (b - a)
@@ -39,11 +44,16 @@ const f2 = v => v.toFixed(3)
 const vertexShader = /* glsl */ `
   uniform float uTime;
   uniform float uPixel;   // 画面の高さ / (2 tan(fov/2))。m の大きさを画面のピクセルにする
+#ifdef WANDER
+  attribute vec3 aCenter; // かさの位置（星の中心から。JS で毎フレーム動かす）
+  attribute vec3 aVel;    // かさの進む速さ (m/s)。触手はこの逆へ遅れてなびく
+#else
   uniform vec3 uFrom, uTo;  // 2 か所の向き（星の中心から。長さ 1）
   uniform float uArc;       // 2 か所のあいだの角度 (rad)
   uniform float uGround[${GROUND_N}];   // 道に沿った地面の高さ（星の中心から m）
-  attribute vec4 aJelly;  // x, y: クラゲごとの乱数, z: かさの大きさ, w: ふらふらの位相
   attribute vec3 aTrip;   // x: 漂っている時間 (s), y: 旅の時間 (s), z: 時刻のずれ（0〜1）
+#endif
+  attribute vec4 aJelly;  // x, y: クラゲごとの乱数, z: かさの大きさ, w: ふらふらの位相
   attribute vec3 aPart;   // x: 0 = かさ / 1〜 = 触手の何粒目, y: 触手の向き (rad), z: 未使用
   attribute vec3 aColor;
   varying vec3 vColor;
@@ -58,6 +68,17 @@ const vertexShader = /* glsl */ `
   float lift(float f) {
     return f < ${f2(THRUST)} ? 1.0 - pow(1.0 - f / ${f2(THRUST)}, 2.0) : 1.0 - smoothstep(${f2(THRUST)}, 1.0, f);
   }
+#ifdef WANDER
+  // 時刻 tt での、かさの位置（星の中心から）。fwd・side：その所の横向きの 2 方向
+  vec3 jellyPos(float tt, float period, out vec3 fwd, out vec3 side) {
+    vec3 d = normalize(aCenter);
+    vec3 ref = abs(d.y) < 0.9 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0);
+    side = normalize(cross(d, ref));
+    fwd = cross(side, d);
+    float h = 0.25 * sin(tt * 0.4 + aJelly.w * TAU) + lift(fract(tt / period + aJelly.y)) * ${f2(LIFT)} * aJelly.z;
+    return aCenter + d * h - aVel * (uTime - tt);   // 少し前の時刻ほど、進んできた向きの後ろ
+  }
+#else
   // 道の上の位置 s（0 = from, 1 = to）の地面の高さ
   float groundAt(float s) {
     float x = clamp(s, 0.0, 1.0) * ${f2(GROUND_N - 1)};
@@ -92,6 +113,7 @@ const vertexShader = /* glsl */ `
     float R = groundAt(s) + h;
     return normalize(d * R + fwd * off.x + side * off.y) * R;
   }
+#endif
   void main() {
     float period = mix(${f2(PULSE[0])}, ${f2(PULSE[1])}, aJelly.x);
     float k = aPart.x;
@@ -233,6 +255,91 @@ export function createKurage({ scene, from, to, groundAt }) {
   const _size = new THREE.Vector2()
   // timeSec: 秒 / camera・renderer: 粒の大きさを画面に合わせる
   function update(timeSec, camera, renderer) {
+    uniforms.uTime.value = timeSec
+    renderer.getDrawingBufferSize(_size)
+    uniforms.uPixel.value = _size.y / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2))
+  }
+  return { points, update }
+}
+
+// 星のあちこちのランダムな所で、地面から ROAM_H (m) の低い所をうろうろするクラゲ
+// count: 数 / groundAt(dir): その向きの地面の高さ（星の中心から m。海なら海面）
+export function createKurageWander({ scene, count, groundAt }) {
+  const per = 1 + STRANDS * DOTS
+  const total = count * per
+  const jelly = new Float32Array(total * 4), part = new Float32Array(total * 3), color = new Float32Array(total * 3)
+  const center = new Float32Array(total * 3), vel = new Float32Array(total * 3)
+  const c = new THREE.Color()
+  const ref = new THREE.Vector3()
+  const jellies = []
+  let i = 0
+  for (let j = 0; j < count; j++) {
+    const J = [Math.random(), Math.random(), rand(SIZE), Math.random()]
+    c.set(COLORS[j % COLORS.length])
+    const a0 = Math.random() * Math.PI * 2
+    for (let k = 0; k <= STRANDS * DOTS; k++) {
+      jelly.set(J, i * 4)
+      part.set(k === 0 ? [0, 0, 0] : [1 + (k - 1) % DOTS, a0 + Math.floor((k - 1) / DOTS) * Math.PI * 2 / STRANDS, 0], i * 3)
+      color.set([c.r, c.g, c.b], i * 3)
+      i++
+    }
+    // 出る所：星の上に一様に散らす。進む向きはランダム
+    const home = new THREE.Vector3().randomDirection()
+    ref.set(0, 1, 0); if (Math.abs(home.y) > 0.9) ref.set(1, 0, 0)
+    const fwd = new THREE.Vector3().crossVectors(home, ref).normalize().applyAxisAngle(home, Math.random() * Math.PI * 2)
+    jellies.push({ home, dir: home.clone(), fwd, speed: rand(ROAM_V), ph: Math.random() * 100, ground: groundAt(home), target: 0 })
+  }
+  const geo = new THREE.BufferGeometry()
+  geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(total * 3), 3))   // 使わない（位置はシェーダーで決める）
+  geo.setAttribute('aJelly', new THREE.BufferAttribute(jelly, 4))
+  geo.setAttribute('aPart', new THREE.BufferAttribute(part, 3))
+  geo.setAttribute('aColor', new THREE.BufferAttribute(color, 3))
+  const centerAttr = new THREE.BufferAttribute(center, 3).setUsage(THREE.DynamicDrawUsage)
+  const velAttr = new THREE.BufferAttribute(vel, 3).setUsage(THREE.DynamicDrawUsage)
+  geo.setAttribute('aCenter', centerAttr)
+  geo.setAttribute('aVel', velAttr)
+  for (const J of jellies) J.target = J.ground
+
+  const uniforms = { uTime: { value: 0 }, uPixel: { value: 500 } }
+  const mat = new THREE.ShaderMaterial({
+    uniforms, vertexShader, fragmentShader, defines: { WANDER: '' },
+    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+  })
+  const points = new THREE.Points(geo, mat)
+  points.name = '光の粒のクラゲ（うろうろ）'
+  points.frustumCulled = false   // 星のあちこちに散らばっていて、位置はシェーダーで決めるので、見えるかどうかの判定はしない
+  scene.add(points)
+
+  const _size = new THREE.Vector2(), _toHome = new THREE.Vector3(), _p = new THREE.Vector3(), _v = new THREE.Vector3()
+  let last = null, next = 0
+  // timeSec: 秒 / camera・renderer: 粒の大きさを画面に合わせる
+  function update(timeSec, camera, renderer) {
+    const dt = last === null ? 0 : Math.min(timeSec - last, 0.1)
+    last = timeSec
+    // 地面の高さは、毎フレーム 2 匹ずつ測り直す（あいだはなめらかに追いかける）
+    for (let n = 0; n < 2; n++) { const J = jellies[next]; J.target = groundAt(J.dir); next = (next + 1) % jellies.length }
+    jellies.forEach((J, j) => {
+      // ゆっくり向きを変えながら進む。出た所から ROAM_R より離れたら、戻る向きへ曲がる
+      const turn = 0.5 * Math.sin(timeSec * 0.23 + J.ph) + 0.3 * Math.sin(timeSec * 0.071 + J.ph * 2.3)
+      J.fwd.applyAxisAngle(J.dir, turn * dt)
+      const away = J.dir.angleTo(J.home) * J.ground
+      if (away > ROAM_R) {
+        _toHome.copy(J.home).addScaledVector(J.dir, -J.home.dot(J.dir)).normalize()
+        J.fwd.lerp(_toHome, Math.min(1, 0.4 * dt)).normalize()
+      }
+      J.dir.addScaledVector(J.fwd, J.speed * dt / J.ground).normalize()
+      J.fwd.addScaledVector(J.dir, -J.fwd.dot(J.dir)).normalize()
+      J.ground += (J.target - J.ground) * Math.min(1, 2 * dt)
+      _p.copy(J.dir).multiplyScalar(J.ground + ROAM_H)
+      _v.copy(J.fwd).multiplyScalar(J.speed)
+      for (let k = 0; k < per; k++) {
+        const o = (j * per + k) * 3
+        center[o] = _p.x; center[o + 1] = _p.y; center[o + 2] = _p.z
+        vel[o] = _v.x; vel[o + 1] = _v.y; vel[o + 2] = _v.z
+      }
+    })
+    centerAttr.needsUpdate = true
+    velAttr.needsUpdate = true
     uniforms.uTime.value = timeSec
     renderer.getDrawingBufferSize(_size)
     uniforms.uPixel.value = _size.y / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2))

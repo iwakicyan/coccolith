@@ -38,7 +38,7 @@ import { createCoin } from './coin.js'
 import { createWaterRipples } from './waterRipple.js'
 import * as sfx from './sfx.js'
 import { createSparkleFountain } from './sparkleFountain.js'
-import { createKurage } from './kurage.js'
+import { createKurage, createKurageWander } from './kurage.js'
 import { createTsue } from '../my-3d-parts/parts/tsue.js'
 import { createEda } from '../my-3d-parts/parts/eda.js'
 import { createBirdFlock } from './birdFlight.js'
@@ -1765,6 +1765,12 @@ const kurage = createKurage({
   scene, from: dirOf(SPARKLE_AT[0].lat, SPARKLE_AT[0].lon), to: dirOf(SPARKLE_AT[1].lat, SPARKLE_AT[1].lon),
   groundAt: dir => Math.max(getGroundHeight(dir) - 1, R_OCEAN),
 })
+// うろうろするクラゲ（kurage.js）: 星のあちこちのランダムな所で、地面から 2m の低い所をうろうろする
+//   地面は毎フレーム少しずつ測り直す。getGroundHeight は乗り物に乗っているかの判定用に _groundHitObj を書き換えるので戻しておく
+const kurageWander = createKurageWander({
+  scene, count: 20,
+  groundAt: dir => { const keep = _groundHitObj; const g = Math.max(getGroundHeight(dir) - 1, R_OCEAN); _groundHitObj = keep; return g },
+})
 
 // 杖（my-3d-parts/parts/tsue.js）: TSUE_LINES の線ごとに、始点から TSUE_GAP (m) ごとに植える
 //   線は 2 点を結ぶ大円。along: 'lat' の線は大円でなく、緯度の円に沿って経度を進める（両端の緯度は同じにする）
@@ -2137,6 +2143,7 @@ function animate() {
     for (const f of birdFlocks) f.update(dt)
     for (const f of sparkleFountains) f.update(now / 1000, camera, renderer)
     kurage.update(now / 1000, camera, renderer)
+    kurageWander.update(now / 1000, camera, renderer)
     for (const f of spriteFlyers) f.update(dt, camera)
     horizonCull.update(camera)
   }
