@@ -7,6 +7,7 @@
 //  横の絵は左側から見た絵（顔が画面の左）。どの絵も左から 15 列目が中心
 
 import { flipped } from '../../pixelSprite.js'
+import noteGreen from '../effects/noteGreen.js'
 
 // Rifta-正面1
 const walkFront1 = {
@@ -598,6 +599,7 @@ export default {
   count: 1,   // 何匹出すか
   home: 'spawn',   // スポーン地点（北極）のまわりに出て、そこから離れない（main.js の homes）
   homeRadius: 20,   // スポーン地点からこの距離 (m) の内側を歩く
+  notes: noteGreen,   // 頭のあたりから緑の ♪ をふわふわ飛ばす（floatNotes.js）
   idleAnim: true,   // 立ち止まっているあいだも歩きのコマを回す
   cx: 15,
   drawnSide: 'left',
