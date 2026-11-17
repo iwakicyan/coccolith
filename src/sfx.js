@@ -290,7 +290,7 @@ export function setAmbience({ wind = 0, wave = 0, water = false, silent = false 
 // 曲ごとに音量のつまみ（level）を持ち、setMusic(name, k) で渡した値へ MUSIC_TAU 秒で寄せる（距離で変わる大きさになめらかについていく）
 // 聞こえないあいだは新しい音を作らず、また聞こえはじめたら曲の頭から鳴らす
 //   ambient（Abi）: パッド（三角波を 2 本ずつ少しずらして重ね、こもらせた和音）を 8 秒ごとに重ねながら入れ替え、ペンタトニックのベルをときどき 1 つディレイで残す
-//   light（Rifta）: 50 BPM（8 分音符 0.6 秒）。木琴の分散和音・柔らかいベース・小さなシェイカー、ときどき高い木琴のメロディ
+//   light（Rifta）: 50 BPM（8 分音符 0.6 秒）。木琴の分散和音・柔らかいベース・柔らかいハイハット、ときどき高い木琴のメロディ
 const MUSIC_TAU = 0.3       // 大きさを寄せる速さ（時定数 s）
 const hz = n => 440 * 2 ** ((n - 69) / 12)   // MIDI の音番号 → Hz
 const musics = {}   // 曲の名前 → { level, next, ...曲ごとのもの }
@@ -404,8 +404,11 @@ const MUSIC_TRACKS = {
           tone({ at, f0: hz(chord.bass), dur: 0.9, peak: 0.05, attack: 0.015, out: m.level })
           mallet(at, hz(chord.bass + 12), 0.02, m.soft, 0.5)
         }
-        // シェイカー（2 拍目と 4 拍目の裏だけ。ごく小さく）
-        if (beat === 3 || beat === 7) noise({ at, freq: 6000, q: 0.8, dur: 0.05, peak: 0.006, attack: 0.003, type: 'highpass', out: m.level })
+        // 柔らかいハイハット（2 拍目と 4 拍目の裏だけ。ごく小さく）。短いとプチッと電子音っぽいので、ふわっと立ち上げて少し長めにシャーンと残す
+        if (beat === 3 || beat === 7) {
+          noise({ at, freq: 5000, q: 0.5, dur: 0.28, peak: 0.005, attack: 0.015, type: 'highpass', out: m.level })
+          noise({ at, freq: 9000, q: 0.7, dur: 0.18, peak: 0.003, attack: 0.012, type: 'bandpass', out: m.level })   // 少しきらっとさせる
+        }
         // ときどき高い木琴のメロディ（表拍だけ。ペンタトニックなので、どの和音の上でも合う）
         if (beat % 2 === 0 && Math.random() < LIGHT_MELODY_CHANCE) {
           const n = LIGHT_MELODY[Math.floor(Math.random() * LIGHT_MELODY.length)]
