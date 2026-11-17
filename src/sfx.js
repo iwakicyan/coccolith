@@ -384,7 +384,7 @@ const MUSIC_TRACKS = {
   light: {
     vol: LIGHT_VOL,
     start(m) {
-      // 曲全体をこもらせて、鳴りはじめのプチッとした高い成分を削る（ベース・シェイカー以外はここを通す）
+      // 曲全体をこもらせて、鳴りはじめのプチッとした高い成分を削る（ベースの基音・ハイハット以外はここを通す）
       m.soft = ctx.createBiquadFilter(); m.soft.type = 'lowpass'; m.soft.frequency.value = 2400; m.soft.Q.value = 0.5
       m.soft.connect(m.level)
       m.out = echoBus(m.soft, LIGHT_STEP * 1.5, 0.12, 1800)   // 付点 8 分のディレイを薄く（木琴らしく、響きは短めに）
