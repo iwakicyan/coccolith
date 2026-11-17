@@ -280,7 +280,7 @@ function hitGlowSpot(e) {
   if (!g?.onTap) return null
   _pointer.set((e.clientX / window.innerWidth) * 2 - 1, -(e.clientY / window.innerHeight) * 2 + 1)
   _iconRay.setFromCamera(_pointer, camera)
-  return _iconRay.intersectObject(g.mesh, false).length > 0 ? g : null
+  return _iconRay.intersectObject(g.hitMesh ?? g.mesh, false).length > 0 ? g : null   // hitMesh: 光るものと別にタップの当たりがあればそれ
 }
 // 光っているものを使う（タップでも Enter でも同じ）
 function openGlowSpot(g) {
@@ -1128,7 +1128,7 @@ coinIntro.start(pDir, pFwd)
 // 自販機（coccolith.js の jihankis）：投入口にコインを入れると、コインが回り終えたところで暗転し、真っ暗の間に取り出し口へ缶を 1 本出す
 //   缶が出ている自販機は光らず、もう入れられない（ページを開き直すと戻る）
 const jihankiTargets = jihankis.map(j => ({
-  objects: () => j.userData.slotMeshes,
+  objects: () => [...j.userData.slotMeshes, j.userData.bodyHit],   // 投入口でなくても本体のどこかに当たれば入れられる（コインは投入口へ入る）
   enabled: () => !j.userData.kanOut && !transitioning && !overviewMode && !interior,
   accepts: () => true,
   slot: j.userData.slot,
@@ -1145,7 +1145,8 @@ for (const j of jihankis) {
   const hit = j.userData.trayHit
   hit.updateWorldMatrix(true, false)
   _glowSpots.push({
-    mesh: hit, dir: new THREE.Vector3().setFromMatrixPosition(hit.matrixWorld).normalize(), reach: 4,
+    mesh: hit, hitMesh: j.userData.bodyHit,   // 光るのは取り出し口、タップの当たりは本体全体（缶に当てなくてよい）
+    dir: new THREE.Vector3().setFromMatrixPosition(hit.matrixWorld).normalize(), reach: 4,
     enabled: () => j.userData.hasKan(),
     onTap: () => {
       const k = j.userData.takeKan()

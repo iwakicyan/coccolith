@@ -820,11 +820,17 @@ export function createCoccolith({ renderer = null } = {}) {
     // 取り出し口に缶が出ているときは、缶の下（取り出し口の底）が光り、選ぶと sabちゃんが持つ（main.js）
     const { trayHit, trayKanSize: ks } = jihanki.userData
     addGroundGlow(trayHit, { y: -trayHit.position.y + 0.005, pad: 0.03, band: 0.03, width: ks.length, depth: ks.diameter })
+    // 本体と同じ大きさの見えない箱（コインを入れる・缶を取るときの当たり。投入口や缶に当てなくても本体のどこかに当たればよい。main.js）
+    const bodyHit = new THREE.Mesh(new THREE.BoxGeometry(baseSize.w, 1.8, baseSize.d), new THREE.MeshBasicMaterial({ visible: false }))
+    bodyHit.name = '本体の当たり'
+    bodyHit.position.y = 0.9
+    jihanki.add(bodyHit)
+    jihanki.userData.bodyHit = bodyHit
     colliders.push(jihanki)
     jihankis.push(jihanki)
     // 投入口のメッシュ（コインの当たり）・投入口の面・取り出し口の置き場（缶の当たりを含む）・光る所はまとめない
     // それ以外の色だけのパーツは、色を頂点の色に移して 1 つのマテリアルにそろえ、影を落とすもの・落とさないもので 1 メッシュずつにまとめる
-    const keepSet = new Set([...slotMeshes, slot, tray, base])
+    const keepSet = new Set([...slotMeshes, slot, tray, base, bodyHit])
     jihankiFlatColors(jihanki, o => keepSet.has(o))
     mergeStatic(jihanki, { keep: o => keepSet.has(o) })
   }
