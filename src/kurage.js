@@ -28,6 +28,7 @@ const DWELL    = [120, 300]     // 1 か所で漂っている時間 (s)
 const SPEED    = [0.6, 1.0]     // 旅の速さ (m/s)
 const WANDER   = 6              // 漂いながらふらふらする幅 (m)
 const LAG      = 0.16           // 触手の粒 1 つごとの遅れ (s)
+const HALO     = 2.2            // かさのまわりのぼんやりした光が届く所（ドームの大きさに対して。ふちが 0.9）
 const SPACING  = 0.32           // 触手の粒の間隔（かさの大きさに対して）
 const GROUND_N = 64             // 道に沿って地面の高さを測る点の数
 const COLORS   = [0xbfeeff, 0xffd0f0, 0xdcd0ff, 0xc8fff0, 0xfff0d8]   // クラゲの色（順番に使う）
@@ -122,7 +123,7 @@ const vertexShader = /* glsl */ `
       vAlpha *= (1.0 - 0.75 * k / ${f2(DOTS + 1)}) * 0.8;
       gl_PointSize = size * 0.16 * (1.0 - 0.05 * k) * uPixel / -mv.z;
     } else {
-      gl_PointSize = size * 1.4 * uPixel / -mv.z;   // ドームのまわりのぼんやりした光の分も含めて大きめに
+      gl_PointSize = size * ${f2(1.4 * HALO / 1.6)} * uPixel / -mv.z;   // ドームのまわりのぼんやりした光の分も含めて大きめに
     }
   }
 `
@@ -144,6 +145,7 @@ const fragmentShader = /* glsl */ `
       return;
     }
     // かさ：横から見ると下が平らなドーム、真下・真上から見るとまん丸。すぼまると細く（丸のときは小さく）なる。ふちが明るく、中はうっすら
+    q *= ${f2(HALO / 1.6)};                           // 粒を光の届く所まで大きくした分、ドームの大きさは変えない
     q.y = -q.y;                                       // 画面の上を +
     q = vec2(dot(q, vec2(vUp.y, -vUp.x)), dot(q, vUp));   // クラゲの上の向きを +y にする
     // 横から見たドーム
@@ -155,10 +157,10 @@ const fragmentShader = /* glsl */ `
     float eR = length(q) / w;
     float capR = exp(-pow(eR / 0.35, 2.0)) * 0.3;
     float e = mix(eS, eR, vRound), cap = mix(capS, capR, vRound);
-    if (e > 1.6) discard;
+    if (e > ${f2(HALO)}) discard;
     float rim  = exp(-pow((e - 0.9) / 0.1, 2.0));                       // ふちの光
     float fill = (1.0 - smoothstep(0.2, 1.0, e)) * 0.28;                 // 中のうっすらした光
-    float halo = (1.0 - smoothstep(0.9, 1.6, e)) * 0.12;                 // まわりのぼんやりした光
+    float halo = pow(1.0 - smoothstep(0.9, ${f2(HALO)}, e), 1.5) * 0.14;                 // まわりのぼんやりした光
     float glow = rim * (0.8 + 0.3 * vSquash) + fill + cap + halo;
     gl_FragColor = vec4(vColor * glow * vAlpha, 1.0);
   }
