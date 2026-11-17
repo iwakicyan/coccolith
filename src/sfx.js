@@ -278,7 +278,7 @@ export function setAmbience({ wind = 0, wave = 0, water = false, silent = false 
 // 曲ごとに音量のつまみ（level）を持ち、setMusic(name, k) で渡した値へ MUSIC_TAU 秒で寄せる（距離で変わる大きさになめらかについていく）
 // 聞こえないあいだは新しい音を作らず、また聞こえはじめたら曲の頭から鳴らす
 //   ambient（Abi）: パッド（三角波を 2 本ずつ少しずらして重ね、こもらせた和音）を 8 秒ごとに重ねながら入れ替え、ペンタトニックのベルをときどき 1 つディレイで残す
-//   light（Rifta）: 60 BPM（8 分音符 0.5 秒）。ポロンと鳴る分散和音・柔らかいベース・小さなシェイカー、ときどき高いベルのメロディ
+//   light（Rifta）: 60 BPM（8 分音符 0.5 秒）。木琴の分散和音・柔らかいベース・小さなシェイカー、ときどき高い木琴のメロディ
 const MUSIC_TAU = 0.3       // 大きさを寄せる速さ（時定数 s）
 const hz = n => 440 * 2 ** ((n - 69) / 12)   // MIDI の音番号 → Hz
 const musics = {}   // 曲の名前 → { level, next, ...曲ごとのもの }
@@ -316,8 +316,16 @@ const LIGHT_CHORDS = [
 ]
 const LIGHT_ARP = [0, 1, 2, 1, 3, 2, 1, 2]   // 小節の中で分散和音のどの音を鳴らすか
 const LIGHT_SKIP = 0.15                     // 分散和音の音をこの割合だけ抜いて、軽く聞かせる
-const LIGHT_MELODY = [79, 81, 83, 86, 88]   // ベルのメロディ（G メジャーのペンタトニック。G5〜E6）
+const LIGHT_MELODY = [79, 81, 83, 86, 88]   // 木琴のメロディ（G メジャーのペンタトニック。G5〜E6）
 const LIGHT_MELODY_CHANCE = 0.18           // 8 分音符ごとにメロディの音を鳴らす割合（表拍だけ）
+
+// 木琴の 1 音: 丸い基音に、すぐ消える 3 倍・6.3 倍の倍音（木の板らしいコン）と、ごく短い打撃のコツッを重ねる
+function mallet(at, f, peak, out, dur = 0.7) {
+  tone({ at, f0: f, dur, peak, attack: 0.002, out })
+  tone({ at, f0: f * 3, dur: 0.09, peak: peak * 0.35, attack: 0.001, out })
+  tone({ at, f0: f * 6.3, dur: 0.035, peak: peak * 0.15, attack: 0.001, out })
+  noise({ at, freq: Math.min(f * 4, 4000), q: 2, dur: 0.025, peak: peak * 0.5, attack: 0.001, out })
+}
 
 const MUSIC_TRACKS = {
   ambient: {
@@ -362,7 +370,7 @@ const MUSIC_TRACKS = {
   light: {
     vol: LIGHT_VOL,
     start(m) {
-      m.out = echoBus(m.level, LIGHT_STEP * 1.5, 0.25, 3000)   // 付点 8 分のディレイで軽く跳ねさせる
+      m.out = echoBus(m.level, LIGHT_STEP * 1.5, 0.12, 1800)   // 付点 8 分のディレイを薄く（木琴らしく、響きは短めに）
       m.step = 0
     },
     reset(m) { m.step = 0 },
@@ -372,20 +380,19 @@ const MUSIC_TRACKS = {
       while (m.next < now + 0.2) {
         const at = m.next - now
         const beat = m.step % 8, chord = LIGHT_CHORDS[Math.floor(m.step / 8) % LIGHT_CHORDS.length]
-        // 分散和音（オルゴールのようなポロン）
-        if (beat === 0 || Math.random() > LIGHT_SKIP) {
-          const f = hz(chord.arp[LIGHT_ARP[beat]])
-          tone({ at, type: 'triangle', f0: f, dur: 0.6, peak: 0.028, attack: 0.004, out: m.out })
-          tone({ at, f0: f * 2, dur: 0.2, peak: 0.006, attack: 0.002, out: m.out })   // 少しきらっとさせる倍音
+        // 分散和音（木琴のコロン）
+        if (beat === 0 || Math.random() > LIGHT_SKIP) mallet(at, hz(chord.arp[LIGHT_ARP[beat]]), 0.032, m.out)
+        // ベース（1 拍目と 3 拍目。低い木琴の音を 1 オクターブ上の音も混ぜて柔らかく）
+        if (beat === 0 || beat === 4) {
+          tone({ at, f0: hz(chord.bass), dur: 0.9, peak: 0.05, attack: 0.006, out: m.level })
+          mallet(at, hz(chord.bass + 12), 0.02, m.level, 0.5)
         }
-        // ベース（1 拍目と 3 拍目）
-        if (beat === 0 || beat === 4) tone({ at, f0: hz(chord.bass), dur: 0.9, peak: 0.06, attack: 0.01, out: m.level })
-        // シェイカー（裏拍）
-        if (beat % 2 === 1) noise({ at, freq: 7000, q: 0.8, dur: 0.06, peak: beat === 3 || beat === 7 ? 0.012 : 0.007, attack: 0.003, type: 'highpass', out: m.level })
-        // ときどき高いベルのメロディ（表拍だけ。ペンタトニックなので、どの和音の上でも合う）
+        // シェイカー（裏拍。ごく小さく）
+        if (beat % 2 === 1) noise({ at, freq: 6000, q: 0.8, dur: 0.05, peak: beat === 3 || beat === 7 ? 0.008 : 0.005, attack: 0.003, type: 'highpass', out: m.level })
+        // ときどき高い木琴のメロディ（表拍だけ。ペンタトニックなので、どの和音の上でも合う）
         if (beat % 2 === 0 && Math.random() < LIGHT_MELODY_CHANCE) {
           const n = LIGHT_MELODY[Math.floor(Math.random() * LIGHT_MELODY.length)]
-          tone({ at, f0: hz(n), dur: 1.2, peak: 0.018, attack: 0.005, out: m.out })
+          mallet(at, hz(n), 0.022, m.out, 0.5)
         }
         m.step = (m.step + 1) % (8 * LIGHT_CHORDS.length)
         m.next += LIGHT_STEP
