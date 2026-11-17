@@ -1760,10 +1760,10 @@ const sparkleFountains = SPARKLE_AT.map(({ lat, lon, edgeSeed }) => {
   const dir = dirOf(lat, lon)
   return createSparkleFountain({ scene, dir, ground: Math.max(getGroundHeight(dir) - 1, R_OCEAN), edgeSeed })
 })
-// 光の粒のクラゲ（kurage.js）: 光の粒の立ちのぼりと同じ所の宙に、光でできたクラゲがふわふわ漂う
-const kurages = SPARKLE_AT.map(({ lat, lon }) => {
-  const dir = dirOf(lat, lon)
-  return createKurage({ scene, dir, ground: Math.max(getGroundHeight(dir) - 1, R_OCEAN) })
+// 光の粒のクラゲ（kurage.js）: 光の粒の立ちのぼりの 2 か所の宙に、光でできたクラゲがふわふわ漂い、2 か所のあいだをゆっくり行ったり来たりする
+const kurage = createKurage({
+  scene, from: dirOf(SPARKLE_AT[0].lat, SPARKLE_AT[0].lon), to: dirOf(SPARKLE_AT[1].lat, SPARKLE_AT[1].lon),
+  groundAt: dir => Math.max(getGroundHeight(dir) - 1, R_OCEAN),
 })
 
 // 杖（my-3d-parts/parts/tsue.js）: TSUE_LINES の線ごとに、始点から TSUE_GAP (m) ごとに植える
@@ -2136,7 +2136,7 @@ function animate() {
     waterRipples.update(dt)
     for (const f of birdFlocks) f.update(dt)
     for (const f of sparkleFountains) f.update(now / 1000, camera, renderer)
-    for (const k of kurages) k.update(now / 1000, camera, renderer)
+    kurage.update(now / 1000, camera, renderer)
     for (const f of spriteFlyers) f.update(dt, camera)
     horizonCull.update(camera)
   }
