@@ -1,5 +1,6 @@
 import * as THREE from 'three'
 import { createBlobShadows, polygonShadow } from './blobShadow.js'
+import { createFloatNotes } from './floatNotes.js'
 
 // ============================================================
 //  8 方向スプライト — ドット絵 1 枚の板を立て、見る角度で絵を差し替える（昔の 3D ゲームのキャラクターの出し方）
@@ -23,6 +24,7 @@ import { createBlobShadows, polygonShadow } from './blobShadow.js'
 //    near: true なら見た目の確認用にスポーン地点の近くに出す
 //    home / homeRadius: 出る場所の名前（createPixelSpriteWalkers に渡す homes）とその半径 (m)。その内側に出て、外へ出そうになったら中へ向きを変える
 //    bgmRadius: sabちゃんがキャラからこの距離 (m) 以内にいるあいだ、アンビエント BGM を流す（main.js が使う。sfx.js の setMusic）
+//    notes: ♪ の絵（コマ）。あれば頭のあたりから ♪ をふわふわ飛ばす（floatNotes.js。大きさはドットの大きさを絵と同じにする）
 //    idleAnim: true なら立ち止まっているあいだも walk のコマを回す（sit は使わない）
 //    shadow: { w, l, dz, sides } があれば足元に擬似的な影（ダークグレーの多角形の板。blobShadow.js）を置く。幅・前後の長さ・前へずらす量 (m)・角の数（なければ 8）
 //  側面: 板は縦軸まわりだけ回って常にカメラの方を向く。オブジェクトの前の向きとカメラのいる方向の角度を 45°（4 方向なら 90°）ごとに区切って絵を選ぶ
@@ -256,6 +258,7 @@ const _axis  = new THREE.Vector3()
 const _next  = new THREE.Vector3()
 const _m     = new THREE.Matrix4()
 const _to    = new THREE.Vector3()
+const _head  = new THREE.Vector3()
 // sabちゃんが缶を持っていると、WATCH_DIST (m) 以内のキャラは立ち止まって sabちゃんの方を向き続ける
 // 缶をもらったキャラは、sabちゃんから FOLLOW_DIST (m) より離れたら sabちゃんの方へ歩き、FOLLOW_DIST の所で止まる（それより近ければその場で sabちゃんの方を向く）
 // sabちゃんが止まっているあいだは、FOLLOW_DIST の内側をふつうに歩き回る
@@ -346,7 +349,8 @@ export function createPixelSpriteWalkers({ scene, art, count, dot, speed, radius
     scene.add(sprite.group)
     // ground0: 前に測った地点の高さ / ground1: PROBE_STEP 先の高さ（null ならまだ測っていない） / travel: ground0 の地点から歩いた距離 (m)
     // bobPhase: 浮き沈みの位相（0 で沈みきり。立ち止まったら 1 回ぶん浮き沈みし終えたところで止める）
-    walkers.push({ sprite, dir, fwd, ground, ground0: ground, ground1: null, travel: 0, turn: 0, turnTarget: 0, walking: false, timer: rand(STOP_TIME), step: 0, anim: Math.random() * 3, paddle: 0, bobPhase: 0, onCarrier: null, follow: null })
+    const notes = art.notes ? createFloatNotes({ scene, frame: art.notes, size: art.notes.height * dot }) : null
+    walkers.push({ sprite, notes, dir, fwd, ground, ground0: ground, ground1: null, travel: 0, turn: 0, turnTarget: 0, walking: false, timer: rand(STOP_TIME), step: 0, anim: Math.random() * 3, paddle: 0, bobPhase: 0, onCarrier: null, follow: null })
   }
 
   // sab: { dir, fwd, kan, still }（sabちゃんの足元の向き・前の向き・缶を持っているか・止まっているか）。なければ見ない
@@ -472,6 +476,7 @@ export function createPixelSpriteWalkers({ scene, art, count, dot, speed, radius
         w.sprite.face(camera, 'walk', Math.floor(w.anim))
       } else w.sprite.face(camera, w.walking ? 'walk' : restPose, Math.floor(w.step))
       if (shadows) shadows.set(i, w.dir, w.fwd, Math.max(w.ground, base))
+      if (w.notes) w.notes.update(dt, _head.copy(w.dir).multiplyScalar(base + lift + body), w.dir, camera)   // 頭のあたりから ♪
     }
     if (shadows) shadows.commit()
   }

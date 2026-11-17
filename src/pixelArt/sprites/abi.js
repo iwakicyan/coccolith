@@ -4,6 +4,8 @@
 //  歩き: 各方向 3 コマを 0.3 秒ずつ。立ち止まっているあいだも同じ 3 コマを回す（idleAnim）
 //  横の絵は左側から見た絵（顔が画面の左）。どの絵も左から 15 列目が中心
 
+import note from '../effects/note.js'
+
 // Abi-正面1
 const walkFront1 = {
   "palette": {
@@ -875,6 +877,7 @@ export default {
   home: 'treehouse',   // ツリーハウスのまわりに出て、そこから離れない（main.js の homes）
   homeRadius: 40,   // ツリーハウスからこの距離 (m) の内側を歩く
   bgmRadius: 20,   // sabちゃんがこの距離 (m) 以内にいるあいだ、静かなアンビエント BGM を流す（sfx.js の setMusic）
+  notes: note,   // 頭のあたりから ♪ をふわふわ飛ばす（floatNotes.js）
   idleAnim: true,   // 立ち止まっているあいだも歩きのコマを回す
   cx: 15,
   drawnSide: 'left',
