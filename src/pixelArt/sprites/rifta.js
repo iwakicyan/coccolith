@@ -597,8 +597,8 @@ const walkTop2 = {
 
 export default {
   count: 1,   // 何匹出すか
-  home: 'spawn',   // スポーン地点（北極）のまわりに出て、そこから離れない（main.js の homes）
-  homeRadius: 20,   // スポーン地点からこの距離 (m) の内側を歩く
+  home: 'treehouse',   // ツリーハウスのまわりに出て、そこから離れない（main.js の homes）
+  homeRadius: 40,   // ツリーハウスからこの距離 (m) の内側を歩く
   notes: noteGreen,   // 頭のあたりから緑の ♪ をふわふわ飛ばす（floatNotes.js）
   bgm: 'light',   // 近くで流す曲（sfx.js の MUSIC_TRACKS。落ち着いているけれど軽い分散和音）
   bgmRadius: 40,   // sabちゃんがこの距離 (m) 以内にいるあいだ流す（15m 以内でいちばん大きい。main.js の BGM_FULL）

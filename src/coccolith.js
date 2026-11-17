@@ -140,7 +140,7 @@ function arcDistToSeg(px, py, pz, { ax, ay, az, bx, by, bz, gnx, gny, gnz }) {
 export const GOJUNOTO_AT = { lat: 10.0, lon: -45.0 }
 // ケーキスタンドの位置（いぬやつたちが昼に集まる先にも使う。migration.js）
 export const CAKESTAND_AT = { lat: -62.0, lon: -131.0 }
-// ツリーハウスの位置（Abi がこのまわりを歩く。main.js の homes）
+// ツリーハウスの位置（Rifta がこのまわりを歩く。main.js の homes）
 export const TREEHOUSE_AT = { lat: 53.0, lon: -171.0 }
 
 // 緯度経度（度）→ 球面上の単位ベクトル
