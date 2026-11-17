@@ -12,7 +12,7 @@ import { initVisitCounter } from './visitCounter.js'
 import { isFlowerCutOpen } from './flowerCut.js'
 import { isPixelSceneOpen, openPixelScene } from './pixelScene.js'
 import { TREEHOUSE_PIXEL_LAYERS, TREEHOUSE_PIXEL_TEXT } from './pixelArt/treehouse.js'
-import { createCoccolith, R_OCEAN, OCEAN_COLOR_A, OCEAN_COLOR_B, GOJUNOTO_AT, CAKESTAND_AT, ROUTES, dirOf } from './coccolith.js'
+import { createCoccolith, R_OCEAN, OCEAN_COLOR_A, OCEAN_COLOR_B, GOJUNOTO_AT, CAKESTAND_AT, TREEHOUSE_AT, ROUTES, dirOf } from './coccolith.js'
 import { createMigration } from './migration.js'
 import { createVeth } from './veth.js'
 import { createCloud1, createFlatCloud } from './cloud1.js'
@@ -1559,11 +1559,15 @@ const migrations = {
   gojunoto:  createMigration({ target: dirOf(GOJUNOTO_AT.lat, GOJUNOTO_AT.lon), radius: R_C, at: 0, avoid: 18 }),
   cakestand: createMigration({ target: dirOf(CAKESTAND_AT.lat, CAKESTAND_AT.lon), radius: R_C, at: 15, avoid: 14 }),
 }
+// 出る場所: 絵の home に書いた名前の場所のまわり（homeRadius の内側）に出て、そこから離れない
+const homes = {
+  treehouse: dirOf(TREEHOUSE_AT.lat, TREEHOUSE_AT.lon),
+}
 const spriteWalkers = Object.values(import.meta.glob('./pixelArt/sprites/*.js', { eager: true, import: 'default' }))
   .map(art => createPixelSpriteWalkers({
     scene, art, count: art.count, dot: SPRITE_DOT * (art.scale ?? 1), speed: SPEED * 0.05, radius: R_C,
     getGround: dir => getGroundHeight(dir) - 1,
-    waterLevel: R_OCEAN + TIDE_SHIFT, spawn: { dir: pDir, fwd: pFwd }, migrations, carrier: rideCarrier,
+    waterLevel: R_OCEAN + TIDE_SHIFT, spawn: { dir: pDir, fwd: pFwd }, migrations, homes, carrier: rideCarrier,
     getSeaLevel: dir => R_OCEAN + dir.dot(oceanMesh.position),   // 海面球は潮で oceanMesh.position だけずれている
     followSpeed: SPEED * 1.15,   // ついてくるときは sabちゃんより少し速く走れる
   }))

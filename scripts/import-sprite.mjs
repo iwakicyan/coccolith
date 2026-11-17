@@ -13,7 +13,7 @@
 //    名前の最後の数字がコマの番号（1, 2, …、なければ 1）。「座」か「静止」が入っていれば立ち止まったときの絵（sit）、
 //    「泳」が入っていれば海を泳ぐときの絵（swim。あれば陸から海へ入って泳ぐ）、それ以外は歩き（walk）
 //    同じポーズでほかの方向が 2 コマあるのに番号のない絵が 1 枚だけなら、2 コマ目はその絵の左右反転にする
-//    斜め前・斜め後ろがなければ 4 方向、あれば 8 方向のスプライトになる
+//    斜め前・斜め後ろがなければ 4 方向、あれば 8 方向のスプライトになる（真横がなければ 6 方向。斜め前と斜め後ろを直に切り替える）
 //    sit がなければ、立ち止まると歩きの 1 コマ目で止まる
 //  空を飛ぶもの（飛行機など）: 名前に「真下」「下方」「水平」「上から」があれば、飛びまわるスプライトにして src/pixelArt/flyers/ に書き出す
 //    下方（見上げた絵）・水平・上から（見下ろした絵）の 3 段それぞれに 正面〜背面 の 5 方向、天面、真下（下から見上げた絵、前が画像の上）
@@ -77,9 +77,10 @@ for (const views of Object.values(poses)) {
 }
 
 const eight = Object.values(poses).some(v => v.frontSide || v.backSide)
+const noSide = eight && !Object.values(poses).some(v => v.side)   // 斜め前・斜め後ろはあるが真横がない → 6 方向
 const need = flying
   ? [...['below', '', 'above'].flatMap(b => VIEW_ORDER.slice(0, 5).map(v => bandView(b, v))), 'top', 'bottom']
-  : eight ? VIEW_ORDER : ['front', 'side', 'back', 'top']
+  : noSide ? VIEW_ORDER.filter(v => v !== 'side') : eight ? VIEW_ORDER : ['front', 'side', 'back', 'top']
 for (const [pose, views] of Object.entries(poses)) {
   const missing = need.filter(v => !views[v])
   if (missing.length) throw new Error(`${pose} に ${missing.join('・')} の絵がない`)
@@ -110,9 +111,9 @@ ${need.map(v => `        ${v}: [${poses.fly[v].map(varName).join(', ')}],`).join
     },
   },
 }
-` : `// ${title}（${eight ? 8 : 4} 方向スプライトの絵。pixelSprite.js）
+` : `// ${title}（${noSide ? 6 : eight ? 8 : 4} 方向スプライトの絵。pixelSprite.js）
 //  scripts/import-sprite.mjs で ${srcNames} から書き出したもの（描き直したらもう一度書き出す）
-//  ${eight ? '正面・斜め前・真横・斜め後ろ・背面・天面の 8 方向' : '正面・真横・背面・天面の 4 方向で、斜め前・斜め後ろの絵はない（見る角度を 90° ごとに区切る）'}
+//  ${noSide ? '正面・斜め前・斜め後ろ・背面・天面の 6 方向で、真横の絵はない（見る角度を 60° ごとに区切り、斜め前から斜め後ろへ直に切り替える）' : eight ? '正面・斜め前・真横・斜め後ろ・背面・天面の 8 方向' : '正面・真横・背面・天面の 4 方向で、斜め前・斜め後ろの絵はない（見る角度を 90° ごとに区切る）'}
 //  歩き: 各方向 ${frameCount} コマ。${poses.sit ? '立ち止まったら座り（静止）の絵' : '立ち止まったら 1 コマ目で止まる'}${poses.swim ? '\n//  泳ぎ: 海に入ったら泳ぎの絵（止まっていても水をかく）' : ''}${anyFlip ? '\n//  flipped(…) は番号のない絵の左右反転（2 コマ目に使う）' : ''}
 //  横の絵は左側から見た絵（顔が画面の左）。どの絵も左から ${cx} 列目が中心
 ${anyFlip ? "\nimport { flipped } from '../../pixelSprite.js'\n" : ''}
@@ -132,4 +133,4 @@ ${need.map(v => `        ${v}: [${views[v].map(frameRef).join(', ')}],`).join('\
 `
 const dest = `src/pixelArt/${flying ? 'flyers' : 'sprites'}/${name}.js`
 writeFileSync(new URL(`../${dest}`, import.meta.url), out)
-console.log(flying ? `${dest} に書き出した（空を飛ぶ 8 方向 × 3 段）` : `${dest} に書き出した（${eight ? 8 : 4} 方向、${Object.keys(poses).join('・')}、${count} 匹）`)
+console.log(flying ? `${dest} に書き出した（空を飛ぶ 8 方向 × 3 段）` : `${dest} に書き出した（${noSide ? 6 : eight ? 8 : 4} 方向、${Object.keys(poses).join('・')}、${count} 匹）`)

@@ -140,6 +140,8 @@ function arcDistToSeg(px, py, pz, { ax, ay, az, bx, by, bz, gnx, gny, gnz }) {
 export const GOJUNOTO_AT = { lat: 10.0, lon: -45.0 }
 // ケーキスタンドの位置（いぬやつたちが昼に集まる先にも使う。migration.js）
 export const CAKESTAND_AT = { lat: -62.0, lon: -131.0 }
+// ツリーハウスの位置（Abi がこのまわりを歩く。main.js の homes）
+export const TREEHOUSE_AT = { lat: 53.0, lon: -171.0 }
 
 // 緯度経度（度）→ 球面上の単位ベクトル
 export function dirOf(lat, lon) {
@@ -599,7 +601,7 @@ export function createCoccolith({ renderer = null } = {}) {
   })
   treehouseWrapper.add(treehouse)
   treehouseWrapper.scale.setScalar(2)
-  placeOnSurface(group, treehouseWrapper, 53.0, -171.0, R_C + LAND_LIFT - 0.3)
+  placeOnSurface(group, treehouseWrapper, TREEHOUSE_AT.lat, TREEHOUSE_AT.lon, R_C + LAND_LIFT - 0.3)
   colliders.push(treehouse)
   // 近づくと扉の輪郭が光り、タップでドット絵のページを開く（main.js の _glowSpots、pixelScene.js）。扉は頭上なので、地面に落とした位置から測る
   {

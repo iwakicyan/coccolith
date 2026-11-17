@@ -6,6 +6,7 @@ import { createBlobShadows, polygonShadow } from './blobShadow.js'
 //  絵のデータ（pixelArt/sprites/sinkichi.js の形。8sprite の txt からは scripts/import-sprite.mjs で書き出せる）:
 //    { count, cx, drawnSide, poses: { <ポーズ名>: { fps, views: { front, frontSide, side, backSide, back, top } } } }
 //    斜め前・斜め後ろ（frontSide / backSide）のない絵は 4 方向にして、見る角度を 90° ごとに区切る（pixelArt/sprites/satoukuma.js の形）
+//    真横（side）のない絵は 6 方向にして、見る角度を 60° ごとに区切る（斜め前から斜め後ろへ直に切り替える。pixelArt/sprites/abi.js の形）
 //    count: 何匹出すか（main.js が使う）
 //    scale: 大きさの倍率（ドット 1 つの大きさにかける。なければ 1。main.js が使う）
 //    views の各方向はコマの配列。コマ = { palette, width, height, grid }（ドット絵エディタの書き出しそのまま）
@@ -20,6 +21,8 @@ import { createBlobShadows, polygonShadow } from './blobShadow.js'
 //    swimSink: 泳ぐとき、側面の絵の高さのこの割合だけ海面より下に沈める（なければ 0.35）
 //    migrate: 集まる先の名前（'gojunoto' など）。時刻によってそこへ集まって散らばる（createPixelSpriteWalkers に渡す migrations。migration.js）
 //    near: true なら見た目の確認用にスポーン地点の近くに出す
+//    home / homeRadius: 出る場所の名前（createPixelSpriteWalkers に渡す homes）とその半径 (m)。その内側に出て、外へ出そうになったら中へ向きを変える
+//    idleAnim: true なら立ち止まっているあいだも walk のコマを回す（sit は使わない）
 //    shadow: { w, l, dz, sides } があれば足元に擬似的な影（ダークグレーの多角形の板。blobShadow.js）を置く。幅・前後の長さ・前へずらす量 (m)・角の数（なければ 8）
 //  側面: 板は縦軸まわりだけ回って常にカメラの方を向く。オブジェクトの前の向きとカメラのいる方向の角度を 45°（4 方向なら 90°）ごとに区切って絵を選ぶ
 //        反対側の 3 方向（4 方向なら真横）は描いた側の絵を左右反転して使う
@@ -55,6 +58,11 @@ const SECTOR_VIEW_8 = {
   0: ['front', false], [-1]: ['frontSide', false], [-2]: ['side', false], [-3]: ['backSide', false],
   1: ['frontSide', true], 2: ['side', true], 3: ['backSide', true], 4: ['back', false], [-4]: ['back', false],
 }
+// 真横のない 6 方向（60° ずつ。斜め前から斜め後ろへ直に切り替える）
+const SECTOR_VIEW_6 = {
+  0: ['front', false], [-1]: ['frontSide', false], [-2]: ['backSide', false],
+  1: ['frontSide', true], 2: ['backSide', true], 3: ['back', false], [-3]: ['back', false],
+}
 const SECTOR_VIEW_4 = {
   0: ['front', false], [-1]: ['side', false], 1: ['side', true], 2: ['back', false], [-2]: ['back', false],
 }
@@ -65,8 +73,9 @@ export const flipped = frame => ({ ...frame, flip: !frame.flip })
 function buildSheet(art) {
   const { drawnSide, poses } = art
   const flying = Object.values(poses).every(p => p.views.bottom)
-  const dirs = Object.values(poses).every(p => p.views.frontSide) ? 8 : 4
-  const views = flying ? Object.keys(Object.values(poses)[0].views) : dirs === 8 ? VIEWS : ['front', 'side', 'back', 'top']
+  const eight = Object.values(poses).every(p => p.views.frontSide)
+  const dirs = !eight ? 4 : Object.values(poses).every(p => p.views.side) ? 8 : 6   // 真横がなければ 6 方向
+  const views = flying ? Object.keys(Object.values(poses)[0].views) : dirs === 8 ? VIEWS : dirs === 6 ? VIEWS.filter(v => v !== 'side') : ['front', 'side', 'back', 'top']
   const cxOf = f => flying ? Math.floor(f.width / 2) : art.cx
   // 同じ絵（grid）は 1 回だけ描く
   const grids = new Map()
@@ -124,7 +133,7 @@ function buildSheet(art) {
   return {
     mat, looks, flying, aspect: cw / ch, footFrac: flying ? 0.5 : (ch - 1 - foot) / ch, cellHeight: ch,
     bodyFrac: flying ? 1 : (foot - head + 1) / ch,
-    sectorAngle: 2 * Math.PI / dirs, sectorView: dirs === 8 ? SECTOR_VIEW_8 : SECTOR_VIEW_4,
+    sectorAngle: 2 * Math.PI / dirs, sectorView: dirs === 8 ? SECTOR_VIEW_8 : dirs === 6 ? SECTOR_VIEW_6 : SECTOR_VIEW_4,
   }
 }
 
@@ -272,7 +281,9 @@ function tangentTo(dir, target, out) {
 // migrations: 集まる先の名前 → 時刻で集まって散らばる動き（migration.js の createMigration）。絵の migrate の名前のものを使う
 // carrier: 上に乗れる動く台（gondola・gondeer。main.js の rideCarrier）。measure が足元の台の回った分（delta）を on に入れるので、乗っている子はその分だけ一緒に運び、
 //          台の近く（near）では足元の高さを毎フレーム測り直す（台が下に来たら乗り、去ったら下りる）
-export function createPixelSpriteWalkers({ scene, art, count, dot, speed, radius, getGround, waterLevel, getSeaLevel = () => waterLevel, spawn, migrations = {}, carrier = null, followSpeed = speed }) {
+export function createPixelSpriteWalkers({ scene, art, count, dot, speed, radius, getGround, waterLevel, getSeaLevel = () => waterLevel, spawn, migrations = {}, homes = {}, carrier = null, followSpeed = speed }) {
+  const home = art.home ? homes[art.home] ?? null : null
+  const homeR = art.homeRadius ?? 40
   const mig = art.migrate ? migrations[art.migrate] ?? null : null
   const sheet = buildSheet(art)
   const height = sheet.cellHeight * dot
@@ -295,7 +306,16 @@ export function createPixelSpriteWalkers({ scene, art, count, dot, speed, radius
     const sprite = createSprite(sheet, height, sink ? sink + (body - sink) * 0.5 : height * 0.5)
     const dir = new THREE.Vector3()
     let ground
-    if (art.near && spawn) {
+    if (home) {
+      // home から homeR の内側（面積が一様になるよう半径は √ で引く）。海なら引き直す
+      for (let n = 0; n < 200; n++) {
+        _next.randomDirection()
+        _axis.crossVectors(home, _next).normalize()
+        dir.copy(home).applyAxisAngle(_axis, homeR * Math.sqrt(Math.random()) / radius).normalize()
+        ground = getGround(dir)
+        if (!isWater(ground)) break
+      }
+    } else if (art.near && spawn) {
       // スポーン地点の正面寄りに、NEAR_DIST 離して出す
       const a = (Math.random() * 2 - 1) * NEAR_SPREAD
       const toward = _next.copy(spawn.fwd).applyAxisAngle(spawn.dir, a)
@@ -325,7 +345,7 @@ export function createPixelSpriteWalkers({ scene, art, count, dot, speed, radius
     scene.add(sprite.group)
     // ground0: 前に測った地点の高さ / ground1: PROBE_STEP 先の高さ（null ならまだ測っていない） / travel: ground0 の地点から歩いた距離 (m)
     // bobPhase: 浮き沈みの位相（0 で沈みきり。立ち止まったら 1 回ぶん浮き沈みし終えたところで止める）
-    walkers.push({ sprite, dir, fwd, ground, ground0: ground, ground1: null, travel: 0, turn: 0, turnTarget: 0, walking: false, timer: rand(STOP_TIME), step: 0, paddle: 0, bobPhase: 0, onCarrier: null, follow: null })
+    walkers.push({ sprite, dir, fwd, ground, ground0: ground, ground1: null, travel: 0, turn: 0, turnTarget: 0, walking: false, timer: rand(STOP_TIME), step: 0, anim: Math.random() * 3, paddle: 0, bobPhase: 0, onCarrier: null, follow: null })
   }
 
   // sab: { dir, fwd, kan, still }（sabちゃんの足元の向き・前の向き・缶を持っているか・止まっているか）。なければ見ない
@@ -389,6 +409,9 @@ export function createPixelSpriteWalkers({ scene, art, count, dot, speed, radius
         if (roam) {
           // 歩き回る範囲の縁（FOLLOW_DIST の FOLLOW_ROAM_EDGE 手前）より外では sabちゃんの方へ向きを変える
           if (radius * w.dir.angleTo(sab.dir) > FOLLOW_DIST - FOLLOW_ROAM_EDGE) turnToward(w.dir, w.fwd, tangentTo(w.dir, sab.dir, _to), WATCH_TURN * dt)
+        } else if (home) {
+          // home から homeR より外では home の方へ向きを変える
+          if (radius * w.dir.angleTo(home) > homeR) turnToward(w.dir, w.fwd, tangentTo(w.dir, home, _to), WATCH_TURN * dt)
         } else if (mig) mig.steer(w.dir, w.fwd, dt)   // 時間帯によって集まる先へ寄せる・離す
 
         // PROBE_STEP 先の地面を測る。海なら進まずに後ろ寄りへ向きを変える（次のフレームで向きを変えた先を測り直す）
@@ -443,7 +466,10 @@ export function createPixelSpriteWalkers({ scene, art, count, dot, speed, radius
       g.setRotationFromMatrix(_m.makeBasis(_right.crossVectors(w.dir, w.fwd), w.dir, w.fwd))
       g.position.copy(w.dir).multiplyScalar(base + lift)
       if (wet) w.sprite.face(camera, 'swim', Math.floor(w.paddle))
-      else w.sprite.face(camera, w.walking ? 'walk' : restPose, Math.floor(w.step))
+      else if (art.idleAnim) {
+        w.anim += dt * sheet.looks.walk.fps   // 歩いていても止まっていても同じ速さでコマを回す
+        w.sprite.face(camera, 'walk', Math.floor(w.anim))
+      } else w.sprite.face(camera, w.walking ? 'walk' : restPose, Math.floor(w.step))
       if (shadows) shadows.set(i, w.dir, w.fwd, Math.max(w.ground, base))
     }
     if (shadows) shadows.commit()
