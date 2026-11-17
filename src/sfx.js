@@ -8,6 +8,7 @@
 //  coinToSlot():  コイン箱・自販機の投入口にコインを入れたとき、コインを拾ったとき（チャリンッ）
 //  kanDrop():     自販機の取り出し口に缶が出たとき（ガチャン）
 //  kanTake():     取り出し口の缶・台の上の花を取ったとき（コトッ）
+//  kanGive():     ドット絵のキャラに缶をあげたとき（コトッ → ピロン）
 //  setMoving(k): sabちゃんが動いている強さ（0〜1）を毎フレーム渡す。動いている間「フォン…フォン…」と鳴らす
 //  setAmbience({ wind, wave, water }): 環境音の大きさ（0〜1）を毎フレーム渡す。風（いつも小さくサー…）と波（海の近くでザザー…と寄せては返す）。water（カメラが水中）なら風・波を消してフォーンをこもらせる。silent（俯瞰中）なら風・波を消す
 //  setMusic(name, k): BGM の曲ごとの大きさ（0〜1）を毎フレーム渡す。ドット絵のキャラの近くで流す（ambient: Abi・ゆっくり重なる和音とベル / light: Rifta・軽い分散和音）
@@ -134,6 +135,17 @@ export function kanTake() {
   // コトッ（短い軽い音）
   tone({ type: 'triangle', f0: 900, f1: 600, dur: 0.07, peak: 0.15, glide: 0.04 })
   noise({ freq: 2500, q: 1.5, dur: 0.03, peak: 0.06 })
+}
+
+export function kanGive() {
+  if (!audio()) return
+  // コトッ（渡す）→ ピロン（上がっていく 2 音。喜んでいる感じ）
+  tone({ type: 'triangle', f0: 900, f1: 600, dur: 0.07, peak: 0.12, glide: 0.04 })
+  noise({ freq: 2500, q: 1.5, dur: 0.03, peak: 0.05 })
+  for (const [at, f] of [[0.12, 1318.5], [0.24, 1760]]) {   // E6 → A6
+    tone({ at, f0: f, dur: 0.5, peak: 0.07, attack: 0.004 })
+    tone({ at, type: 'triangle', f0: f * 2, dur: 0.15, peak: 0.012, attack: 0.002 })   // 少しきらっと
+  }
 }
 
 // --- 動いている間の「フォン…フォン…」 ---

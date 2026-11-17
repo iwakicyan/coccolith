@@ -1636,6 +1636,7 @@ function giveKan(group, walker) {
   sabchan.group.remove(held.kan.obj)
   held.kan.dispose()
   held.kan = null
+  sfx.kanGive()
   return true
 }
 // Enter: GIVE_DIST 以内のいちばん近いキャラに缶をあげる。あげたら true
