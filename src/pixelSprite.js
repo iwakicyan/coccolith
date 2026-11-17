@@ -23,7 +23,7 @@ import { createFloatNotes } from './floatNotes.js'
 //    migrate: 集まる先の名前（'gojunoto' など）。時刻によってそこへ集まって散らばる（createPixelSpriteWalkers に渡す migrations。migration.js）
 //    near: true なら見た目の確認用にスポーン地点の近くに出す
 //    home / homeRadius: 出る場所の名前（createPixelSpriteWalkers に渡す homes）とその半径 (m)。その内側に出て、外へ出そうになったら中へ向きを変える
-//    bgmRadius: sabちゃんがキャラからこの距離 (m) 以内にいるあいだ、アンビエント BGM を流す（main.js が使う。sfx.js の setMusic）
+//    bgm / bgmRadius: sabちゃんがキャラからこの距離 (m) 以内にいるあいだ、bgm の名前の曲を流す（main.js が使う。sfx.js の setMusic・MUSIC_TRACKS）
 //    notes: ♪ の絵（コマ）。あれば頭のあたりから ♪ をふわふわ飛ばす（floatNotes.js。大きさはドットの大きさを絵と同じにする）
 //    idleAnim: true なら立ち止まっているあいだも walk のコマを回す（sit は使わない）
 //    shadow: { w, l, dz, sides } があれば足元に擬似的な影（ダークグレーの多角形の板。blobShadow.js）を置く。幅・前後の長さ・前へずらす量 (m)・角の数（なければ 8）

@@ -1574,11 +1574,12 @@ const spriteWalkers = spriteArts
     getSeaLevel: dir => R_OCEAN + dir.dot(oceanMesh.position),   // 海面球は潮で oceanMesh.position だけずれている
     followSpeed: SPEED * 1.15,   // ついてくるときは sabちゃんより少し速く走れる
   }))
-// 絵に bgmRadius があるキャラ（Abi）の近く（その距離の内側）にいるあいだ、アンビエント BGM を流す（sfx.js の setMusic。室内・俯瞰中は止める）
+// 絵に bgm（曲の名前）と bgmRadius があるキャラ（Abi・Rifta）の近く（その距離の内側）にいるあいだ、その曲を流す（sfx.js の setMusic。室内・俯瞰中は止める）
 //   キャラから BGM_FULL (m) 以内はいちばん大きく、そこから bgmRadius に向かってだんだん小さくなり、bgmRadius で聞こえなくなる
 const BGM_FULL = 15
-const bgmWalkers = spriteWalkers.map((w, i) => [w, spriteArts[i].bgmRadius]).filter(([, r]) => r)
-const bgmLevel = () => Math.max(0, ...bgmWalkers.map(([w, r]) => {
+const bgmWalkers = spriteWalkers.map((w, i) => [w, spriteArts[i].bgm, spriteArts[i].bgmRadius]).filter(([, name, r]) => name && r)
+const bgmNames = [...new Set(bgmWalkers.map(([, name]) => name))]
+const bgmLevel = name => Math.max(0, ...bgmWalkers.filter(b => b[1] === name).map(([w, , r]) => {
   const k = THREE.MathUtils.clamp((r - w.distTo(pDir)) / (r - BGM_FULL), 0, 1)
   return k * k * (3 - 2 * k)   // なめらかに
 }))
@@ -2099,7 +2100,7 @@ function animate() {
   // 水中かは毎フレーム見る（潜った瞬間に音を切り替える）
   const ambWater = !interior && !overviewMode && camera.position.length() < seaSurfaceHeight(_ambCam.copy(camera.position).normalize())
   sfx.setAmbience(interior ? { wind: 0.25, wave: 0 } : { wind: 1, wave: ambWave, water: ambWater, silent: overviewMode })
-  sfx.setMusic(!interior && !overviewMode ? bgmLevel() : 0)
+  for (const name of bgmNames) sfx.setMusic(name, !interior && !overviewMode ? bgmLevel(name) : 0)
   coinIntro.update(dt, sabchan.group.position)
   coinDrop.update(dt)
   updateDoorGlow(now)

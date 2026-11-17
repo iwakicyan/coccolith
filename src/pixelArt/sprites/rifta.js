@@ -600,6 +600,8 @@ export default {
   home: 'spawn',   // スポーン地点（北極）のまわりに出て、そこから離れない（main.js の homes）
   homeRadius: 20,   // スポーン地点からこの距離 (m) の内側を歩く
   notes: noteGreen,   // 頭のあたりから緑の ♪ をふわふわ飛ばす（floatNotes.js）
+  bgm: 'light',   // 近くで流す曲（sfx.js の MUSIC_TRACKS。落ち着いているけれど軽い分散和音）
+  bgmRadius: 40,   // sabちゃんがこの距離 (m) 以内にいるあいだ流す（15m 以内でいちばん大きい。main.js の BGM_FULL）
   idleAnim: true,   // 立ち止まっているあいだも歩きのコマを回す
   cx: 15,
   drawnSide: 'left',

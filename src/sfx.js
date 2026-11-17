@@ -10,7 +10,7 @@
 //  kanTake():     取り出し口の缶・台の上の花を取ったとき（コトッ）
 //  setMoving(k): sabちゃんが動いている強さ（0〜1）を毎フレーム渡す。動いている間「フォン…フォン…」と鳴らす
 //  setAmbience({ wind, wave, water }): 環境音の大きさ（0〜1）を毎フレーム渡す。風（いつも小さくサー…）と波（海の近くでザザー…と寄せては返す）。water（カメラが水中）なら風・波を消してフォーンをこもらせる。silent（俯瞰中）なら風・波を消す
-//  setMusic(k): アンビエント BGM の大きさ（0〜1）を毎フレーム渡す。Abi の近くで流す（ゆっくり重なる和音と、ときどき鳴る柔らかいベル）
+//  setMusic(name, k): BGM の曲ごとの大きさ（0〜1）を毎フレーム渡す。ドット絵のキャラの近くで流す（ambient: Abi・ゆっくり重なる和音とベル / light: Rifta・軽い分散和音）
 //  initSoundButton(btn): HUD の歯車の横のスピーカーを、音のオン・オフの切り替えにする（選んだほうは localStorage に残す）
 // ============================================================
 
@@ -274,76 +274,143 @@ export function setAmbience({ wind = 0, wave = 0, water = false, silent = false 
   }
 }
 
-// --- アンビエント BGM（Abi の近く） ---
-// パッド: 三角波を 2 本ずつ少しずらして重ね、こもらせた和音を MUSIC_CHORD_GAP 秒ごとに次の和音へ重ねながら入れ替える（立ち上がり・消えるのはゆっくり）
-// ベル: ペンタトニックの音をときどき 1 つ、柔らかく鳴らしてディレイで残す
-// 大きさは setMusic で渡した値へ MUSIC_TAU 秒で寄せる（距離で変わる大きさになめらかについていく）。聞こえないあいだは新しい音を作らない
-const MUSIC_VOL = 0.6       // いちばん大きいときの音量（風 0.05・波 0.12 と同じ物差し。パッド 1 音がこの 0.04 倍ほど）
+// --- BGM（ドット絵のキャラの近く） ---
+// 曲ごとに音量のつまみ（level）を持ち、setMusic(name, k) で渡した値へ MUSIC_TAU 秒で寄せる（距離で変わる大きさになめらかについていく）
+// 聞こえないあいだは新しい音を作らず、また聞こえはじめたら曲の頭から鳴らす
+//   ambient（Abi）: パッド（三角波を 2 本ずつ少しずらして重ね、こもらせた和音）を 8 秒ごとに重ねながら入れ替え、ペンタトニックのベルをときどき 1 つディレイで残す
+//   light（Rifta）: 100 BPM（8 分音符 0.3 秒）。ポロンと鳴る分散和音・柔らかいベース・小さなシェイカー、ときどき高いベルのメロディ
 const MUSIC_TAU = 0.3       // 大きさを寄せる速さ（時定数 s）
-const MUSIC_CHORD_GAP = 8   // 和音を入れ替える間隔 (s)
-const MUSIC_CHORD_FADE = 4  // 和音の立ち上がり・消える長さ (s)
-const MUSIC_BELL_GAP = [2.5, 7]   // ベルの間隔 (s)
 const hz = n => 440 * 2 ** ((n - 69) / 12)   // MIDI の音番号 → Hz
+const musics = {}   // 曲の名前 → { level, next, ...曲ごとのもの }
+
+// ディレイで残響のように残す行き先（out へ。元の音もそのまま out へ出す）
+function echoBus(out, time, feedback, cutoff) {
+  const bus = ctx.createGain()
+  const delay = ctx.createDelay(2); delay.delayTime.value = time
+  const fb = ctx.createGain(); fb.gain.value = feedback
+  const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = cutoff
+  bus.connect(out)
+  bus.connect(delay).connect(lp).connect(fb).connect(delay)
+  lp.connect(out)
+  return bus
+}
+
+// ambient（Abi）
+const AMBIENT_VOL = 0.6       // いちばん大きいときの音量（風 0.05・波 0.12 と同じ物差し。パッド 1 音がこの 0.04 倍ほど）
+const AMBIENT_CHORD_GAP = 8   // 和音を入れ替える間隔 (s)
+const AMBIENT_CHORD_FADE = 4  // 和音の立ち上がり・消える長さ (s)
+const AMBIENT_BELL_GAP = [2.5, 7]   // ベルの間隔 (s)
 // Dmaj9 → Bm9 → Gmaj9 → Asus4（D メジャー）。1 つめはベース
-const MUSIC_CHORDS = [[38, 57, 61, 64, 66], [35, 54, 57, 61, 62], [31, 54, 59, 62, 69], [33, 52, 57, 62, 64]]
-const MUSIC_BELLS = [74, 76, 78, 81, 83, 86]   // D メジャーのペンタトニック（D5〜D6）
-let music = null   // { level, pad, bell }
-let musicChord = 0, musicChordNext = 0, musicBellNext = 0
-function startMusic() {
-  const level = ctx.createGain(); level.gain.value = 0
-  level.connect(master)
-  const pad = ctx.createBiquadFilter(); pad.type = 'lowpass'; pad.frequency.value = 700; pad.Q.value = 0.3
-  pad.connect(level)
-  // ベルはディレイで残響のように残す
-  const bell = ctx.createGain()
-  const delay = ctx.createDelay(2); delay.delayTime.value = 0.45
-  const fb = ctx.createGain(); fb.gain.value = 0.45
-  const tone = ctx.createBiquadFilter(); tone.type = 'lowpass'; tone.frequency.value = 2200
-  bell.connect(level)
-  bell.connect(delay).connect(tone).connect(fb).connect(delay)
-  tone.connect(level)
-  music = { level, pad, bell }
+const AMBIENT_CHORDS = [[38, 57, 61, 64, 66], [35, 54, 57, 61, 62], [31, 54, 59, 62, 69], [33, 52, 57, 62, 64]]
+const AMBIENT_BELLS = [74, 76, 78, 81, 83, 86]   // D メジャーのペンタトニック（D5〜D6）
+
+// light（Rifta）
+const LIGHT_VOL = 0.6
+const LIGHT_STEP = 0.3   // 8 分音符 (s)。100 BPM
+// G → Em → C → D（G メジャー）を 1 小節（8 分音符 8 つ）ずつ。bass: ベースの音 / arp: 分散和音に使う 4 音
+const LIGHT_CHORDS = [
+  { bass: 43, arp: [62, 67, 71, 74] },
+  { bass: 40, arp: [64, 67, 71, 76] },
+  { bass: 36, arp: [64, 67, 72, 76] },
+  { bass: 38, arp: [62, 66, 69, 74] },
+]
+const LIGHT_ARP = [0, 1, 2, 1, 3, 2, 1, 2]   // 小節の中で分散和音のどの音を鳴らすか
+const LIGHT_SKIP = 0.15                     // 分散和音の音をこの割合だけ抜いて、軽く聞かせる
+const LIGHT_MELODY = [79, 81, 83, 86, 88]   // ベルのメロディ（G メジャーのペンタトニック。G5〜E6）
+const LIGHT_MELODY_CHANCE = 0.18           // 8 分音符ごとにメロディの音を鳴らす割合（表拍だけ）
+
+const MUSIC_TRACKS = {
+  ambient: {
+    vol: AMBIENT_VOL,
+    start(m) {
+      m.pad = ctx.createBiquadFilter(); m.pad.type = 'lowpass'; m.pad.frequency.value = 700; m.pad.Q.value = 0.3
+      m.pad.connect(m.level)
+      m.bell = echoBus(m.level, 0.45, 0.45, 2200)
+      m.chord = 0; m.bellNext = 0
+    },
+    reset(m) { m.bellNext = 0 },
+    // m.next: 次の和音を鳴らす時刻
+    schedule(m, now) {
+      if (m.next <= now + 0.1) {
+        const at = Math.max(m.next, now + 0.05)
+        const dur = AMBIENT_CHORD_GAP + AMBIENT_CHORD_FADE
+        AMBIENT_CHORDS[m.chord].forEach((n, i) => {
+          const g = ctx.createGain()
+          const peak = i === 0 ? 0.05 : 0.035   // ベースだけ少し大きく
+          g.gain.setValueAtTime(0, at)
+          g.gain.linearRampToValueAtTime(peak, at + AMBIENT_CHORD_FADE)
+          g.gain.setValueAtTime(peak, at + dur - AMBIENT_CHORD_FADE)
+          g.gain.linearRampToValueAtTime(0, at + dur)
+          g.connect(m.pad)
+          for (const cents of [-6, 6]) {
+            const o = ctx.createOscillator(); o.type = 'triangle'
+            o.frequency.value = hz(n); o.detune.value = cents
+            o.connect(g); o.start(at); o.stop(at + dur + 0.05)
+          }
+        })
+        m.chord = (m.chord + 1) % AMBIENT_CHORDS.length
+        m.next = at + AMBIENT_CHORD_GAP
+      }
+      if (m.bellNext <= now + 0.1) {
+        const at = Math.max(m.bellNext, now + 0.05) + (m.bellNext ? 0 : AMBIENT_CHORD_FADE)   // 鳴りはじめはパッドが立ち上がってから
+        const n = AMBIENT_BELLS[Math.floor(Math.random() * AMBIENT_BELLS.length)]
+        tone({ at: at - now, f0: hz(n), dur: 3, peak: 0.03, attack: 0.02, out: m.bell })
+        m.bellNext = at + AMBIENT_BELL_GAP[0] + Math.random() * (AMBIENT_BELL_GAP[1] - AMBIENT_BELL_GAP[0])
+      }
+    },
+  },
+  light: {
+    vol: LIGHT_VOL,
+    start(m) {
+      m.out = echoBus(m.level, LIGHT_STEP * 1.5, 0.25, 3000)   // 付点 8 分のディレイで軽く跳ねさせる
+      m.step = 0
+    },
+    reset(m) { m.step = 0 },
+    // m.next: 次の 8 分音符の時刻。少し先（0.2 秒）まで予約しておく
+    schedule(m, now) {
+      if (m.next < now) m.next = now + 0.05
+      while (m.next < now + 0.2) {
+        const at = m.next - now
+        const beat = m.step % 8, chord = LIGHT_CHORDS[Math.floor(m.step / 8) % LIGHT_CHORDS.length]
+        // 分散和音（オルゴールのようなポロン）
+        if (beat === 0 || Math.random() > LIGHT_SKIP) {
+          const f = hz(chord.arp[LIGHT_ARP[beat]])
+          tone({ at, type: 'triangle', f0: f, dur: 0.45, peak: 0.028, attack: 0.004, out: m.out })
+          tone({ at, f0: f * 2, dur: 0.2, peak: 0.006, attack: 0.002, out: m.out })   // 少しきらっとさせる倍音
+        }
+        // ベース（1 拍目と 3 拍目）
+        if (beat === 0 || beat === 4) tone({ at, f0: hz(chord.bass), dur: 0.9, peak: 0.06, attack: 0.01, out: m.level })
+        // シェイカー（裏拍）
+        if (beat % 2 === 1) noise({ at, freq: 7000, q: 0.8, dur: 0.06, peak: beat === 3 || beat === 7 ? 0.012 : 0.007, attack: 0.003, type: 'highpass', out: m.level })
+        // ときどき高いベルのメロディ（表拍だけ。ペンタトニックなので、どの和音の上でも合う）
+        if (beat % 2 === 0 && Math.random() < LIGHT_MELODY_CHANCE) {
+          const n = LIGHT_MELODY[Math.floor(Math.random() * LIGHT_MELODY.length)]
+          tone({ at, f0: hz(n), dur: 1.2, peak: 0.018, attack: 0.005, out: m.out })
+        }
+        m.step = (m.step + 1) % (8 * LIGHT_CHORDS.length)
+        m.next += LIGHT_STEP
+      }
+    },
+  },
 }
-function musicChordAt(at, notes) {
-  const dur = MUSIC_CHORD_GAP + MUSIC_CHORD_FADE
-  notes.forEach((n, i) => {
-    const g = ctx.createGain()
-    const peak = i === 0 ? 0.05 : 0.035   // ベースだけ少し大きく
-    g.gain.setValueAtTime(0, at)
-    g.gain.linearRampToValueAtTime(peak, at + MUSIC_CHORD_FADE)
-    g.gain.setValueAtTime(peak, at + dur - MUSIC_CHORD_FADE)
-    g.gain.linearRampToValueAtTime(0, at + dur)
-    g.connect(music.pad)
-    for (const cents of [-6, 6]) {
-      const o = ctx.createOscillator(); o.type = 'triangle'
-      o.frequency.value = hz(n); o.detune.value = cents
-      o.connect(g); o.start(at); o.stop(at + dur + 0.05)
-    }
-  })
-}
-function musicBellAt(at) {
-  const n = MUSIC_BELLS[Math.floor(Math.random() * MUSIC_BELLS.length)]
-  const g = envelope(at, 0.03, 0.02, 3, music.bell)
-  const o = ctx.createOscillator(); o.type = 'sine'; o.frequency.value = hz(n)
-  o.connect(g); o.start(at); o.stop(at + 3.05)
-}
-export function setMusic(k) {
+
+// name: 曲の名前（MUSIC_TRACKS）/ k: 大きさ（0〜1）。毎フレーム曲ごとに渡す
+export function setMusic(name, k) {
   if (!ctx || muted || document.hidden) return   // 最初のタッチ・キーで音が起きるまでは何もしない
-  if (!music) { if (k <= 0) return; startMusic() }
+  const track = MUSIC_TRACKS[name]
+  if (!track) return
+  let m = musics[name]
+  if (!m) {
+    if (k <= 0) return
+    const level = ctx.createGain(); level.gain.value = 0
+    level.connect(master)
+    m = musics[name] = { level, next: 0 }
+    track.start(m)
+  }
   const now = ctx.currentTime
-  music.level.gain.setTargetAtTime(MUSIC_VOL * k, now, MUSIC_TAU)
-  if (k <= 0 && music.level.gain.value < 0.001) { musicChordNext = musicBellNext = 0; return }   // 聞こえなくなったら音を作らない
-  if (musicChordNext <= now + 0.1) {
-    const at = Math.max(musicChordNext, now + 0.05)
-    musicChordAt(at, MUSIC_CHORDS[musicChord])
-    musicChord = (musicChord + 1) % MUSIC_CHORDS.length
-    musicChordNext = at + MUSIC_CHORD_GAP
-  }
-  if (musicBellNext <= now + 0.1) {
-    const at = Math.max(musicBellNext, now + 0.05) + (musicBellNext ? 0 : MUSIC_CHORD_FADE)   // 鳴りはじめはパッドが立ち上がってから
-    musicBellAt(at)
-    musicBellNext = at + MUSIC_BELL_GAP[0] + Math.random() * (MUSIC_BELL_GAP[1] - MUSIC_BELL_GAP[0])
-  }
+  m.level.gain.setTargetAtTime(track.vol * k, now, MUSIC_TAU)
+  if (k <= 0 && m.level.gain.value < 0.001) { m.next = 0; track.reset(m); return }   // 聞こえなくなったら音を作らない（次は曲の頭から）
+  track.schedule(m, now)
 }
 
 // スピーカー（音を出しているとき）と、斜線を引いたスピーカー（消しているとき）

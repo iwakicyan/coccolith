@@ -876,6 +876,7 @@ export default {
   count: 1,   // 何匹出すか
   home: 'treehouse',   // ツリーハウスのまわりに出て、そこから離れない（main.js の homes）
   homeRadius: 40,   // ツリーハウスからこの距離 (m) の内側を歩く
+  bgm: 'ambient',   // 近くで流す曲（sfx.js の MUSIC_TRACKS）
   bgmRadius: 40,   // sabちゃんがこの距離 (m) 以内にいるあいだ、静かなアンビエント BGM を流す（sfx.js の setMusic）
   notes: note,   // 頭のあたりから ♪ をふわふわ飛ばす（floatNotes.js）
   idleAnim: true,   // 立ち止まっているあいだも歩きのコマを回す
