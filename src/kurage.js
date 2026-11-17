@@ -13,18 +13,18 @@ import { R_C } from './constants.js'
 //    色を足し合わせて光らせる（AdditiveBlending）
 // ============================================================
 
-const COUNT    = 72             // クラゲの数
+const COUNT    = 100            // クラゲの数
 const STRANDS  = 4              // 触手の本数
 const DOTS     = 6              // 触手 1 本の粒の数
 const AREA_R   = 45             // 漂っている所で散らばる半径 (m)
 const TRAVEL_R = 50             // 2 か所の真ん中で散らばる半径 (m)。そこまでなめらかに膨らむ
 const HEIGHT   = [5, 20]        // 漂っている所での、地面からの高さ (m)
-const TRAVEL_H = [2, 50]        // 2 か所の真ん中での、地面からの高さ (m)
+const TRAVEL_H = [2, 100]       // 2 か所の真ん中での、地面からの高さ (m)
 const SIZE     = [0.9, 1.7]     // かさの大きさ (m)
 const PULSE    = [2.6, 3.8]     // ひと泳ぎの周期 (s)
 const THRUST   = 0.28           // 周期のうち、すぼまってのぼる時間の割合
 const LIFT     = 0.9            // ひと泳ぎでのぼる高さ（かさの大きさに対して）
-const DWELL    = [300, 600]     // 1 か所で漂っている時間 (s)
+const DWELL    = [180, 420]     // 1 か所で漂っている時間 (s)
 const SPEED    = [0.6, 1.0]     // 旅の速さ (m/s)
 const WANDER   = 6              // 漂いながらふらふらする幅 (m)
 const LAG      = 0.16           // 触手の粒 1 つごとの遅れ (s)
