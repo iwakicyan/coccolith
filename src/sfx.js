@@ -387,6 +387,10 @@ const MUSIC_TRACKS = {
       // 曲全体をこもらせて、鳴りはじめのプチッとした高い成分を削る（ベースの基音・ハイハット以外はここを通す）
       m.soft = ctx.createBiquadFilter(); m.soft.type = 'lowpass'; m.soft.frequency.value = 2400; m.soft.Q.value = 0.5
       m.soft.connect(m.level)
+      // ハイハットのトップを丸める（2 段に重ねて、上をなだらかに落とす）
+      m.hat = ctx.createBiquadFilter(); m.hat.type = 'lowpass'; m.hat.frequency.value = 5000; m.hat.Q.value = 0.5
+      const hat2 = ctx.createBiquadFilter(); hat2.type = 'lowpass'; hat2.frequency.value = 6500; hat2.Q.value = 0.5
+      m.hat.connect(hat2).connect(m.level)
       m.out = echoBus(m.soft, LIGHT_STEP * 1.5, 0.12, 1800)   // 付点 8 分のディレイを薄く（木琴らしく、響きは短めに）
       m.step = 0
     },
@@ -405,10 +409,8 @@ const MUSIC_TRACKS = {
           mallet(at, hz(chord.bass + 12), 0.02, m.soft, 0.5)
         }
         // 柔らかいハイハット（2 拍目と 4 拍目の裏だけ。ごく小さく）。短いとプチッと電子音っぽいので、ふわっと立ち上げて少し長めにシャーンと残す
-        if (beat === 3 || beat === 7) {
-          noise({ at, freq: 5000, q: 0.5, dur: 0.28, peak: 0.005, attack: 0.015, type: 'highpass', out: m.level })
-          noise({ at, freq: 9000, q: 0.7, dur: 0.18, peak: 0.003, attack: 0.012, type: 'bandpass', out: m.level })   // 少しきらっとさせる
-        }
+        //   いちばん上の高い成分は静電気のように聞こえるので、4kHz あたりの帯域だけにして、さらに m.hat でこもらせる
+        if (beat === 3 || beat === 7) noise({ at, freq: 4000, q: 0.7, dur: 0.32, peak: 0.007, attack: 0.025, type: 'bandpass', out: m.hat })
         // ときどき高い木琴のメロディ（表拍だけ。ペンタトニックなので、どの和音の上でも合う）
         if (beat % 2 === 0 && Math.random() < LIGHT_MELODY_CHANCE) {
           const n = LIGHT_MELODY[Math.floor(Math.random() * LIGHT_MELODY.length)]
