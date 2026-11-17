@@ -278,7 +278,7 @@ export function setAmbience({ wind = 0, wave = 0, water = false, silent = false 
 // 曲ごとに音量のつまみ（level）を持ち、setMusic(name, k) で渡した値へ MUSIC_TAU 秒で寄せる（距離で変わる大きさになめらかについていく）
 // 聞こえないあいだは新しい音を作らず、また聞こえはじめたら曲の頭から鳴らす
 //   ambient（Abi）: パッド（三角波を 2 本ずつ少しずらして重ね、こもらせた和音）を 8 秒ごとに重ねながら入れ替え、ペンタトニックのベルをときどき 1 つディレイで残す
-//   light（Rifta）: 75 BPM（8 分音符 0.4 秒）。ポロンと鳴る分散和音・柔らかいベース・小さなシェイカー、ときどき高いベルのメロディ
+//   light（Rifta）: 60 BPM（8 分音符 0.5 秒）。ポロンと鳴る分散和音・柔らかいベース・小さなシェイカー、ときどき高いベルのメロディ
 const MUSIC_TAU = 0.3       // 大きさを寄せる速さ（時定数 s）
 const hz = n => 440 * 2 ** ((n - 69) / 12)   // MIDI の音番号 → Hz
 const musics = {}   // 曲の名前 → { level, next, ...曲ごとのもの }
@@ -306,7 +306,7 @@ const AMBIENT_BELLS = [74, 76, 78, 81, 83, 86]   // D メジャーのペンタ�
 
 // light（Rifta）
 const LIGHT_VOL = 0.6
-const LIGHT_STEP = 0.4   // 8 分音符 (s)。75 BPM
+const LIGHT_STEP = 0.5   // 8 分音符 (s)。60 BPM
 // G → Em → C → D（G メジャー）を 1 小節（8 分音符 8 つ）ずつ。bass: ベースの音 / arp: 分散和音に使う 4 音
 const LIGHT_CHORDS = [
   { bass: 43, arp: [62, 67, 71, 74] },
