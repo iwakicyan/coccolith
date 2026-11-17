@@ -6,10 +6,10 @@ import { R_C } from './constants.js'
 //  1 匹 = かさの粒 1 つ（ドームの形に描く）＋ かさの下に垂れる触手 STRANDS 本 × DOTS 粒
 //  動きはぜんぶ頂点シェーダーで時刻から計算する（粒ごとの乱数を属性に持たせるだけ。毎フレーム JS で動かさない）
 //    旅：from で DWELL 秒漂う → 2 か所を結ぶ大円に沿って SPEED (m/s) でゆっくり to へ → to で漂う → from へ戻る …（1 匹ずつ時刻をずらす）
-//        漂っている所では半径 AREA_R に散らばり、旅のあいだは道の幅 TRAVEL_R に寄って、ゆるい列になる
+//        漂っている所では半径 AREA_R に散らばり、道は 2 か所の真ん中で半径 TRAVEL_R・高さ TRAVEL_H に膨らむ
 //    泳ぎ：PULSE 秒ごとに、かさがキュッとすぼまってスッとのぼり、ふわっと開きながらゆっくり沈む（1 回ごとに元の高さへ戻る）
 //    触手：かさの少し前の時刻の位置をなぞるので、のぼるときは遅れてついてきて、波が下へ伝わる
-//    高さ：道に沿って GROUND_N 点、道の幅ぶんの地面のいちばん高い所を測っておき、その上 HEIGHT (m) を漂う
+//    高さ：道に沿って GROUND_N 点、道の幅ぶんの地面のいちばん高い所を測っておき、その上 HEIGHT（真ん中では TRAVEL_H）(m) を漂う
 //    色を足し合わせて光らせる（AdditiveBlending）
 // ============================================================
 
@@ -17,8 +17,9 @@ const COUNT    = 72             // クラゲの数
 const STRANDS  = 4              // 触手の本数
 const DOTS     = 6              // 触手 1 本の粒の数
 const AREA_R   = 45             // 漂っている所で散らばる半径 (m)
-const TRAVEL_R = 16             // 旅のあいだに散らばる半径 (m)
-const HEIGHT   = [5, 20]        // 地面からの高さ (m)
+const TRAVEL_R = 50             // 2 か所の真ん中で散らばる半径 (m)。そこまでなめらかに膨らむ
+const HEIGHT   = [5, 20]        // 漂っている所での、地面からの高さ (m)
+const TRAVEL_H = [2, 50]        // 2 か所の真ん中での、地面からの高さ (m)
 const SIZE     = [0.9, 1.7]     // かさの大きさ (m)
 const PULSE    = [2.6, 3.8]     // ひと泳ぎの周期 (s)
 const THRUST   = 0.28           // 周期のうち、すぼまってのぼる時間の割合
@@ -79,12 +80,13 @@ const vertexShader = /* glsl */ `
     side = normalize(cross(uFrom, uTo));
     fwd = cross(side, d);
     // 散らばる所：漂っている所では広く、旅のあいだは道に寄る
-    float spread = mix(${f2(AREA_R)}, ${f2(TRAVEL_R)}, sin(3.14159 * s));
+    float mid = sin(3.14159 * s);   // 2 か所の真ん中ほど 1
+    float spread = mix(${f2(AREA_R)}, ${f2(TRAVEL_R)}, mid);
     float ang = aJelly.x * TAU, r = sqrt(aJelly.y);
     vec2 off = vec2(cos(ang), sin(ang)) * r * spread;
     off += ${f2(WANDER)} * vec2(sin(tt * 0.031 + aJelly.w * TAU), cos(tt * 0.027 + aJelly.w * 5.1));
     off += 0.5 * vec2(sin(tt * 0.23 + aJelly.x * TAU), cos(tt * 0.19 + aJelly.y * TAU));
-    float h = mix(${f2(HEIGHT[0])}, ${f2(HEIGHT[1])}, fract(aJelly.x * 7.31 + aJelly.y * 3.17)) + 1.2 * sin(tt * 0.05 + aJelly.w * TAU);
+    float h = mix(mix(${f2(HEIGHT[0])}, ${f2(TRAVEL_H[0])}, mid), mix(${f2(HEIGHT[1])}, ${f2(TRAVEL_H[1])}, mid), fract(aJelly.x * 7.31 + aJelly.y * 3.17)) + 1.2 * sin(tt * 0.05 + aJelly.w * TAU);
     h += lift(fract(tt / period + aJelly.y)) * ${f2(LIFT)} * aJelly.z;
     float R = groundAt(s) + h;
     return normalize(d * R + fwd * off.x + side * off.y) * R;
@@ -176,8 +178,9 @@ export function createKurage({ scene, from, to, groundAt }) {
     d.copy(A).multiplyScalar(Math.sin((1 - s) * arc)).addScaledVector(B, Math.sin(s * arc)).normalize()
     fwd.crossVectors(side, d)
     let g = 0
+    const WIDE = Math.max(AREA_R, TRAVEL_R) + WANDER
     for (const a of [-1, 0, 1]) for (const b of [-1, -0.5, 0, 0.5, 1]) {
-      q.copy(d).multiplyScalar(R_C).addScaledVector(fwd, a * AREA_R).addScaledVector(side, b * AREA_R).normalize()
+      q.copy(d).multiplyScalar(R_C).addScaledVector(fwd, a * WIDE).addScaledVector(side, b * WIDE).normalize()
       g = Math.max(g, groundAt(q))
     }
     ground.push(g)
