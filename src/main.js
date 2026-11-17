@@ -1563,6 +1563,7 @@ const migrations = {
 // 出る場所: 絵の home に書いた名前の場所のまわり（homeRadius の内側）に出て、そこから離れない
 const homes = {
   treehouse: dirOf(TREEHOUSE_AT.lat, TREEHOUSE_AT.lon),
+  spawn: new THREE.Vector3(0, 1, 0),   // スポーン地点（北極）
 }
 const spriteArts = Object.values(import.meta.glob('./pixelArt/sprites/*.js', { eager: true, import: 'default' }))
 const spriteWalkers = spriteArts
