@@ -9,7 +9,7 @@ import { createNoise2D } from 'simplex-noise'
 //    粒は真ん中ほど明るい丸いぼかし。色を足し合わせて光らせる（AdditiveBlending）。地面の向きを上にした向きで置く
 // ============================================================
 
-const COUNT     = 1400          // 粒の数
+const COUNT     = 1000          // 粒の数
 const HEIGHT    = [10, 26]      // のぼる高さ (m)
 const LIFE      = [3.5, 7]      // 1 粒の一生 (s)
 const BASE_R    = [0, 50]       // 出る所の、真ん中からの半径 (m)。縁の内側に一様に散らす
