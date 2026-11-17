@@ -1574,7 +1574,7 @@ const spriteWalkers = spriteArts
   }))
 // 絵に bgmRadius があるキャラ（Abi）の近く（その距離の内側）にいるあいだ、アンビエント BGM を流す（sfx.js の setMusic。室内・俯瞰中は止める）
 //   キャラから BGM_FULL (m) 以内はいちばん大きく、そこから bgmRadius に向かってだんだん小さくなり、bgmRadius で聞こえなくなる
-const BGM_FULL = 5
+const BGM_FULL = 15
 const bgmWalkers = spriteWalkers.map((w, i) => [w, spriteArts[i].bgmRadius]).filter(([, r]) => r)
 const bgmLevel = () => Math.max(0, ...bgmWalkers.map(([w, r]) => {
   const k = THREE.MathUtils.clamp((r - w.distTo(pDir)) / (r - BGM_FULL), 0, 1)
