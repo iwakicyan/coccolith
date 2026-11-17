@@ -1,19 +1,20 @@
 import * as THREE from 'three'
 
 // ============================================================
-//  ふわふわ飛ぶ音符 — ドット絵のキャラの頭のあたりから ♪ を出し、左右にゆらゆらしながらゆっくり昇らせて消す
+//  ふわふわ飛ぶ音符 — ドット絵のキャラの頭のあたりから ♪ を 1 つずつ出し、左右にゆらゆらしながら NOTE_HEIGHT までゆっくり昇らせて消す
 //  ♪ はいつもカメラの方を向く板（THREE.Sprite）。1 つずつ透明度を変えるので、マテリアルは ♪ ごとに持つ（数が少ないので軽い）
 //  pixelSprite.js の createPixelSpriteWalkers が、絵のデータに notes（コマ = { palette, width, height, grid }）があるキャラごとに 1 つ作る
 // ============================================================
 
-const NOTE_GAP    = [0.9, 1.8]   // 次の ♪ を出すまで (s)
-const NOTE_LIFE   = 3.2          // 1 つの ♪ が消えるまで (s)
+const NOTE_GAP    = [0.4, 1.2]   // ♪ が消えてから次の ♪ を出すまで (s)。♪ は 1 つずつ出す
+const NOTE_HEIGHT = 1.5          // 頭のあたりからこの高さ (m) まで昇って消える
 const NOTE_RISE   = 0.55         // 昇る速さ (m/s)
+const NOTE_LIFE   = NOTE_HEIGHT / NOTE_RISE   // 1 つの ♪ が消えるまで (s)
 const NOTE_SWAY   = 0.25         // 左右に揺れる幅 (m)
 const NOTE_SWAY_HZ = 0.6         // 揺れる速さ（1 秒に何回）
 const NOTE_FADE_IN = 0.3         // ふわっと出てくる長さ (s)
 const NOTE_FADE_OUT = 1.2        // 消えていく長さ (s。最後のこの秒数で薄くなる)
-const NOTE_POOL   = Math.ceil(NOTE_LIFE / NOTE_GAP[0]) + 1
+const NOTE_POOL   = 1
 const rand = ([a, b]) => a + Math.random() * (b - a)
 
 const textures = new Map()
@@ -53,20 +54,18 @@ export function createFloatNotes({ scene, frame, size }) {
 
   // head: ♪ を出す所（ワールド座標）/ up: その場所の上の向き（単位ベクトル）/ camera: 揺れる横の向きをカメラから見た左右にする
   function update(dt, head, up, camera) {
-    if ((timer -= dt) <= 0) {
+    const n = notes.find(n => !n.alive)
+    if (n && (timer -= dt) <= 0) {   // 前の ♪ が消えてから数える
       timer = rand(NOTE_GAP)
-      const n = notes.find(n => !n.alive)
-      if (n) {
-        n.alive = true; n.age = 0
-        n.phase = Math.random() * Math.PI * 2
-        n.flip = Math.random() < 0.5 ? -1 : 1   // 左右どちらへ流れていくか
-        n.up.copy(up)
-        // カメラから見た左右（上の向きに直角）
-        _side.set(1, 0, 0).applyQuaternion(camera.quaternion)
-        n.side.copy(_side).addScaledVector(up, -_side.dot(up)).normalize()
-        n.from.copy(head).addScaledVector(n.side, n.flip * size * 0.4)
-        n.s.visible = true
-      }
+      n.alive = true; n.age = 0
+      n.phase = Math.random() * Math.PI * 2
+      n.flip = Math.random() < 0.5 ? -1 : 1   // 左右どちらへ流れていくか
+      n.up.copy(up)
+      // カメラから見た左右（上の向きに直角）
+      _side.set(1, 0, 0).applyQuaternion(camera.quaternion)
+      n.side.copy(_side).addScaledVector(up, -_side.dot(up)).normalize()
+      n.from.copy(head).addScaledVector(n.side, n.flip * size * 0.4)
+      n.s.visible = true
     }
     for (const n of notes) {
       if (!n.alive) continue
