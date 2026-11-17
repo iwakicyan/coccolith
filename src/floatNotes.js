@@ -7,7 +7,7 @@ import * as THREE from 'three'
 // ============================================================
 
 const NOTE_GAP    = [0.4, 1.2]   // ♪ が消えてから次の ♪ を出すまで (s)。♪ は 1 つずつ出す
-const NOTE_HEIGHT = 1.5          // 頭のあたりからこの高さ (m) まで昇って消える
+const NOTE_HEIGHT = 2            // 頭のあたりからこの高さ (m) まで昇って消える
 const NOTE_RISE   = 0.55         // 昇る速さ (m/s)
 const NOTE_LIFE   = NOTE_HEIGHT / NOTE_RISE   // 1 つの ♪ が消えるまで (s)
 const NOTE_SWAY   = 0.25         // 左右に揺れる幅 (m)

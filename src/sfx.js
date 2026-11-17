@@ -277,9 +277,9 @@ export function setAmbience({ wind = 0, wave = 0, water = false, silent = false 
 // --- アンビエント BGM（Abi の近く） ---
 // パッド: 三角波を 2 本ずつ少しずらして重ね、こもらせた和音を MUSIC_CHORD_GAP 秒ごとに次の和音へ重ねながら入れ替える（立ち上がり・消えるのはゆっくり）
 // ベル: ペンタトニックの音をときどき 1 つ、柔らかく鳴らしてディレイで残す
-// 大きさは setMusic で渡した値へ MUSIC_TAU 秒でゆっくり寄せる。聞こえないあいだは新しい音を作らない
+// 大きさは setMusic で渡した値へ MUSIC_TAU 秒で寄せる（距離で変わる大きさになめらかについていく）。聞こえないあいだは新しい音を作らない
 const MUSIC_VOL = 0.6       // いちばん大きいときの音量（風 0.05・波 0.12 と同じ物差し。パッド 1 音がこの 0.04 倍ほど）
-const MUSIC_TAU = 1.5       // 大きさを寄せる速さ（時定数 s）
+const MUSIC_TAU = 0.3       // 大きさを寄せる速さ（時定数 s）
 const MUSIC_CHORD_GAP = 8   // 和音を入れ替える間隔 (s)
 const MUSIC_CHORD_FADE = 4  // 和音の立ち上がり・消える長さ (s)
 const MUSIC_BELL_GAP = [2.5, 7]   // ベルの間隔 (s)
