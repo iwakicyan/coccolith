@@ -39,6 +39,8 @@ const vertexShader = /* glsl */ `
   varying float vAlpha;
   varying float vKind;    // 0: かさ, 1: 触手
   varying float vSquash;  // かさのすぼまり具合 0〜1
+  varying float vRound;   // 真下・真上から見ているほど 1（かさをまん丸に描く）
+  varying vec2 vUp;       // クラゲの上の向きを画面に映した向き（かさのドームをこの向きに立てる）
 
   const float TAU = 6.2831853;
   float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
@@ -83,6 +85,10 @@ const vertexShader = /* glsl */ `
     vColor = aColor;
     vSquash = squash;
     vKind = k > 0.5 ? 1.0 : 0.0;
+    // 見ている向きとクラゲの上の向き（地面の上）とのなす角で、横から見たドームと真下・真上から見た丸を混ぜる
+    vec3 up = normalize((modelViewMatrix * vec4(0.0, 1.0, 0.0, 0.0)).xyz);
+    vRound = smoothstep(0.55, 0.9, abs(dot(normalize(mv.xyz), up)));
+    vUp = length(up.xy) > 1e-3 ? normalize(up.xy) : vec2(0.0, 1.0);
     if (k > 0.5) {
       vAlpha *= (1.0 - 0.75 * k / ${f2(DOTS + 1)}) * 0.8;
       gl_PointSize = size * 0.16 * (1.0 - 0.05 * k) * uPixel / -mv.z;
@@ -96,6 +102,8 @@ const fragmentShader = /* glsl */ `
   varying float vAlpha;
   varying float vKind;
   varying float vSquash;
+  varying float vRound;
+  varying vec2 vUp;
   void main() {
     vec2 q = gl_PointCoord * 2.0 - 1.0;
     if (vKind > 0.5) {
@@ -106,15 +114,21 @@ const fragmentShader = /* glsl */ `
       gl_FragColor = vec4(vColor * glow * vAlpha, 1.0);
       return;
     }
-    // かさ：下が平らなドーム。すぼまると細く縦長になる。ふちが明るく、中はうっすら
-    q.y = -q.y;                                       // 上を +
+    // かさ：横から見ると下が平らなドーム、真下・真上から見るとまん丸。すぼまると細く（丸のときは小さく）なる。ふちが明るく、中はうっすら
+    q.y = -q.y;                                       // 画面の上を +
+    q = vec2(dot(q, vec2(vUp.y, -vUp.x)), dot(q, vUp));   // クラゲの上の向きを +y にする
+    // 横から見たドーム
     float w = 0.62 * (1.0 - 0.22 * vSquash), h = 0.5 * (1.0 + 0.12 * vSquash), yb = -0.18;
     float dy = q.y - yb;
-    float e = dy > 0.0 ? length(vec2(q.x / w, dy / h)) : length(vec2(q.x / w, dy / (h * 0.22)));
+    float eS = dy > 0.0 ? length(vec2(q.x / w, dy / h)) : length(vec2(q.x / w, dy / (h * 0.22)));
+    float capS = exp(-pow(length(vec2(q.x / w, (dy - h * 0.55) / h)) / 0.35, 2.0)) * 0.35;   // てっぺんの少し明るい所
+    // 真下・真上から見た丸（てっぺんが真ん中に来る）
+    float eR = length(q) / w;
+    float capR = exp(-pow(eR / 0.35, 2.0)) * 0.3;
+    float e = mix(eS, eR, vRound), cap = mix(capS, capR, vRound);
     if (e > 1.6) discard;
     float rim  = exp(-pow((e - 0.9) / 0.1, 2.0));                       // ふちの光
     float fill = (1.0 - smoothstep(0.2, 1.0, e)) * 0.28;                 // 中のうっすらした光
-    float cap  = exp(-pow(length(vec2(q.x / w, (dy - h * 0.55) / h)) / 0.35, 2.0)) * 0.35;   // てっぺんの少し明るい所
     float halo = (1.0 - smoothstep(0.9, 1.6, e)) * 0.12;                 // まわりのぼんやりした光
     float glow = rim * (0.8 + 0.3 * vSquash) + fill + cap + halo;
     gl_FragColor = vec4(vColor * glow * vAlpha, 1.0);
