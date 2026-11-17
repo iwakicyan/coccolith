@@ -315,16 +315,15 @@ const LIGHT_CHORDS = [
   { bass: 38, arp: [62, 66, 69, 74] },
 ]
 const LIGHT_ARP = [0, 1, 2, 1, 3, 2, 1, 2]   // 小節の中で分散和音のどの音を鳴らすか
-const LIGHT_SKIP = 0.15                     // 分散和音の音をこの割合だけ抜いて、軽く聞かせる
+const LIGHT_SKIP = 0.4                      // 分散和音の音をこの割合だけ抜いて、軽く聞かせる（小節の頭は抜かない）
 const LIGHT_MELODY = [79, 81, 83, 86, 88]   // 木琴のメロディ（G メジャーのペンタトニック。G5〜E6）
-const LIGHT_MELODY_CHANCE = 0.18           // 8 分音符ごとにメロディの音を鳴らす割合（表拍だけ）
+const LIGHT_MELODY_CHANCE = 0.08           // 8 分音符ごとにメロディの音を鳴らす割合（表拍だけ）
 
-// 木琴の 1 音: 丸い基音に、すぐ消える 3 倍・6.3 倍の倍音（木の板らしいコン）と、ごく短い打撃のコツッを重ねる
-function mallet(at, f, peak, out, dur = 0.7) {
-  tone({ at, f0: f, dur, peak, attack: 0.002, out })
-  tone({ at, f0: f * 3, dur: 0.09, peak: peak * 0.35, attack: 0.001, out })
-  tone({ at, f0: f * 6.3, dur: 0.035, peak: peak * 0.15, attack: 0.001, out })
-  noise({ at, freq: Math.min(f * 4, 4000), q: 2, dur: 0.025, peak: peak * 0.5, attack: 0.001, out })
+// 木琴の 1 音: 丸い基音に、すぐ消える 3 倍の倍音（木の板らしいコン）と、ごく小さな打撃のコツッを重ねる（丸く聞こえるよう倍音・打撃は控えめ）
+function mallet(at, f, peak, out, dur = 0.8) {
+  tone({ at, f0: f, dur, peak, attack: 0.005, out })
+  tone({ at, f0: f * 3, dur: 0.06, peak: peak * 0.15, attack: 0.003, out })
+  noise({ at, freq: Math.min(f * 2, 2000), q: 1.5, dur: 0.02, peak: peak * 0.15, attack: 0.002, type: 'lowpass', out })
 }
 
 const MUSIC_TRACKS = {
@@ -387,8 +386,8 @@ const MUSIC_TRACKS = {
           tone({ at, f0: hz(chord.bass), dur: 0.9, peak: 0.05, attack: 0.006, out: m.level })
           mallet(at, hz(chord.bass + 12), 0.02, m.level, 0.5)
         }
-        // シェイカー（裏拍。ごく小さく）
-        if (beat % 2 === 1) noise({ at, freq: 6000, q: 0.8, dur: 0.05, peak: beat === 3 || beat === 7 ? 0.008 : 0.005, attack: 0.003, type: 'highpass', out: m.level })
+        // シェイカー（2 拍目と 4 拍目の裏だけ。ごく小さく）
+        if (beat === 3 || beat === 7) noise({ at, freq: 6000, q: 0.8, dur: 0.05, peak: 0.006, attack: 0.003, type: 'highpass', out: m.level })
         // ときどき高い木琴のメロディ（表拍だけ。ペンタトニックなので、どの和音の上でも合う）
         if (beat % 2 === 0 && Math.random() < LIGHT_MELODY_CHANCE) {
           const n = LIGHT_MELODY[Math.floor(Math.random() * LIGHT_MELODY.length)]
