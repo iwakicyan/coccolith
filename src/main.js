@@ -1583,6 +1583,15 @@ const bgmLevel = name => Math.max(0, ...bgmWalkers.filter(b => b[1] === name).ma
   const k = THREE.MathUtils.clamp((r - w.distTo(pDir)) / (r - BGM_FULL), 0, 1)
   return k * k * (3 - 2 * k)   // なめらかに
 }))
+// 曲は重ねない: 聞こえる範囲に入った順に並べ、いちばんあとに入った曲だけを流す（先に流れていた曲は消す。あとの曲の範囲を出たら、まだ範囲にいれば戻る）
+let bgmOrder = []   // 聞こえる範囲にいる曲の名前（入った順）
+function updateMusic(on) {
+  const levels = new Map(bgmNames.map(name => [name, on ? bgmLevel(name) : 0]))
+  bgmOrder = bgmOrder.filter(name => levels.get(name) > 0)
+  for (const name of bgmNames) if (levels.get(name) > 0 && !bgmOrder.includes(name)) bgmOrder.push(name)
+  const playing = bgmOrder.at(-1)
+  for (const name of bgmNames) sfx.setMusic(name, name === playing ? levels.get(name) : 0)
+}
 // 缶を持った sabちゃんが近づくと、ドット絵のキャラは立ち止まって sabちゃんの方を向く（10m 以内。pixelSprite.js）
 // こちらを向いている距離（WATCH_DIST）なら、Enter（いちばん近いキャラ）かキャラをタップで缶をあげられる。もらったキャラは sabちゃんから 5m より離れないようについてくる（ページを開き直すと戻る）
 const GIVE_DIST = SPRITE_WATCH_DIST
@@ -2100,7 +2109,7 @@ function animate() {
   // 水中かは毎フレーム見る（潜った瞬間に音を切り替える）
   const ambWater = !interior && !overviewMode && camera.position.length() < seaSurfaceHeight(_ambCam.copy(camera.position).normalize())
   sfx.setAmbience(interior ? { wind: 0.25, wave: 0 } : { wind: 1, wave: ambWave, water: ambWater, silent: overviewMode })
-  for (const name of bgmNames) sfx.setMusic(name, !interior && !overviewMode ? bgmLevel(name) : 0)
+  updateMusic(!interior && !overviewMode)
   coinIntro.update(dt, sabchan.group.position)
   coinDrop.update(dt)
   updateDoorGlow(now)
