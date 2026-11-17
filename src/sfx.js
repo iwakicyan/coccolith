@@ -142,6 +142,7 @@ const HUM_MIN    = 0.1    // これより弱い入力では鳴らさない
 const HUM_DELAY  = 0.2    // ディレイの間隔 (s)
 const HUM_FEEDBACK = 0.55 // 繰り返すたびに残る割合
 const HUM_WET    = 0.6    // ディレイの音の大きさ（元の音に対して）
+const HUM_VOL    = 0.8    // フォーン全体の音量（ディレイも含めてこの倍にする）
 let humNext = 0           // 次の「フォン」を鳴らす時刻（ctx.currentTime）。止まっているときは 0
 const HUM_MUFFLE_HZ = 200  // 水中でフォーンをこもらせるときのフィルタ (Hz)。2 段に重ねて高い音をばっさり落とす
 const HUM_WATER_PITCH = 0.65  // 水中ではフォーンの音程をこの倍率に下げる（ボワ…と重く）
@@ -157,7 +158,8 @@ function humOut() {
     f.frequency.value = underwater ? HUM_MUFFLE_HZ : 20000
     return f
   })
-  humMuffle[0].connect(humMuffle[1]).connect(master)
+  const vol = ctx.createGain(); vol.gain.value = HUM_VOL
+  humMuffle[0].connect(humMuffle[1]).connect(vol).connect(master)
   humBus.connect(humMuffle[0])
   const delay = ctx.createDelay(1)
   delay.delayTime.value = HUM_DELAY
@@ -276,7 +278,7 @@ export function setAmbience({ wind = 0, wave = 0, water = false, silent = false 
 // パッド: 三角波を 2 本ずつ少しずらして重ね、こもらせた和音を MUSIC_CHORD_GAP 秒ごとに次の和音へ重ねながら入れ替える（立ち上がり・消えるのはゆっくり）
 // ベル: ペンタトニックの音をときどき 1 つ、柔らかく鳴らしてディレイで残す
 // 大きさは setMusic で渡した値へ MUSIC_TAU 秒でゆっくり寄せる。聞こえないあいだは新しい音を作らない
-const MUSIC_VOL = 0.35      // いちばん大きいときの音量（風 0.05・波 0.12 と同じ物差し。パッド 1 音がこの 0.04 倍ほど）
+const MUSIC_VOL = 0.6       // いちばん大きいときの音量（風 0.05・波 0.12 と同じ物差し。パッド 1 音がこの 0.04 倍ほど）
 const MUSIC_TAU = 1.5       // 大きさを寄せる速さ（時定数 s）
 const MUSIC_CHORD_GAP = 8   // 和音を入れ替える間隔 (s)
 const MUSIC_CHORD_FADE = 4  // 和音の立ち上がり・消える長さ (s)
