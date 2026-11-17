@@ -22,6 +22,7 @@ import { createBlobShadows, polygonShadow } from './blobShadow.js'
 //    migrate: 集まる先の名前（'gojunoto' など）。時刻によってそこへ集まって散らばる（createPixelSpriteWalkers に渡す migrations。migration.js）
 //    near: true なら見た目の確認用にスポーン地点の近くに出す
 //    home / homeRadius: 出る場所の名前（createPixelSpriteWalkers に渡す homes）とその半径 (m)。その内側に出て、外へ出そうになったら中へ向きを変える
+//    bgmRadius: sabちゃんがキャラからこの距離 (m) 以内にいるあいだ、アンビエント BGM を流す（main.js が使う。sfx.js の setMusic）
 //    idleAnim: true なら立ち止まっているあいだも walk のコマを回す（sit は使わない）
 //    shadow: { w, l, dz, sides } があれば足元に擬似的な影（ダークグレーの多角形の板。blobShadow.js）を置く。幅・前後の長さ・前へずらす量 (m)・角の数（なければ 8）
 //  側面: 板は縦軸まわりだけ回って常にカメラの方を向く。オブジェクトの前の向きとカメラのいる方向の角度を 45°（4 方向なら 90°）ごとに区切って絵を選ぶ
@@ -500,7 +501,14 @@ export function createPixelSpriteWalkers({ scene, art, count, dot, speed, radius
     w.follow = true
   }
 
-  return { update, nearest, hit, follow }
+  // dir（単位ベクトル）からいちばん近いキャラまでの距離 (m)。ついてきているキャラも含める（いなければ Infinity）
+  function distTo(dir) {
+    let d = Infinity
+    for (const w of walkers) d = Math.min(d, radius * w.dir.angleTo(dir))
+    return d
+  }
+
+  return { update, nearest, hit, follow, distTo }
 }
 
 // ------------------------------------------------------------

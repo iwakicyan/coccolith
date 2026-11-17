@@ -1563,7 +1563,8 @@ const migrations = {
 const homes = {
   treehouse: dirOf(TREEHOUSE_AT.lat, TREEHOUSE_AT.lon),
 }
-const spriteWalkers = Object.values(import.meta.glob('./pixelArt/sprites/*.js', { eager: true, import: 'default' }))
+const spriteArts = Object.values(import.meta.glob('./pixelArt/sprites/*.js', { eager: true, import: 'default' }))
+const spriteWalkers = spriteArts
   .map(art => createPixelSpriteWalkers({
     scene, art, count: art.count, dot: SPRITE_DOT * (art.scale ?? 1), speed: SPEED * 0.05, radius: R_C,
     getGround: dir => getGroundHeight(dir) - 1,
@@ -1571,6 +1572,9 @@ const spriteWalkers = Object.values(import.meta.glob('./pixelArt/sprites/*.js', 
     getSeaLevel: dir => R_OCEAN + dir.dot(oceanMesh.position),   // 海面球は潮で oceanMesh.position だけずれている
     followSpeed: SPEED * 1.15,   // ついてくるときは sabちゃんより少し速く走れる
   }))
+// 絵に bgmRadius があるキャラ（Abi）の近く（その距離の内側）にいるあいだ、アンビエント BGM を流す（sfx.js の setMusic。室内・俯瞰中は止める）
+const bgmWalkers = spriteWalkers.map((w, i) => [w, spriteArts[i].bgmRadius]).filter(([, r]) => r)
+const bgmNear = () => bgmWalkers.some(([w, r]) => w.distTo(pDir) <= r)
 // 缶を持った sabちゃんが近づくと、ドット絵のキャラは立ち止まって sabちゃんの方を向く（10m 以内。pixelSprite.js）
 // こちらを向いている距離（WATCH_DIST）なら、Enter（いちばん近いキャラ）かキャラをタップで缶をあげられる。もらったキャラは sabちゃんから 5m より離れないようについてくる（ページを開き直すと戻る）
 const GIVE_DIST = SPRITE_WATCH_DIST
@@ -2088,6 +2092,7 @@ function animate() {
   // 水中かは毎フレーム見る（潜った瞬間に音を切り替える）
   const ambWater = !interior && !overviewMode && camera.position.length() < seaSurfaceHeight(_ambCam.copy(camera.position).normalize())
   sfx.setAmbience(interior ? { wind: 0.25, wave: 0 } : { wind: 1, wave: ambWave, water: ambWater, silent: overviewMode })
+  sfx.setMusic(!interior && !overviewMode && bgmNear() ? 1 : 0)
   coinIntro.update(dt, sabchan.group.position)
   coinDrop.update(dt)
   updateDoorGlow(now)

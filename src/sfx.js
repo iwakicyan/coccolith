@@ -10,6 +10,7 @@
 //  kanTake():     取り出し口の缶・台の上の花を取ったとき（コトッ）
 //  setMoving(k): sabちゃんが動いている強さ（0〜1）を毎フレーム渡す。動いている間「フォン…フォン…」と鳴らす
 //  setAmbience({ wind, wave, water }): 環境音の大きさ（0〜1）を毎フレーム渡す。風（いつも小さくサー…）と波（海の近くでザザー…と寄せては返す）。water（カメラが水中）なら風・波を消してフォーンをこもらせる。silent（俯瞰中）なら風・波を消す
+//  setMusic(k): アンビエント BGM の大きさ（0〜1）を毎フレーム渡す。Abi の近くで流す（ゆっくり重なる和音と、ときどき鳴る柔らかいベル）
 //  initSoundButton(btn): HUD の歯車の横のスピーカーを、音のオン・オフの切り替えにする（選んだほうは localStorage に残す）
 // ============================================================
 
@@ -268,6 +269,78 @@ export function setAmbience({ wind = 0, wave = 0, water = false, silent = false 
     const at = Math.max(waveNext, now + 0.05)
     waveSwash(at)
     waveNext = at + WAVE_GAP[0] + Math.random() * (WAVE_GAP[1] - WAVE_GAP[0])
+  }
+}
+
+// --- アンビエント BGM（Abi の近く） ---
+// パッド: 三角波を 2 本ずつ少しずらして重ね、こもらせた和音を MUSIC_CHORD_GAP 秒ごとに次の和音へ重ねながら入れ替える（立ち上がり・消えるのはゆっくり）
+// ベル: ペンタトニックの音をときどき 1 つ、柔らかく鳴らしてディレイで残す
+// 大きさは setMusic で渡した値へ MUSIC_TAU 秒でゆっくり寄せる。聞こえないあいだは新しい音を作らない
+const MUSIC_VOL = 0.35      // いちばん大きいときの音量（風 0.05・波 0.12 と同じ物差し。パッド 1 音がこの 0.04 倍ほど）
+const MUSIC_TAU = 1.5       // 大きさを寄せる速さ（時定数 s）
+const MUSIC_CHORD_GAP = 8   // 和音を入れ替える間隔 (s)
+const MUSIC_CHORD_FADE = 4  // 和音の立ち上がり・消える長さ (s)
+const MUSIC_BELL_GAP = [2.5, 7]   // ベルの間隔 (s)
+const hz = n => 440 * 2 ** ((n - 69) / 12)   // MIDI の音番号 → Hz
+// Dmaj9 → Bm9 → Gmaj9 → Asus4（D メジャー）。1 つめはベース
+const MUSIC_CHORDS = [[38, 57, 61, 64, 66], [35, 54, 57, 61, 62], [31, 54, 59, 62, 69], [33, 52, 57, 62, 64]]
+const MUSIC_BELLS = [74, 76, 78, 81, 83, 86]   // D メジャーのペンタトニック（D5〜D6）
+let music = null   // { level, pad, bell }
+let musicChord = 0, musicChordNext = 0, musicBellNext = 0
+function startMusic() {
+  const level = ctx.createGain(); level.gain.value = 0
+  level.connect(master)
+  const pad = ctx.createBiquadFilter(); pad.type = 'lowpass'; pad.frequency.value = 700; pad.Q.value = 0.3
+  pad.connect(level)
+  // ベルはディレイで残響のように残す
+  const bell = ctx.createGain()
+  const delay = ctx.createDelay(2); delay.delayTime.value = 0.45
+  const fb = ctx.createGain(); fb.gain.value = 0.45
+  const tone = ctx.createBiquadFilter(); tone.type = 'lowpass'; tone.frequency.value = 2200
+  bell.connect(level)
+  bell.connect(delay).connect(tone).connect(fb).connect(delay)
+  tone.connect(level)
+  music = { level, pad, bell }
+}
+function musicChordAt(at, notes) {
+  const dur = MUSIC_CHORD_GAP + MUSIC_CHORD_FADE
+  notes.forEach((n, i) => {
+    const g = ctx.createGain()
+    const peak = i === 0 ? 0.05 : 0.035   // ベースだけ少し大きく
+    g.gain.setValueAtTime(0, at)
+    g.gain.linearRampToValueAtTime(peak, at + MUSIC_CHORD_FADE)
+    g.gain.setValueAtTime(peak, at + dur - MUSIC_CHORD_FADE)
+    g.gain.linearRampToValueAtTime(0, at + dur)
+    g.connect(music.pad)
+    for (const cents of [-6, 6]) {
+      const o = ctx.createOscillator(); o.type = 'triangle'
+      o.frequency.value = hz(n); o.detune.value = cents
+      o.connect(g); o.start(at); o.stop(at + dur + 0.05)
+    }
+  })
+}
+function musicBellAt(at) {
+  const n = MUSIC_BELLS[Math.floor(Math.random() * MUSIC_BELLS.length)]
+  const g = envelope(at, 0.03, 0.02, 3, music.bell)
+  const o = ctx.createOscillator(); o.type = 'sine'; o.frequency.value = hz(n)
+  o.connect(g); o.start(at); o.stop(at + 3.05)
+}
+export function setMusic(k) {
+  if (!ctx || muted || document.hidden) return   // 最初のタッチ・キーで音が起きるまでは何もしない
+  if (!music) { if (k <= 0) return; startMusic() }
+  const now = ctx.currentTime
+  music.level.gain.setTargetAtTime(MUSIC_VOL * k, now, MUSIC_TAU)
+  if (k <= 0 && music.level.gain.value < 0.001) { musicChordNext = musicBellNext = 0; return }   // 聞こえなくなったら音を作らない
+  if (musicChordNext <= now + 0.1) {
+    const at = Math.max(musicChordNext, now + 0.05)
+    musicChordAt(at, MUSIC_CHORDS[musicChord])
+    musicChord = (musicChord + 1) % MUSIC_CHORDS.length
+    musicChordNext = at + MUSIC_CHORD_GAP
+  }
+  if (musicBellNext <= now + 0.1) {
+    const at = Math.max(musicBellNext, now + 0.05) + (musicBellNext ? 0 : MUSIC_CHORD_FADE)   // 鳴りはじめはパッドが立ち上がってから
+    musicBellAt(at)
+    musicBellNext = at + MUSIC_BELL_GAP[0] + Math.random() * (MUSIC_BELL_GAP[1] - MUSIC_BELL_GAP[0])
   }
 }
 
