@@ -332,10 +332,13 @@ const LIGHT_MELODY = [79, 81, 83, 86, 88]   // 木琴のメロディ（G メジ�
 const LIGHT_MELODY_CHANCE = 0.08           // 8 分音符ごとにメロディの音を鳴らす割合（表拍だけ）
 
 // 木琴の 1 音: 丸い基音に、すぐ消える 3 倍の倍音（木の板らしいコン）と、ごく小さな打撃のコツッを重ねる（丸く聞こえるよう倍音・打撃は控えめ）
+//   立ち上がりが速すぎるとプチッと聞こえるので少しなだらかにし、高い音ほど倍音・打撃を弱める（高い音の倍音・打撃がいちばんプチッと聞こえる）
+const MALLET_ATTACK = 0.012   // 基音の立ち上がり (s)
 function mallet(at, f, peak, out, dur = 0.8) {
-  tone({ at, f0: f, dur, peak, attack: 0.005, out })
-  tone({ at, f0: f * 3, dur: 0.06, peak: peak * 0.15, attack: 0.003, out })
-  noise({ at, freq: Math.min(f * 2, 2000), q: 1.5, dur: 0.02, peak: peak * 0.15, attack: 0.002, type: 'lowpass', out })
+  const soft = Math.min(1, 440 / f)   // A4 より高い音ほど倍音・打撃を弱める
+  tone({ at, f0: f, dur, peak, attack: MALLET_ATTACK, out })
+  tone({ at, f0: f * 3, dur: 0.07, peak: peak * 0.12 * soft, attack: 0.008, out })
+  noise({ at, freq: Math.min(f * 2, 1500), q: 1, dur: 0.03, peak: peak * 0.1 * soft, attack: 0.008, type: 'lowpass', out })
 }
 
 const MUSIC_TRACKS = {
@@ -381,7 +384,10 @@ const MUSIC_TRACKS = {
   light: {
     vol: LIGHT_VOL,
     start(m) {
-      m.out = echoBus(m.level, LIGHT_STEP * 1.5, 0.12, 1800)   // 付点 8 分のディレイを薄く（木琴らしく、響きは短めに）
+      // 曲全体をこもらせて、鳴りはじめのプチッとした高い成分を削る（ベース・シェイカー以外はここを通す）
+      m.soft = ctx.createBiquadFilter(); m.soft.type = 'lowpass'; m.soft.frequency.value = 2400; m.soft.Q.value = 0.5
+      m.soft.connect(m.level)
+      m.out = echoBus(m.soft, LIGHT_STEP * 1.5, 0.12, 1800)   // 付点 8 分のディレイを薄く（木琴らしく、響きは短めに）
       m.step = 0
     },
     reset(m) { m.step = 0 },
@@ -395,8 +401,8 @@ const MUSIC_TRACKS = {
         if (beat === 0 || Math.random() > LIGHT_SKIP) mallet(at, hz(chord.arp[LIGHT_ARP[beat]]), 0.032, m.out)
         // ベース（1 拍目と 3 拍目。低い木琴の音を 1 オクターブ上の音も混ぜて柔らかく）
         if (beat === 0 || beat === 4) {
-          tone({ at, f0: hz(chord.bass), dur: 0.9, peak: 0.05, attack: 0.006, out: m.level })
-          mallet(at, hz(chord.bass + 12), 0.02, m.level, 0.5)
+          tone({ at, f0: hz(chord.bass), dur: 0.9, peak: 0.05, attack: 0.015, out: m.level })
+          mallet(at, hz(chord.bass + 12), 0.02, m.soft, 0.5)
         }
         // シェイカー（2 拍目と 4 拍目の裏だけ。ごく小さく）
         if (beat === 3 || beat === 7) noise({ at, freq: 6000, q: 0.8, dur: 0.05, peak: 0.006, attack: 0.003, type: 'highpass', out: m.level })
