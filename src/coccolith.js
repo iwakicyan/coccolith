@@ -567,15 +567,16 @@ export function createCoccolith({ renderer = null } = {}) {
   }))
 
   // --- EF: 光の粒の立ちのぼり（constants.js の SPARKLE_AT）の 2 か所の地面に、ドット絵の EF（40×40 を 9 枚）を 1 枚 6m で貼る ---
-  //   範囲は光の粒が湧くところと同じ形（縁はギザギザ）を EF_SCALE 倍に縮めたところ（半径 35m ほど。光の粒の範囲は変えない）。2 か所とも山（山A・山F）の上なので、段の坂にも地形に沿わせて貼る
+  //   範囲は光の粒が湧くところと同じ形（縁はギザギザ）を EF_SCALE 倍に縮めたところ（半径 30m ほど。光の粒の範囲は変えない）。2 か所とも山（山A・山F）の上なので、段の坂にも地形に沿わせて貼る
   //   坂の折れ目に潜らないよう、1 枚を 6×6 に分けて（1m ごと）地面から 0.15m 浮かせる
-  const EF_SCALE = 0.7
+  const EF_SCALE = 0.6
+  const EF_OPACITY = 0.8   // 不透明度。下の山の地面が少し透けて見える
   for (const { lat, lon, edgeSeed } of SPARKLE_AT) {
     const inArea = sparkleAreaContainsFn(dirOf(lat, lon), edgeSeed, R_C + LAND_LIFT, EF_SCALE)
     group.add(createShitabaGround({
       terrainGeo: geo, segs: TERRAIN_SEGS, center: { lat, lon },
       contains: (la, lo) => inArea(dirOf(la, lo)),
-      tiles: EF_TILES, name: 'ef', flatOnly: false, sub: 6, lift: 0.15,
+      tiles: EF_TILES, name: 'ef', flatOnly: false, sub: 6, lift: 0.15, opacity: EF_OPACITY,
     }))
   }
 

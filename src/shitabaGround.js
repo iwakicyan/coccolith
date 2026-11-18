@@ -13,6 +13,7 @@ import { SHITABA_TILES } from './pixelArt/ground/shitaba.js'
 //  center: { lat, lon } 図法の中心
 //  tiles: 9 枚のドット絵（既定は下葉。光の粒のところは EF）/ name: メッシュの名前
 //  flatOnly: false なら坂（山）にも地形に沿わせて貼る（EF。光の粒の 2 か所は山A・山F の上）
+//  opacity: 不透明度（1 で透けない。1 より小さいと下の地面が透けて見える）
 //  sub / lift: 1 枚を分ける数と浮かせる高さ。坂に貼るときは細かく分け、少し高く浮かせて地形の折れ目に潜らないようにする
 // ============================================================
 
@@ -91,7 +92,7 @@ const dirOf = (lat, lon) => {
 }
 
 export function createShitabaGround({ terrainGeo, segs, contains, center, tiles = SHITABA_TILES, name = 'shitaba',
-                                     flatOnly = true, sub: SUB = SUB_DEFAULT, lift: LIFT = LIFT_DEFAULT }) {
+                                     flatOnly = true, sub: SUB = SUB_DEFAULT, lift: LIFT = LIFT_DEFAULT, opacity = 1 }) {
   const R = R_C + LAND_LIFT
   const radiusAt = terrainRadiusFn(terrainGeo, segs)
 
@@ -189,6 +190,7 @@ export function createShitabaGround({ terrainGeo, segs, contains, center, tiles 
 
   const mat = new THREE.MeshLambertMaterial({
     map: createAtlasTexture(tiles), alphaTest: 0.5,
+    ...(opacity < 1 && { transparent: true, opacity, depthWrite: false }),   // 透けるときは、重なった地面を隠さないよう深度を書かない
     polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1,
   })
   const mesh = new THREE.Mesh(geo, mat)
