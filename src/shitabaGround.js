@@ -1,6 +1,7 @@
 import * as THREE from 'three'
 import { R_C, LAND_LIFT } from './constants.js'
 import { SHITABA_TILES } from './pixelArt/ground/shitaba.js'
+import Alea from 'alea'
 
 // ============================================================
 //  下葉 — ドット絵を地面に平らに貼る
@@ -15,6 +16,8 @@ import { SHITABA_TILES } from './pixelArt/ground/shitaba.js'
 //  tiles: 9 枚のドット絵（＋カケの絵。既定は下葉。光の粒のところは EF）/ name: メッシュの名前
 //  flatOnly: false なら坂（山）にも地形に沿わせて貼る（EF。光の粒の 2 か所は山A・山F の上）
 //  tile: 1 枚の大きさ (m)
+//  holes: { count, seed } 範囲の中に開ける穴の数と、場所・形を決める乱数の種（開くたびには変わらない）。穴は 1〜2 マス角で、
+//    穴のまわりは 2 マス以上の絵が残るところにだけ開ける（1 マス幅だと端の絵が合わないので）。入りきらなければ数は減る
 //  opacity: 不透明度（1 で透けない。1 より小さいと下の地面が透けて見える）
 //  sub / lift: 1 枚を分ける数と浮かせる高さ。坂に貼るときは細かく分け、少し高く浮かせて地形の折れ目に潜らないようにする
 // ============================================================
@@ -111,7 +114,7 @@ const dirOf = (lat, lon) => {
 }
 
 export function createShitabaGround({ terrainGeo, segs, contains, center, tiles = SHITABA_TILES, name = 'shitaba',
-                                     flatOnly = true, sub: SUB = SUB_DEFAULT, lift: LIFT = LIFT_DEFAULT, opacity = 1, tile: TILE = TILE_DEFAULT }) {
+                                     flatOnly = true, sub: SUB = SUB_DEFAULT, lift: LIFT = LIFT_DEFAULT, opacity = 1, tile: TILE = TILE_DEFAULT, holes = null }) {
   const R = R_C + LAND_LIFT
   const radiusAt = terrainRadiusFn(terrainGeo, segs)
 
@@ -171,6 +174,28 @@ export function createShitabaGround({ terrainGeo, segs, contains, center, tiles 
       const [i, j] = k.split(',').map(Number)
       const h = (di, dj) => cells.has(key(i + di, j + dj))
       if ((!h(0, 1) && !h(0, -1)) || (!h(1, 0) && !h(-1, 0))) { cells.delete(k); changed = true }
+    }
+  }
+
+  // 穴を開ける：穴の形（1×1・2×1・1×2・2×2 マス）と場所を乱数で選び、穴のまわり 2 マスがぜんぶ絵のマスで、
+  //   ほかの穴のまわりとも重ならないところだけに開ける
+  if (holes?.count > 0) {
+    const rng = Alea(holes.seed ?? 'holes')
+    const keep = new Set()   // 開けた穴とそのまわり 2 マス（次の穴はここに掛からないように）
+    const list = [...cells.keys()].map(k => k.split(',').map(Number))
+    let made = 0
+    for (let tries = 0; tries < 300 && made < holes.count && list.length; tries++) {
+      const [i0, j0] = list[Math.floor(rng() * list.length)]
+      const w = 1 + Math.floor(rng() * 2), hgt = 1 + Math.floor(rng() * 2)
+      let ok = true
+      for (let a = -2; a < w + 2 && ok; a++) for (let b = -2; b < hgt + 2 && ok; b++) {
+        const kk = key(i0 + a, j0 + b)
+        if (!cells.has(kk) || keep.has(kk)) ok = false
+      }
+      if (!ok) continue
+      for (let a = -2; a < w + 2; a++) for (let b = -2; b < hgt + 2; b++) keep.add(key(i0 + a, j0 + b))
+      for (let a = 0; a < w; a++) for (let b = 0; b < hgt; b++) cells.delete(key(i0 + a, j0 + b))
+      made++
     }
   }
 
