@@ -189,7 +189,7 @@ export function createShitabaGround({ terrainGeo, segs, contains, center, tiles 
   geo.computeBoundingSphere()
 
   const mat = new THREE.MeshLambertMaterial({
-    map: createAtlasTexture(tiles), alphaTest: 0.5,
+    map: createAtlasTexture(tiles), alphaTest: 0.5 * opacity,   // 透明なドットだけ捨てる（alphaTest は opacity を掛けたあとの値と比べるので、合わせて下げる）
     ...(opacity < 1 && { transparent: true, opacity, depthWrite: false }),   // 透けるときは、重なった地面を隠さないよう深度を書かない
     polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1,
   })
