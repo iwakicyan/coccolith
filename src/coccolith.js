@@ -575,7 +575,7 @@ export function createCoccolith({ renderer = null } = {}) {
   const EF_SCALE = 1
   const EF_LOOK = [
     { tile: 8, opacity: 0.6, edgeAmp: 0.55, holes: { big: 0, small: 10, seed: 'ef-hole-day' } },   // 昼の側（山A）
-    { tile: 6, opacity: 0.8, edgeAmp: 0.3, holes: { big: 0, small: 6, seed: 'ef-hole-night' } },  // 夜の側（山F）
+    { tile: 6, opacity: 0.8, edgeAmp: 0.3, holes: { big: 0, small: 16, seed: 'ef-hole-night' } },  // 夜の側（山F）
   ]
   SPARKLE_AT.forEach(({ lat, lon, edgeSeed }, k) => {
     const { tile, opacity, edgeAmp, holes } = EF_LOOK[k]
