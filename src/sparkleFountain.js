@@ -37,10 +37,10 @@ function mulberry32(seed) {
   }
 }
 // 角度 a での縁の半径 (m)。ノイズを円周（cos a, sin a）の上で取るので、1 周してつなぎ目が出ない。細かい段ほど弱く重ねる
-function edgeRadiusOf(edgeSeed, edgeAmp = EDGE_AMP) {
+function edgeRadiusOf(edgeSeed, edgeAmp = EDGE_AMP, edgeFreq = EDGE_FREQ) {
   const noise = createNoise2D(mulberry32(edgeSeed))
   return a => {
-  let n = 0, amp = 1, f = EDGE_FREQ, sum = 0
+  let n = 0, amp = 1, f = edgeFreq, sum = 0
   for (let o = 0; o < EDGE_OCT; o++) {
     n += amp * noise(Math.cos(a) * f + o * 17.3, Math.sin(a) * f - o * 9.1)
     sum += amp; amp *= 0.5; f *= 2
@@ -51,9 +51,10 @@ function edgeRadiusOf(edgeSeed, edgeAmp = EDGE_AMP) {
 
 // 光の粒の立ちのぼりの範囲（縁のギザギザの内側）に入るか。地面に EF のドット絵を貼る範囲にも使う（coccolith.js）
 // center: 真ん中の向き / edgeSeed: createSparkleFountain と同じ種 / R: 地面の高さ（星の中心から m）/ scale: 縁の半径を何倍にするか
-// edgeAmp: 縁のギザギザの伸び縮みの幅（既定は光の粒と同じ EDGE_AMP。大きいほどギザギザが強い）。返す関数は向き d を受け取る
-export function sparkleAreaContainsFn(center, edgeSeed = EDGE_SEED, R, scale = 1, edgeAmp = EDGE_AMP) {
-  const edgeRadius = edgeRadiusOf(edgeSeed, edgeAmp)
+// edgeAmp: 縁のギザギザの伸び縮みの幅（既定は光の粒と同じ EDGE_AMP。大きいほどギザギザが強い）
+// edgeFreq: ギザギザの細かさ（既定は光の粒と同じ EDGE_FREQ。大きいほど波が多い）。返す関数は向き d を受け取る
+export function sparkleAreaContainsFn(center, edgeSeed = EDGE_SEED, R, scale = 1, edgeAmp = EDGE_AMP, edgeFreq = EDGE_FREQ) {
+  const edgeRadius = edgeRadiusOf(edgeSeed, edgeAmp, edgeFreq)
   const c = center.clone().normalize()
   const inv = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), c).invert()
   const l = new THREE.Vector3()
