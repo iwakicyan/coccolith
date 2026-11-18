@@ -6,12 +6,13 @@ import { SHITABA_TILES } from './pixelArt/ground/shitaba.js'
 //  下葉 — ドット絵を地面に平らに貼る
 //  範囲の真ん中を中心にした平面（中心からの距離と向きを保つ図法）に TILE (m) 角のマス目を敷き、
 //  範囲に入るマスにドット絵を 1 枚ずつ貼る。上下左右のマスがあるかどうかで 9 枚（中央・端・角）から選ぶ（上 = 北）
+//  tiles にカケの絵（cutTopLeft など）があれば、へこんだ角（ななめ隣だけマスが無い角）はその角が欠けた絵にする
 //  板は地形の三角形に沿わせ、LIFT だけ浮かせる。flatOnly なら平らな陸地（高さ R_C + LAND_LIFT）だけに貼り、坂（海岸・山）には貼らない
 //
 //  terrainGeo: 地表の SphereGeometry（押し出したあとのもの。分割数 segs × segs）
 //  contains(lat, lon): その地点が貼る範囲か
 //  center: { lat, lon } 図法の中心
-//  tiles: 9 枚のドット絵（既定は下葉。光の粒のところは EF）/ name: メッシュの名前
+//  tiles: 9 枚のドット絵（＋カケの絵。既定は下葉。光の粒のところは EF）/ name: メッシュの名前
 //  flatOnly: false なら坂（山）にも地形に沿わせて貼る（EF。光の粒の 2 か所は山A・山F の上）
 //  tile: 1 枚の大きさ (m)
 //  opacity: 不透明度（1 で透けない。1 より小さいと下の地面が透けて見える）
@@ -23,26 +24,43 @@ const SUB_DEFAULT  = 3          // 1 枚を SUB × SUB に分けて地形に沿�
 const LIFT_DEFAULT = 0.08       // 地面から浮かせる高さ (m)
 const FLAT_TOL = 0.8    // 平らな陸地とみなす高さの幅 (m)。地形の三角形の中ほどは頂点より最大 0.55m ほど低い
 
-// 9 枚を並べたテクスチャの中の位置（列, 行）。行 0 が上（北）
-const ATLAS = {
-  topLeft: [0, 0], top: [1, 0], topRight: [2, 0],
-  left:    [0, 1], center: [1, 1], right: [2, 1],
-  bottomLeft: [0, 2], bottom: [1, 2], bottomRight: [2, 2],
+// へこんだ角に使うカケの絵（tiles に cutTopLeft などがあるときだけ使う。下葉には無い）
+//   角の名前 → 絵の名前。ななめ隣のマスが無く、その角をはさむ 2 辺のマスはあるときに、その角が欠けた絵を使う
+const CUT_TILE = { TL: 'cutTopLeft', TR: 'cutTopRight', BL: 'cutBottomLeft', BR: 'cutBottomRight' }
+const CUT_PAIR_TILE = { 'TL,BR': 'cutTopLeftBottomRight', 'TR,BL': 'cutTopRightBottomLeft' }   // 2 か所欠けるのを描いた絵
+
+// マスに使う絵を決める。返すのは 4 分の 1 ずつの絵の名前 [左上, 右上, 左下, 右下]
+//   n s e w: 上下左右のマスがあるか / cuts: 欠ける角（'TL' など）
+//   描いた絵がそのまま当てはまるときはその 1 枚。ほかは、欠ける角の 4 分の 1 だけカケの絵から取り、残りは端・角・中央の絵から取る
+function tileQuarters(tiles, n, s, e, w, cuts) {
+  const base = !n && !w ? 'topLeft' : !n && !e ? 'topRight' : !s && !w ? 'bottomLeft' : !s && !e ? 'bottomRight'
+             : !n ? 'top' : !s ? 'bottom' : !w ? 'left' : !e ? 'right' : 'center'
+  cuts = cuts.filter(c => tiles[CUT_TILE[c]])
+  const whole = base !== 'center' ? (cuts.length ? null : base)
+              : cuts.length === 0 ? 'center' : cuts.length === 1 ? CUT_TILE[cuts[0]] : CUT_PAIR_TILE[cuts.join(',')]
+  if (whole && tiles[whole]) return [whole, whole, whole, whole]
+  return ['TL', 'TR', 'BL', 'BR'].map(q => cuts.includes(q) ? CUT_TILE[q] : base)
 }
 
-function createAtlasTexture(tiles) {
-  const N = tiles.center.width
+// 使う組み合わせだけを並べたテクスチャを作る。quartersList: tileQuarters の結果の並び（重なりなし）
+function createAtlasTexture(tiles, quartersList, cols, rows) {
+  const N = tiles.center.width, H = N / 2
   const canvas = document.createElement('canvas')
-  canvas.width = canvas.height = N * 3
+  canvas.width = N * cols; canvas.height = N * rows
   const ctx = canvas.getContext('2d')
-  for (const [key, [col, row]] of Object.entries(ATLAS)) {
-    const { palette, grid } = tiles[key]
-    grid.forEach((line, y) => line.forEach((n, x) => {
-      if (!palette[n]) return
-      ctx.fillStyle = palette[n]
-      ctx.fillRect(col * N + x, row * N + y, 1, 1)
-    }))
-  }
+  quartersList.forEach((quarters, k) => {
+    const col = k % cols, row = Math.floor(k / cols)
+    quarters.forEach((name, q) => {
+      const { palette, grid } = tiles[name]
+      const x0 = (q % 2) * H, y0 = Math.floor(q / 2) * H
+      for (let y = y0; y < y0 + H; y++) for (let x = x0; x < x0 + H; x++) {
+        const c = palette[grid[y][x]]
+        if (!c) continue
+        ctx.fillStyle = c
+        ctx.fillRect(col * N + x, row * N + y, 1, 1)
+      }
+    })
+  })
   const tex = new THREE.CanvasTexture(canvas)
   tex.colorSpace = THREE.SRGBColorSpace
   tex.magFilter = tex.minFilter = THREE.NearestFilter
@@ -156,17 +174,32 @@ export function createShitabaGround({ terrainGeo, segs, contains, center, tiles 
     }
   }
 
-  // マスごとに絵を選んで板を作る
-  const pos = [], nrm = [], uv = [], index = []
-  const EPS = 0.001   // テクスチャの隣の絵がにじまないよう、端を少し内側にする
-  const v = new THREE.Vector3()
+  // マスごとに絵を選ぶ（上下左右のマスと、へこんだ角になるななめ隣のマスを見る）。使う組み合わせだけをテクスチャに並べる
+  const atlasIndex = new Map(), quartersList = []
+  const cellTile = new Map()   // "i,j" → テクスチャの中の番号
   for (const k of cells.keys()) {
     const [i, j] = k.split(',').map(Number)
     const h = (di, dj) => cells.has(key(i + di, j + dj))
     const n = h(0, 1), s = h(0, -1), e = h(1, 0), w = h(-1, 0)
-    const tile = !n && !w ? 'topLeft' : !n && !e ? 'topRight' : !s && !w ? 'bottomLeft' : !s && !e ? 'bottomRight'
-               : !n ? 'top' : !s ? 'bottom' : !w ? 'left' : !e ? 'right' : 'center'
-    const [col, row] = ATLAS[tile]
+    const cuts = []
+    if (n && w && !h(-1, 1)) cuts.push('TL')    // 左 = 西（i が減る向き）、上 = 北（j が増える向き）
+    if (n && e && !h(1, 1)) cuts.push('TR')
+    if (s && w && !h(-1, -1)) cuts.push('BL')
+    if (s && e && !h(1, -1)) cuts.push('BR')
+    const quarters = tileQuarters(tiles, n, s, e, w, cuts)
+    const qk = quarters.join(',')
+    if (!atlasIndex.has(qk)) { atlasIndex.set(qk, quartersList.length); quartersList.push(quarters) }
+    cellTile.set(k, atlasIndex.get(qk))
+  }
+  const COLS = Math.max(1, Math.ceil(Math.sqrt(quartersList.length))), ROWS = Math.max(1, Math.ceil(quartersList.length / COLS))
+
+  // マスごとに板を作る
+  const pos = [], nrm = [], uv = [], index = []
+  const EPS = 0.001   // テクスチャの隣の絵がにじまないよう、端を少し内側にする
+  const v = new THREE.Vector3()
+  for (const [k, t] of cellTile) {
+    const [i, j] = k.split(',').map(Number)
+    const col = t % COLS, row = Math.floor(t / COLS)   // row 0 がテクスチャの上
     const base = pos.length / 3
     for (let b = 0; b <= SUB; b++) for (let a = 0; a <= SUB; a++) {
       const gi = i * SUB + a, gj = j * SUB + b
@@ -175,7 +208,7 @@ export function createShitabaGround({ terrainGeo, segs, contains, center, tiles 
       v.multiplyScalar(vertexR(gi, gj) + LIFT)
       pos.push(v.x, v.y, v.z)
       const fs = EPS + (1 - 2 * EPS) * a / SUB, ft = EPS + (1 - 2 * EPS) * b / SUB   // 東・北へ 0〜1
-      uv.push((col + fs) / 3, (2 - row + ft) / 3)
+      uv.push((col + fs) / COLS, (ROWS - 1 - row + ft) / ROWS)
     }
     for (let b = 0; b < SUB; b++) for (let a = 0; a < SUB; a++) {
       const p = base + b * (SUB + 1) + a, q = p + SUB + 1
@@ -190,7 +223,7 @@ export function createShitabaGround({ terrainGeo, segs, contains, center, tiles 
   geo.computeBoundingSphere()
 
   const mat = new THREE.MeshLambertMaterial({
-    map: createAtlasTexture(tiles), alphaTest: 0.5 * opacity,   // 透明なドットだけ捨てる（alphaTest は opacity を掛けたあとの値と比べるので、合わせて下げる）
+    map: createAtlasTexture(tiles, quartersList, COLS, ROWS), alphaTest: 0.5 * opacity,   // 透明なドットだけ捨てる（alphaTest は opacity を掛けたあとの値と比べるので、合わせて下げる）
     ...(opacity < 1 && { transparent: true, opacity, depthWrite: false }),   // 透けるときは、重なった地面を隠さないよう深度を書かない
     polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1,
   })
