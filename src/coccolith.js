@@ -574,8 +574,8 @@ export function createCoccolith({ renderer = null } = {}) {
   //   昼の側（SPARKLE_AT[0]。lat -11・lon -136、山A）は俯瞰で見ると目立つので、1 枚を大きく、薄く、縁を強くギザギザにする
   const EF_SCALE = 1
   const EF_LOOK = [
-    { tile: 8, opacity: 0.6, edgeAmp: 0.55, holes: { big: 1, small: 3, seed: 'ef-hole-day' } },   // 昼の側（山A）
-    { tile: 6, opacity: 0.8, edgeAmp: 0.3, holes: { big: 2, small: 4, seed: 'ef-hole-night' } },  // 夜の側（山F）
+    { tile: 8, opacity: 0.6, edgeAmp: 0.55, holes: { big: 0, small: 5, seed: 'ef-hole-day' } },   // 昼の側（山A）
+    { tile: 6, opacity: 0.8, edgeAmp: 0.3, holes: { big: 0, small: 6, seed: 'ef-hole-night' } },  // 夜の側（山F）
   ]
   SPARKLE_AT.forEach(({ lat, lon, edgeSeed }, k) => {
     const { tile, opacity, edgeAmp, holes } = EF_LOOK[k]
