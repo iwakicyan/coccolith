@@ -49,6 +49,20 @@ function edgeRadiusOf(edgeSeed) {
   }
 }
 
+// 光の粒の立ちのぼりの範囲（縁のギザギザの内側）に入るか。地面に EF のドット絵を貼る範囲にも使う（coccolith.js）
+// center: 真ん中の向き / edgeSeed: createSparkleFountain と同じ種 / R: 地面の高さ（星の中心から m）。返す関数は向き d を受け取る
+export function sparkleAreaContainsFn(center, edgeSeed = EDGE_SEED, R) {
+  const edgeRadius = edgeRadiusOf(edgeSeed)
+  const c = center.clone().normalize()
+  const inv = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), c).invert()
+  const l = new THREE.Vector3()
+  return d => {
+    l.copy(d).normalize().applyQuaternion(inv)   // 立ちのぼりと同じ向き（地面の上が +y）にして、角度と真ん中からの距離を出す
+    const r = Math.acos(THREE.MathUtils.clamp(l.y, -1, 1)) * R
+    return r <= edgeRadius(Math.atan2(l.z, l.x))
+  }
+}
+
 const vertexShader = /* glsl */ `
   uniform float uTime;
   uniform float uCurve;   // 1 / (2 × 星の半径)。真ん中から離れるほど星の丸みで地面が下がる分（r² × uCurve）

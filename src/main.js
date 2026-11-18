@@ -17,7 +17,7 @@ import { createMigration } from './migration.js'
 import { createVeth } from './veth.js'
 import { createCloud1, createFlatCloud } from './cloud1.js'
 import { mergeStatic } from '../my-3d-parts/parts/mergeStatic.js'
-import { R_C, LAND_LIFT, ORBIT } from './constants.js'
+import { R_C, LAND_LIFT, ORBIT, SPARKLE_AT } from './constants.js'
 import { createGondolaRide, createGondolaTourRide } from './gondola.js'
 import { createGondeerRide, gondeerLatPath } from './gondeer.js'
 import { createKummo } from '../my-3d-parts/parts/kummo.jsx'
@@ -1751,11 +1751,7 @@ function throwCoinToWater(e) {
 }
 
 // 光の粒の立ちのぼり（sparkleFountain.js）: SPARKLE_AT の各地点を中心に半径 50m ほど（縁はノイズでギザギザ）の地中 6m（海なら海面の下）から、丸いぽわぽわした光の粒が立ちのぼる
-//   edgeSeed: 縁のギザギザの形（場所ごとに変える）
-const SPARKLE_AT = [
-  { lat: -11, lon: -136, edgeSeed: 7 },
-  { lat: -11, lon: -31, edgeSeed: 23 },
-]
+//   場所と縁の形は constants.js の SPARKLE_AT（地面の EF のドット絵も同じ範囲に貼る。coccolith.js）
 const sparkleFountains = SPARKLE_AT.map(({ lat, lon, edgeSeed }) => {
   const dir = dirOf(lat, lon)
   return createSparkleFountain({ scene, dir, ground: Math.max(getGroundHeight(dir) - 1, R_OCEAN), edgeSeed })

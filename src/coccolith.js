@@ -1,7 +1,7 @@
 import * as THREE from 'three'
 import { createNoise3D } from 'simplex-noise'
 import Alea from 'alea'
-import { R_C, LAND_LIFT } from './constants.js'
+import { R_C, LAND_LIFT, SPARKLE_AT } from './constants.js'
 import { createTORCH } from '../my-3d-parts/landmark/TORCH.js'
 import { createChairTree } from '../my-3d-parts/landmark/chairtree.js'
 import { createTou } from '../my-3d-parts/landmark/tou.js'
@@ -28,6 +28,8 @@ import { TREEHOUSE_PIXEL_LAYERS, TREEHOUSE_PIXEL_TEXT } from './pixelArt/treehou
 import { createFlowerGeometry, openFlowerCut } from './flowerCut.js'
 import { addLedBoard } from './ledBoard.js'
 import { createShitabaGround } from './shitabaGround.js'
+import { EF_TILES } from './pixelArt/ground/ef.js'
+import { sparkleAreaContainsFn } from './sparkleFountain.js'
 import { applyNightEnv } from './nightEnv.js'
 import { createForest1 } from '../my-3d-parts/parts/forest1.jsx'
 import { createFrame64 } from '../my-3d-parts/parts/Frame_6-4.jsx'
@@ -563,6 +565,17 @@ export function createCoccolith({ renderer = null } = {}) {
         return _distToSeg(lat, lon, a.lat, a.lon, b.lat, b.lon) >= SHITABA_SHRINK_DEG })) ||
       SHITABA_CIRCLES.some(c => dirOf(lat, lon).dot(c.dir) >= c.cosR)),
   }))
+
+  // --- EF: 光の粒の立ちのぼり（constants.js の SPARKLE_AT）の 2 か所の地面に、ドット絵の EF（40×40 を 9 枚）を 1 枚 6m で貼る ---
+  //   範囲は光の粒が湧くところと同じ（半径 50m ほどで縁はギザギザ）。平らな陸地だけに貼る（海・坂には貼らない）
+  for (const { lat, lon, edgeSeed } of SPARKLE_AT) {
+    const inArea = sparkleAreaContainsFn(dirOf(lat, lon), edgeSeed, R_C + LAND_LIFT)
+    group.add(createShitabaGround({
+      terrainGeo: geo, segs: TERRAIN_SEGS, center: { lat, lon },
+      contains: (la, lo) => inArea(dirOf(la, lo)),
+      tiles: EF_TILES, name: 'ef',
+    }))
+  }
 
   const FIELD01_AREAS = [
     [{lat:-60,lon:30},{lat:-37,lon:62},{lat:-43,lon:82},{lat:-60,lon:82}],

@@ -11,6 +11,7 @@ import { SHITABA_TILES } from './pixelArt/ground/shitaba.js'
 //  terrainGeo: 地表の SphereGeometry（押し出したあとのもの。分割数 segs × segs）
 //  contains(lat, lon): その地点が貼る範囲か
 //  center: { lat, lon } 図法の中心
+//  tiles: 9 枚のドット絵（既定は下葉。光の粒のところは EF）/ name: メッシュの名前
 // ============================================================
 
 const TILE = 6          // 1 枚の大きさ (m)
@@ -25,13 +26,13 @@ const ATLAS = {
   bottomLeft: [0, 2], bottom: [1, 2], bottomRight: [2, 2],
 }
 
-function createAtlasTexture() {
-  const N = SHITABA_TILES.center.width
+function createAtlasTexture(tiles) {
+  const N = tiles.center.width
   const canvas = document.createElement('canvas')
   canvas.width = canvas.height = N * 3
   const ctx = canvas.getContext('2d')
   for (const [key, [col, row]] of Object.entries(ATLAS)) {
-    const { palette, grid } = SHITABA_TILES[key]
+    const { palette, grid } = tiles[key]
     grid.forEach((line, y) => line.forEach((n, x) => {
       if (!palette[n]) return
       ctx.fillStyle = palette[n]
@@ -87,7 +88,7 @@ const dirOf = (lat, lon) => {
   return new THREE.Vector3(Math.sin(phi) * Math.cos(theta), Math.cos(phi), Math.sin(phi) * Math.sin(theta))
 }
 
-export function createShitabaGround({ terrainGeo, segs, contains, center }) {
+export function createShitabaGround({ terrainGeo, segs, contains, center, tiles = SHITABA_TILES, name = 'shitaba' }) {
   const R = R_C + LAND_LIFT
   const radiusAt = terrainRadiusFn(terrainGeo, segs)
 
@@ -184,11 +185,11 @@ export function createShitabaGround({ terrainGeo, segs, contains, center }) {
   geo.computeBoundingSphere()
 
   const mat = new THREE.MeshLambertMaterial({
-    map: createAtlasTexture(), alphaTest: 0.5,
+    map: createAtlasTexture(tiles), alphaTest: 0.5,
     polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1,
   })
   const mesh = new THREE.Mesh(geo, mat)
   mesh.receiveShadow = true
-  mesh.name = 'shitaba'
+  mesh.name = name
   return mesh
 }
