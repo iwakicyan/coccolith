@@ -181,8 +181,8 @@ export function createShitabaGround({ terrainGeo, segs, contains, center, tiles 
   }
 
   // 穴を開ける：大きい穴から順に、形（HOLE_SHAPES）と場所を乱数で選んで開ける
-  //   範囲の外側の縁からは 2 マス以上離す（穴のまわり 2 マスは絵のマスか、2 マス目だけはもう開けた穴のマスでもよい）
-  //   穴同士は近くてもよい（すぐ隣にはくっつけない）。ただ、開けたせいで 1 マス幅のところ（端の絵が合わない）ができるなら開けない
+  //   範囲の外側の縁からは 2 マス以上離す（穴のまわり 2 マスが、絵のマスか、もう開けた穴のマス）
+  //   穴同士は近くてもよい（くっついたら 1 つの大きい穴になる）。ただ、開けたせいで 1 マス幅のところ（端の絵が合わない）ができるなら開けない
   if (holes) {
     const rng = Alea(holes.seed ?? 'holes')
     const holeCells = new Set()
@@ -200,8 +200,8 @@ export function createShitabaGround({ terrainGeo, segs, contains, center, tiles 
         let ok = true
         for (let a = -2; a < w + 2 && ok; a++) for (let b = -2; b < hgt + 2 && ok; b++) {
           const kk = key(i0 + a, j0 + b)
-          const ring1 = a >= -1 && a <= w && b >= -1 && b <= hgt   // 穴とそのすぐ隣（ななめも）。ここはぜんぶ絵のマスでないといけない
-          if (ring1 ? !cells.has(kk) : !cells.has(kk) && !holeCells.has(kk)) ok = false
+          const inside = a >= 0 && a < w && b >= 0 && b < hgt
+          if (inside ? !cells.has(kk) : !cells.has(kk) && !holeCells.has(kk)) ok = false
         }
         if (!ok) continue
         const opened = []
