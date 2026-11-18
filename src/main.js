@@ -1606,8 +1606,8 @@ const PLANK_WIND = 1.3
 // 環境音（sfx.js の setAmbience）: 風はいつも、波は sabちゃんのまわりに海があるほど大きく。室内では風を小さくして波は消す。俯瞰中とカメラが水中にあるときは両方プツッと消す（水中では動いている間のフォーンもこもらせる）
 //   海の近さは AMB_SAMPLE_T 秒おきに、sabちゃんの足元と、まわり 8 方向 × AMB_SAMPLE_D (m) の地点が海かどうかで測る（近い海ほど大きい）
 const AMB_SAMPLE_T = 0.25
-const AMB_SAMPLE_D = [2, 4, 6, 8, 10, 12]
-const AMB_WAVE_FAR = 12.5 // この距離の海は 0 として数える (m)。12m より遠い海は聞こえない
+const AMB_SAMPLE_D = [1, 2]
+const AMB_WAVE_FAR = 2.5  // この距離の海は 0 として数える (m)。2m より遠い海は聞こえない
 let ambT = 0, ambWave = 0
 const _ambCam = new THREE.Vector3()
 const _ambSide = new THREE.Vector3(), _ambAxis = new THREE.Vector3(), _ambDir = new THREE.Vector3(), _ambRight = new THREE.Vector3()
