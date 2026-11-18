@@ -315,7 +315,7 @@ const AMBIENT_CHORDS = [[38, 57, 61, 64, 66], [35, 54, 57, 61, 62], [31, 54, 59,
 const AMBIENT_BELLS = [74, 76, 78, 81, 83, 86]   // D メジャーのペンタトニック（D5〜D6）
 
 // light（Rifta）
-const LIGHT_VOL = 0.6
+const LIGHT_VOL = 0.75      // いちばん大きいときの音量（アンビエントよりやや小さく聞こえたので 0.6 → 0.75）
 const LIGHT_STEP = 0.6   // 8 分音符 (s)。50 BPM
 // G → Em → C → D（G メジャー）を 1 小節（8 分音符 8 つ）ずつ。bass: ベースの音 / arp: 分散和音に使う 4 音
 const LIGHT_CHORDS = [
