@@ -17,7 +17,7 @@ import Alea from 'alea'
 //  flatOnly: false なら坂（山）にも地形に沿わせて貼る（EF。光の粒の 2 か所は山A・山F の上）
 //  tile: 1 枚の大きさ (m)
 //  holes: { big, small, seed } 範囲の中に開ける大きい穴・小さい穴の数と、場所・形を決める乱数の種（開くたびには変わらない）。形は HOLE_SHAPES
-//    穴のまわりは 2 マス以上の絵が残るところにだけ開ける（1 マス幅だと端の絵が合わないので）。入りきらなければ数は減る
+//    範囲の縁からは 2 マス以上離す。穴同士は近くてもよいが、1 マス幅のところ（端の絵が合わない）ができるところには開けない。入りきらなければ数は減る
 //  opacity: 不透明度（1 で透けない。1 より小さいと下の地面が透けて見える）
 //  sub / lift: 1 枚を分ける数と浮かせる高さ。坂に貼るときは細かく分け、少し高く浮かせて地形の折れ目に潜らないようにする
 // ============================================================
@@ -180,21 +180,37 @@ export function createShitabaGround({ terrainGeo, segs, contains, center, tiles 
     }
   }
 
-  // 穴を開ける：大きい穴から順に、形（HOLE_SHAPES）と場所を乱数で選び、穴のまわり 2 マスがぜんぶ絵のマスのところだけに開ける
-  //   （ほかの穴もまわり 2 マスに入らないので、穴と穴のあいだも 2 マス以上空く）
+  // 穴を開ける：大きい穴から順に、形（HOLE_SHAPES）と場所を乱数で選んで開ける
+  //   範囲の外側の縁からは 2 マス以上離す（穴のまわり 2 マスは絵のマスか、2 マス目だけはもう開けた穴のマスでもよい）
+  //   穴同士は近くてもよい（すぐ隣にはくっつけない）。ただ、開けたせいで 1 マス幅のところ（端の絵が合わない）ができるなら開けない
   if (holes) {
     const rng = Alea(holes.seed ?? 'holes')
+    const holeCells = new Set()
+    const thin = (i, j) => {   // 1 マス幅で飛び出したマスか（上下とも・左右とも空いている）
+      const h = (di, dj) => cells.has(key(i + di, j + dj))
+      return (!h(0, 1) && !h(0, -1)) || (!h(1, 0) && !h(-1, 0))
+    }
     for (const size of ['big', 'small']) {
       const shapes = HOLE_SHAPES[size]
-      for (let made = 0, tries = 0; made < (holes[size] ?? 0) && tries < 500; tries++) {
+      for (let made = 0, tries = 0; made < (holes[size] ?? 0) && tries < 1000; tries++) {
         const list = [...cells.keys()]
         if (!list.length) break
         const [i0, j0] = list[Math.floor(rng() * list.length)].split(',').map(Number)
         const [w, hgt] = shapes[Math.floor(rng() * shapes.length)]
         let ok = true
-        for (let a = -2; a < w + 2 && ok; a++) for (let b = -2; b < hgt + 2 && ok; b++) if (!cells.has(key(i0 + a, j0 + b))) ok = false
+        for (let a = -2; a < w + 2 && ok; a++) for (let b = -2; b < hgt + 2 && ok; b++) {
+          const kk = key(i0 + a, j0 + b)
+          const ring1 = a >= -1 && a <= w && b >= -1 && b <= hgt   // 穴とそのすぐ隣（ななめも）。ここはぜんぶ絵のマスでないといけない
+          if (ring1 ? !cells.has(kk) : !cells.has(kk) && !holeCells.has(kk)) ok = false
+        }
         if (!ok) continue
-        for (let a = 0; a < w; a++) for (let b = 0; b < hgt; b++) cells.delete(key(i0 + a, j0 + b))
+        const opened = []
+        for (let a = 0; a < w; a++) for (let b = 0; b < hgt; b++) { const kk = key(i0 + a, j0 + b); cells.delete(kk); opened.push(kk) }
+        for (let a = -1; a < w + 1 && ok; a++) for (let b = -1; b < hgt + 1 && ok; b++) {
+          if (cells.has(key(i0 + a, j0 + b)) && thin(i0 + a, j0 + b)) ok = false
+        }
+        if (!ok) { for (const kk of opened) cells.set(kk, true); continue }
+        for (const kk of opened) holeCells.add(kk)
         made++
       }
     }
