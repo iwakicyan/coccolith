@@ -13,11 +13,12 @@ import { SHITABA_TILES } from './pixelArt/ground/shitaba.js'
 //  center: { lat, lon } 図法の中心
 //  tiles: 9 枚のドット絵（既定は下葉。光の粒のところは EF）/ name: メッシュの名前
 //  flatOnly: false なら坂（山）にも地形に沿わせて貼る（EF。光の粒の 2 か所は山A・山F の上）
+//  tile: 1 枚の大きさ (m)
 //  opacity: 不透明度（1 で透けない。1 より小さいと下の地面が透けて見える）
 //  sub / lift: 1 枚を分ける数と浮かせる高さ。坂に貼るときは細かく分け、少し高く浮かせて地形の折れ目に潜らないようにする
 // ============================================================
 
-const TILE = 6          // 1 枚の大きさ (m)
+const TILE_DEFAULT = 6  // 1 枚の大きさ (m)
 const SUB_DEFAULT  = 3          // 1 枚を SUB × SUB に分けて地形に沿わせる（地形の折れ目で板が地面に潜らないように）
 const LIFT_DEFAULT = 0.08       // 地面から浮かせる高さ (m)
 const FLAT_TOL = 0.8    // 平らな陸地とみなす高さの幅 (m)。地形の三角形の中ほどは頂点より最大 0.55m ほど低い
@@ -92,7 +93,7 @@ const dirOf = (lat, lon) => {
 }
 
 export function createShitabaGround({ terrainGeo, segs, contains, center, tiles = SHITABA_TILES, name = 'shitaba',
-                                     flatOnly = true, sub: SUB = SUB_DEFAULT, lift: LIFT = LIFT_DEFAULT, opacity = 1 }) {
+                                     flatOnly = true, sub: SUB = SUB_DEFAULT, lift: LIFT = LIFT_DEFAULT, opacity = 1, tile: TILE = TILE_DEFAULT }) {
   const R = R_C + LAND_LIFT
   const radiusAt = terrainRadiusFn(terrainGeo, segs)
 

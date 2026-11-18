@@ -566,19 +566,25 @@ export function createCoccolith({ renderer = null } = {}) {
       SHITABA_CIRCLES.some(c => dirOf(lat, lon).dot(c.dir) >= c.cosR)),
   }))
 
-  // --- EF: 光の粒の立ちのぼり（constants.js の SPARKLE_AT）の 2 か所の地面に、ドット絵の EF（40×40 を 9 枚）を 1 枚 6m で貼る ---
+  // --- EF: 光の粒の立ちのぼり（constants.js の SPARKLE_AT）の 2 か所の地面に、ドット絵の EF（40×40 を 9 枚）を貼る ---
   //   範囲は光の粒が湧くところと同じ形（縁はギザギザ）を EF_SCALE 倍に縮めたところ（半径 30m ほど。光の粒の範囲は変えない）。2 か所とも山（山A・山F）の上なので、段の坂にも地形に沿わせて貼る
-  //   坂の折れ目に潜らないよう、1 枚を 6×6 に分けて（1m ごと）地面から 0.15m 浮かせる
+  //   坂の折れ目に潜らないよう、1 枚を 1m ごとに分けて地面から 0.15m 浮かせる
+  //   tile: 1 枚の大きさ (m) / opacity: 不透明度（下の山の地面が透けて見える）/ edgeAmp: 縁のギザギザの強さ（光の粒は 0.3）
+  //   昼の側（SPARKLE_AT[0]。lat -11・lon -136、山A）は俯瞰で見ると目立つので、1 枚を大きく、薄く、縁を強くギザギザにする
   const EF_SCALE = 0.6
-  const EF_OPACITY = 0.8   // 不透明度。下の山の地面が少し透けて見える
-  for (const { lat, lon, edgeSeed } of SPARKLE_AT) {
-    const inArea = sparkleAreaContainsFn(dirOf(lat, lon), edgeSeed, R_C + LAND_LIFT, EF_SCALE)
+  const EF_LOOK = [
+    { tile: 8, opacity: 0.6, edgeAmp: 0.55 },   // 昼の側（山A）
+    { tile: 6, opacity: 0.8, edgeAmp: 0.3 },    // 夜の側（山F）
+  ]
+  SPARKLE_AT.forEach(({ lat, lon, edgeSeed }, k) => {
+    const { tile, opacity, edgeAmp } = EF_LOOK[k]
+    const inArea = sparkleAreaContainsFn(dirOf(lat, lon), edgeSeed, R_C + LAND_LIFT, EF_SCALE, edgeAmp)
     group.add(createShitabaGround({
       terrainGeo: geo, segs: TERRAIN_SEGS, center: { lat, lon },
       contains: (la, lo) => inArea(dirOf(la, lo)),
-      tiles: EF_TILES, name: 'ef', flatOnly: false, sub: 6, lift: 0.15, opacity: EF_OPACITY,
+      tiles: EF_TILES, name: 'ef', flatOnly: false, sub: tile, lift: 0.15, opacity, tile,
     }))
-  }
+  })
 
   const FIELD01_AREAS = [
     [{lat:-60,lon:30},{lat:-37,lon:62},{lat:-43,lon:82},{lat:-60,lon:82}],
