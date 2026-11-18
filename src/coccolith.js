@@ -567,12 +567,12 @@ export function createCoccolith({ renderer = null } = {}) {
   }))
 
   // --- EF: 光の粒の立ちのぼり（constants.js の SPARKLE_AT）の 2 か所の地面に、ドット絵の EF（40×40 を 9 枚）を貼る ---
-  //   範囲は光の粒が湧くところと同じ形（縁はギザギザ）を EF_SCALE 倍に縮めたところ（半径 30m ほど。光の粒の範囲は変えない）。2 か所とも山（山A・山F）の上なので、段の坂にも地形に沿わせて貼る
+  //   範囲は光の粒が湧くところと同じ形（縁はギザギザ）を EF_SCALE 倍にしたところ（1 で光の粒と同じ半径 50m ほど）。2 か所とも山（山A・山F）の上なので、段の坂にも地形に沿わせて貼る
   //   坂の折れ目に潜らないよう、1 枚を 1m ごとに分けて地面から 0.15m 浮かせる
   //   tile: 1 枚の大きさ (m) / opacity: 不透明度（下の山の地面が透けて見える）/ edgeAmp: 縁のギザギザの強さ（光の粒は 0.3）
   //   holes: 範囲の中に開ける大きい穴（2〜3 マス角）・小さい穴（1〜2 マス）の数と、場所・形を決める乱数の種（まわりに 2 マス残せるところだけ。入りきらなければ減る）
   //   昼の側（SPARKLE_AT[0]。lat -11・lon -136、山A）は俯瞰で見ると目立つので、1 枚を大きく、薄く、縁を強くギザギザにする
-  const EF_SCALE = 0.6
+  const EF_SCALE = 1
   const EF_LOOK = [
     { tile: 8, opacity: 0.6, edgeAmp: 0.55, holes: { big: 1, small: 3, seed: 'ef-hole-day' } },   // 昼の側（山A）
     { tile: 6, opacity: 0.8, edgeAmp: 0.3, holes: { big: 2, small: 4, seed: 'ef-hole-night' } },  // 夜の側（山F）
