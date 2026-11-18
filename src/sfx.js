@@ -12,16 +12,14 @@
 //  setMoving(k): sabちゃんが動いている強さ（0〜1）を毎フレーム渡す。動いている間「フォン…フォン…」と鳴らす
 //  setAmbience({ wind, wave, water }): 環境音の大きさ（0〜1）を毎フレーム渡す。風（いつも小さくサー…）と波（海の近くでザザー…と寄せては返す）。water（カメラが水中）なら風・波を消してフォーンをこもらせる。silent（俯瞰中）なら風・波を消す
 //  setMusic(name, k): BGM の曲ごとの大きさ（0〜1）を毎フレーム渡す。ドット絵のキャラの近くで流す（ambient: Abi・ゆっくり重なる和音とベル / light: Rifta・軽い分散和音）
-//  initSoundButton(btn): HUD の歯車の横のスピーカーを、音のオン・オフの切り替えにする（選んだほうは localStorage に残す）
+//  initSoundButton(btn): HUD の歯車の横のスピーカーを、音のオン・オフの切り替えにする（開いたときはいつも消えていて、押すと鳴りはじめる。選んだほうは残さない）
 // ============================================================
 
 import { t, onLangChange } from './i18n.js'
 
 const VOLUME = 0.5   // 全体の音量
-const SOUND_KEY = 'coccolith.sound'
 
-let muted = false
-try { muted = localStorage.getItem(SOUND_KEY) === '0' } catch { /* 読めなければ音を出す */ }
+let muted = true   // 開いたときはいつも音を消しておく（スピーカーを押すと鳴る）
 
 let ctx = null, master = null, noiseBuf = null
 
@@ -456,7 +454,6 @@ export function initSoundButton(btn) {
   onLangChange(draw)
   btn.addEventListener('click', () => {
     muted = !muted
-    try { localStorage.setItem(SOUND_KEY, muted ? '0' : '1') } catch { /* 残せなくても今回は効く */ }
     if (ctx) { if (muted) ctx.suspend(); else ctx.resume() }
     else if (!muted) audio()
     draw()
