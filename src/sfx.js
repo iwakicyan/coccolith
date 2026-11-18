@@ -231,13 +231,13 @@ function startAmbience() {
   }
 
   // 風: こもったサー…。音量と明るさを、周期の違うゆっくりした揺れでふくらませたりしぼめたりする
-  const windFilter = ctx.createBiquadFilter(); windFilter.type = 'bandpass'; windFilter.frequency.value = 420; windFilter.Q.value = 0.7
-  const windSwell = ctx.createGain(); windSwell.gain.value = 0.6
+  const windFilter = ctx.createBiquadFilter(); windFilter.type = 'bandpass'; windFilter.frequency.value = 300; windFilter.Q.value = 0.7
+  const windSwell = ctx.createGain(); windSwell.gain.value = 0.5   // 0.4〜0.6 で揺れる
   const windLevel = ctx.createGain(); windLevel.gain.value = 0
   loopNoise(buf, 0).connect(windFilter).connect(windSwell).connect(windLevel).connect(master)
-  lfo(0.07, 0.1, windSwell.gain)
-  lfo(0.17, 0.05, windSwell.gain)
-  lfo(0.05, 160, windFilter.frequency)
+  lfo(0.07, 0.067, windSwell.gain)
+  lfo(0.17, 0.033, windSwell.gain)
+  lfo(0.05, 100, windFilter.frequency)
 
   // 波: 寄せるたびに waveEnv の音量とフィルタを上げて下げる（ザザー…）
   const waveFilter = ctx.createBiquadFilter(); waveFilter.type = 'lowpass'; waveFilter.frequency.value = 400; waveFilter.Q.value = 0.5
