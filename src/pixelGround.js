@@ -1,32 +1,29 @@
 import * as THREE from 'three'
 import { R_C, LAND_LIFT } from './constants.js'
-import { SHITABA_TILES } from './pixelArt/ground/shitaba.js'
 import Alea from 'alea'
 
 // ============================================================
-//  下葉 — ドット絵を地面に平らに貼る
-//  範囲の真ん中を中心にした平面（中心からの距離と向きを保つ図法）に TILE (m) 角のマス目を敷き、
-//  範囲に入るマスにドット絵を 1 枚ずつ貼る。上下左右のマスがあるかどうかで 9 枚（中央・端・角）から選ぶ（上 = 北）
+//  ドット絵の地面 — 40×40 などのドット絵を、地面に平らに並べて貼る（下葉・EF）
+//  範囲の真ん中を中心にした平面（中心からの距離と向きを保つ図法）に tile (m) 角のマス目を敷き、範囲に入るマスに 1 枚ずつ貼る
+//  絵は上下左右のマスがあるかどうかで 9 枚（中央・端・角）から選ぶ（上 = 北、左 = 西）
 //  tiles にカケの絵（cutTopLeft など）があれば、へこんだ角（ななめ隣だけマスが無い角）はその角が欠けた絵にする
-//  板は地形の三角形に沿わせ、LIFT だけ浮かせる。flatOnly なら平らな陸地（高さ R_C + LAND_LIFT）だけに貼り、坂（海岸・山）には貼らない
+//  1 マス幅のところは端の絵が合わないので消す。板は地形の三角形に沿わせ、lift だけ浮かせる
 //
 //  terrainGeo: 地表の SphereGeometry（押し出したあとのもの。分割数 segs × segs）
-//  contains(lat, lon): その地点が貼る範囲か
-//  center: { lat, lon } 図法の中心
-//  tiles: 9 枚のドット絵（＋カケの絵。既定は下葉。光の粒のところは EF）/ name: メッシュの名前
-//  flatOnly: false なら坂（山）にも地形に沿わせて貼る（EF。光の粒の 2 か所は山A・山F の上）
-//  tile: 1 枚の大きさ (m)
-//  holes: { big, small, seed, at } at: 場所を決めて開ける 1 マスの穴 [{ lat, lon }]（その地点にいちばん近いマス）。
-//    big, small, seed 範囲の中に開ける大きい穴・小さい穴の数と、場所・形を決める乱数の種（開くたびには変わらない）。形は HOLE_SHAPES
-//    範囲の縁からは 2 マス以上離す。穴同士は近くてもよいが、1 マス幅のところ（端の絵が合わない）ができるところには開けない。入りきらなければ数は減る
+//  contains(lat, lon): その地点が貼る範囲か / center: { lat, lon } 図法の中心
+//  tiles: ドット絵（9 枚＋カケの絵）/ name: メッシュの名前
+//  tile: 1 枚の大きさ (m) / sub: 1 枚を sub × sub に分けて地形に沿わせる / lift: 地面から浮かせる高さ (m)
+//    坂に貼るときは細かく分け、少し高く浮かせて地形の折れ目に潜らないようにする
+//  flatOnly: true なら平らな陸地（高さ R_C + LAND_LIFT）だけに貼り、坂（海岸・山）には貼らない。false なら坂にも沿わせて貼る
 //  opacity: 不透明度（1 で透けない。1 より小さいと下の地面が透けて見える）
-//  sub / lift: 1 枚を分ける数と浮かせる高さ。坂に貼るときは細かく分け、少し高く浮かせて地形の折れ目に潜らないようにする
-// ============================================================
-
-const TILE_DEFAULT = 6  // 1 枚の大きさ (m)
-const SUB_DEFAULT  = 3          // 1 枚を SUB × SUB に分けて地形に沿わせる（地形の折れ目で板が地面に潜らないように）
-const LIFT_DEFAULT = 0.08       // 地面から浮かせる高さ (m)
-const FLAT_TOL = 0.8    // 平らな陸地とみなす高さの幅 (m)。地形の三角形の中ほどは頂点より最大 0.55m ほど低い
+//  holes: 穴 { big, small, seed, at }
+//    big / small: 乱数で開ける大きい穴・小さい穴の数（形は HOLE_SHAPES）。seed: 場所と形を決める乱数の種（開くたびには変わらない）
+//      範囲の縁からは 2 マス以上離す。穴同士はくっついてもよい（1 つの大きい穴になる）。1 マス幅のところができる置き方はしない。入りきらなければ数は減る
+//    at: 場所を決めて開ける 1 マスの穴 [{ lat, lon }]（その地点にいちばん近いマス）
+const TILE_DEFAULT = 6      // 1 枚の大きさ (m)
+const SUB_DEFAULT  = 3      // 1 枚を分ける数
+const LIFT_DEFAULT = 0.08   // 地面から浮かせる高さ (m)
+const FLAT_TOL     = 0.8    // 平らな陸地とみなす高さの幅 (m)。地形の三角形の中ほどは頂点より最大 0.55m ほど低い
 
 // 穴の形（東西 × 南北のマスの数）。big を先に開けて、あいたところに small を入れる
 const HOLE_SHAPES = { big: [[2, 2], [3, 2], [2, 3], [3, 3]], small: [[1, 1], [2, 1], [1, 2]] }
@@ -117,8 +114,9 @@ const dirOf = (lat, lon) => {
   return new THREE.Vector3(Math.sin(phi) * Math.cos(theta), Math.cos(phi), Math.sin(phi) * Math.sin(theta))
 }
 
-export function createShitabaGround({ terrainGeo, segs, contains, center, tiles = SHITABA_TILES, name = 'shitaba',
-                                     flatOnly = true, sub: SUB = SUB_DEFAULT, lift: LIFT = LIFT_DEFAULT, opacity = 1, tile: TILE = TILE_DEFAULT, holes = null }) {
+export function createPixelGround({ terrainGeo, segs, contains, center, tiles, name,
+                                   tile: TILE = TILE_DEFAULT, sub: SUB = SUB_DEFAULT, lift: LIFT = LIFT_DEFAULT,
+                                   flatOnly = true, opacity = 1, holes = null }) {
   const R = R_C + LAND_LIFT
   const radiusAt = terrainRadiusFn(terrainGeo, segs)
 
@@ -171,29 +169,25 @@ export function createShitabaGround({ terrainGeo, segs, contains, center, tiles 
     }
   }
 
-  // 1 マス幅で飛び出したところ（上下とも・左右とも空いている）は、端の絵が合わないので消す
+  // 1 マス幅で飛び出したところは、端の絵が合わないので消す
+  const isThin = (i, j) => {   // 上下とも・左右とも空いているマスか
+    const h = (di, dj) => cells.has(key(i + di, j + dj))
+    return (!h(0, 1) && !h(0, -1)) || (!h(1, 0) && !h(-1, 0))
+  }
   const pruneThin = () => {
     for (let changed = true; changed;) {
       changed = false
       for (const k of [...cells.keys()]) {
         const [i, j] = k.split(',').map(Number)
-        const h = (di, dj) => cells.has(key(i + di, j + dj))
-        if ((!h(0, 1) && !h(0, -1)) || (!h(1, 0) && !h(-1, 0))) { cells.delete(k); changed = true }
+        if (isThin(i, j)) { cells.delete(k); changed = true }
       }
     }
   }
   pruneThin()
 
-  // 穴を開ける：大きい穴から順に、形（HOLE_SHAPES）と場所を乱数で選んで開ける
-  //   範囲の外側の縁からは 2 マス以上離す（穴のまわり 2 マスが、絵のマスか、もう開けた穴のマス）
-  //   穴同士は近くてもよい（くっついたら 1 つの大きい穴になる）。ただ、開けたせいで 1 マス幅のところ（端の絵が合わない）ができるなら開けない
+  // 穴を開ける
   if (holes) {
-    const rng = Alea(holes.seed ?? 'holes')
     const holeCells = new Set()
-    const thin = (i, j) => {   // 1 マス幅で飛び出したマスか（上下とも・左右とも空いている）
-      const h = (di, dj) => cells.has(key(i + di, j + dj))
-      return (!h(0, 1) && !h(0, -1)) || (!h(1, 0) && !h(-1, 0))
-    }
     // 場所を決めた穴（holes.at）：その地点にいちばん近いマスを 1 マス開ける
     const cd = new THREE.Vector3()
     for (const p of holes.at ?? []) {
@@ -206,6 +200,10 @@ export function createShitabaGround({ terrainGeo, segs, contains, center, tiles 
       }
       if (best && Math.acos(Math.min(1, bestDot)) * R < TILE) { cells.delete(best); holeCells.add(best) }
     }
+    // 乱数の穴：大きい穴から順に、形（HOLE_SHAPES）と場所を選ぶ
+    //   穴のまわり 2 マスが、絵のマスか、もう開けた穴のマスのところだけ（範囲の縁から 2 マス以上離れる）
+    //   開けたせいで 1 マス幅のところができるなら、やめて選び直す
+    const rng = Alea(holes.seed ?? 'holes')
     for (const size of ['big', 'small']) {
       const shapes = HOLE_SHAPES[size]
       for (let made = 0, tries = 0; made < (holes[size] ?? 0) && tries < 1000; tries++) {
@@ -223,7 +221,7 @@ export function createShitabaGround({ terrainGeo, segs, contains, center, tiles 
         const opened = []
         for (let a = 0; a < w; a++) for (let b = 0; b < hgt; b++) { const kk = key(i0 + a, j0 + b); cells.delete(kk); opened.push(kk) }
         for (let a = -1; a < w + 1 && ok; a++) for (let b = -1; b < hgt + 1 && ok; b++) {
-          if (cells.has(key(i0 + a, j0 + b)) && thin(i0 + a, j0 + b)) ok = false
+          if (cells.has(key(i0 + a, j0 + b)) && isThin(i0 + a, j0 + b)) ok = false
         }
         if (!ok) { for (const kk of opened) cells.set(kk, true); continue }
         for (const kk of opened) holeCells.add(kk)

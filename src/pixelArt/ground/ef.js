@@ -2,7 +2,7 @@
 //  EF — 地面に平らに貼るドット絵（40×40 を 9 枚。中央・上下左右の端・四隅）と、へこんだ角に使うカケ 6 枚
 //  cut〜: ななめ隣のマスが無い角だけが欠けた絵（cutTopLeft は左上が欠ける。cutTopLeftBottomRight は左上と右下の 2 か所）
 //  名前は並べたときの位置（上 = 北）。端と角は外側が透明（null）
-//  地面に貼る処理は shitabaGround.js の createShitabaGround（光の粒の立ちのぼりの 2 か所に貼る）
+//  地面に貼る処理は pixelGround.js の createPixelGround（光の粒の立ちのぼりの 2 か所に貼る）
 // ============================================================
 
 export const EF_TILES = {

@@ -27,7 +27,8 @@ import { openPixelScene } from './pixelScene.js'
 import { TREEHOUSE_PIXEL_LAYERS, TREEHOUSE_PIXEL_TEXT } from './pixelArt/treehouse.js'
 import { createFlowerGeometry, openFlowerCut } from './flowerCut.js'
 import { addLedBoard } from './ledBoard.js'
-import { createShitabaGround } from './shitabaGround.js'
+import { createPixelGround } from './pixelGround.js'
+import { SHITABA_TILES } from './pixelArt/ground/shitaba.js'
 import { EF_TILES } from './pixelArt/ground/ef.js'
 import { sparkleAreaContainsFn } from './sparkleFountain.js'
 import { applyNightEnv } from './nightEnv.js'
@@ -546,7 +547,7 @@ export function createCoccolith({ renderer = null } = {}) {
   ]
   for (const poly of GRASS_AREAS) group.add(createGrassField(poly, noise3D, GRASS_KIND_1, [gojunotoHole, rasenHole]))
 
-  // --- 下葉: forest1 ×3 のあたりの草地は、立てた草の代わりにドット絵を地面に貼る（shitabaGround.js） ---
+  // --- 下葉: forest1 ×3 のあたりの草地は、立てた草の代わりにドット絵を地面に貼る（pixelGround.js） ---
   //   範囲は前の草地と同じポリゴンを 5m 内側へ寄せたところ（草地の境目のぼかしの真ん中くらい）
   const SHITABA_AREA = [{lat:73.3,lon:7.2},{lat:42.4,lon:-33.8},{lat:42.4,lon:-16.6},{lat:56.3,lon:62.4}]
   //   立てた草も、ほかの草地の 3 割の密度でこの草地全体（下葉の上と、lon 25 より先）に残す
@@ -557,8 +558,8 @@ export function createCoccolith({ renderer = null } = {}) {
   const SHITABA_SHRINK_DEG = (5 / R_C) * (180 / Math.PI)
   const SHITABA_CIRCLES = [{ lat: 54.6, lon: -36.6, r: 70 }]
     .map(c => ({ dir: dirOf(c.lat, c.lon), cosR: Math.cos(c.r / (R_C + LAND_LIFT)) }))
-  group.add(createShitabaGround({
-    terrainGeo: geo, segs: TERRAIN_SEGS,
+  group.add(createPixelGround({
+    terrainGeo: geo, segs: TERRAIN_SEGS, tiles: SHITABA_TILES, name: 'shitaba',
     center: { lat: 54, lon: -5 },
     contains: (lat, lon) => lon <= SHITABA_LON_MAX && ((_polyContains(lat, lon, SHITABA_AREA) &&
       SHITABA_AREA.every((a, i) => { const b = SHITABA_AREA[(i + 1) % SHITABA_AREA.length]
@@ -566,26 +567,27 @@ export function createCoccolith({ renderer = null } = {}) {
       SHITABA_CIRCLES.some(c => dirOf(lat, lon).dot(c.dir) >= c.cosR)),
   }))
 
-  // --- EF: 光の粒の立ちのぼり（constants.js の SPARKLE_AT）の 2 か所の地面に、ドット絵の EF（40×40 を 9 枚）を貼る ---
-  //   範囲は光の粒が湧くところと同じ形（縁はギザギザ）を EF_SCALE 倍にしたところ（1 で光の粒と同じ半径 50m ほど）。2 か所とも山（山A・山F）の上なので、段の坂にも地形に沿わせて貼る
-  //   坂の折れ目に潜らないよう、1 枚を 1m ごとに分けて地面から 0.15m 浮かせる
-  //   tile: 1 枚の大きさ (m) / opacity: 不透明度（下の山の地面が透けて見える）/ edgeAmp: 縁のギザギザの強さ（光の粒は 0.3）/ edgeFreq: ギザギザの細かさ（光の粒は 2.2）
-  //   holes: 範囲の中に開ける大きい穴（2〜3 マス角）・小さい穴（1〜2 マス）の数と、場所・形を決める乱数の種（まわりに 2 マス残せるところだけ。入りきらなければ減る）
-  //   昼の側（SPARKLE_AT[0]。lat -11・lon -136、山A）は俯瞰で見ると目立つので、1 枚を大きく、薄く、縁を強くギザギザにする
-  const EF_SCALE = 1
-  const EF_LOOK = [
-    { tile: 8, opacity: 0.6, edgeAmp: 0.7, edgeFreq: 4, holes: { big: 0, small: 10, seed: 'ef-hole-day', at: [{ lat: -6.5, lon: -140 }] } },   // 昼の側（山A）
-    { tile: 6, opacity: 0.8, edgeAmp: 0.55, edgeFreq: 4, holes: { big: 0, small: 16, seed: 'ef-hole-night' } },  // 夜の側（山F）
+  // --- EF: 光の粒の立ちのぼり（constants.js の SPARKLE_AT）の 2 か所の地面に、ドット絵の EF（9 枚＋カケ 6 枚）を貼る（pixelGround.js） ---
+  //   範囲は光の粒が湧くところと同じ大きさ（半径 50m ほど）で、縁のギザギザだけ光の粒より細かく強くする
+  //   2 か所とも山（山A・山F）の上なので、段の坂にも地形に沿わせて貼る。折れ目に潜らないよう 1m ごとに分け、地面から 0.15m 浮かせる
+  //   tile: 1 枚の大きさ (m) / opacity: 不透明度（下の山の地面が透けて見える）
+  //   edgeAmp: 縁のギザギザの強さ（光の粒は 0.3）/ edgeFreq: ギザギザの細かさ（光の粒は 2.2）
+  //   holes: 穴（pixelGround.js の holes。small は乱数で開ける小さい穴の数、at は場所を決めた穴）
+  //   昼の側（山A）は俯瞰で見ると目立つので、1 枚を大きく、薄く、縁を強くギザギザにする
+  const EF_AREAS = [
+    { at: SPARKLE_AT[0], tile: 8, opacity: 0.6, edgeAmp: 0.7, edgeFreq: 4,     // 昼の側（lat -11・lon -136、山A）
+      holes: { small: 10, seed: 'ef-hole-day', at: [{ lat: -6.5, lon: -140 }] } },
+    { at: SPARKLE_AT[1], tile: 6, opacity: 0.8, edgeAmp: 0.55, edgeFreq: 4,    // 夜の側（lat -11・lon -31、山F）
+      holes: { small: 16, seed: 'ef-hole-night' } },
   ]
-  SPARKLE_AT.forEach(({ lat, lon, edgeSeed }, k) => {
-    const { tile, opacity, edgeAmp, edgeFreq, holes } = EF_LOOK[k]
-    const inArea = sparkleAreaContainsFn(dirOf(lat, lon), edgeSeed, R_C + LAND_LIFT, EF_SCALE, edgeAmp, edgeFreq)
-    group.add(createShitabaGround({
+  for (const { at: { lat, lon, edgeSeed }, tile, opacity, edgeAmp, edgeFreq, holes } of EF_AREAS) {
+    const inArea = sparkleAreaContainsFn(dirOf(lat, lon), R_C + LAND_LIFT, { edgeSeed, edgeAmp, edgeFreq })
+    group.add(createPixelGround({
       terrainGeo: geo, segs: TERRAIN_SEGS, center: { lat, lon },
       contains: (la, lo) => inArea(dirOf(la, lo)),
-      tiles: EF_TILES, name: 'ef', flatOnly: false, sub: tile, lift: 0.15, opacity, tile, holes,
+      tiles: EF_TILES, name: 'ef', tile, sub: tile, lift: 0.15, flatOnly: false, opacity, holes,
     }))
-  })
+  }
 
   const FIELD01_AREAS = [
     [{lat:-60,lon:30},{lat:-37,lon:62},{lat:-43,lon:82},{lat:-60,lon:82}],
