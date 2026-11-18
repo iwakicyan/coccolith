@@ -16,7 +16,8 @@ import Alea from 'alea'
 //  tiles: 9 枚のドット絵（＋カケの絵。既定は下葉。光の粒のところは EF）/ name: メッシュの名前
 //  flatOnly: false なら坂（山）にも地形に沿わせて貼る（EF。光の粒の 2 か所は山A・山F の上）
 //  tile: 1 枚の大きさ (m)
-//  holes: { big, small, seed } 範囲の中に開ける大きい穴・小さい穴の数と、場所・形を決める乱数の種（開くたびには変わらない）。形は HOLE_SHAPES
+//  holes: { big, small, seed, at } at: 場所を決めて開ける 1 マスの穴 [{ lat, lon }]（その地点にいちばん近いマス）。
+//    big, small, seed 範囲の中に開ける大きい穴・小さい穴の数と、場所・形を決める乱数の種（開くたびには変わらない）。形は HOLE_SHAPES
 //    範囲の縁からは 2 マス以上離す。穴同士は近くてもよいが、1 マス幅のところ（端の絵が合わない）ができるところには開けない。入りきらなければ数は減る
 //  opacity: 不透明度（1 で透けない。1 より小さいと下の地面が透けて見える）
 //  sub / lift: 1 枚を分ける数と浮かせる高さ。坂に貼るときは細かく分け、少し高く浮かせて地形の折れ目に潜らないようにする
@@ -171,14 +172,17 @@ export function createShitabaGround({ terrainGeo, segs, contains, center, tiles 
   }
 
   // 1 マス幅で飛び出したところ（上下とも・左右とも空いている）は、端の絵が合わないので消す
-  for (let changed = true; changed;) {
-    changed = false
-    for (const k of [...cells.keys()]) {
-      const [i, j] = k.split(',').map(Number)
-      const h = (di, dj) => cells.has(key(i + di, j + dj))
-      if ((!h(0, 1) && !h(0, -1)) || (!h(1, 0) && !h(-1, 0))) { cells.delete(k); changed = true }
+  const pruneThin = () => {
+    for (let changed = true; changed;) {
+      changed = false
+      for (const k of [...cells.keys()]) {
+        const [i, j] = k.split(',').map(Number)
+        const h = (di, dj) => cells.has(key(i + di, j + dj))
+        if ((!h(0, 1) && !h(0, -1)) || (!h(1, 0) && !h(-1, 0))) { cells.delete(k); changed = true }
+      }
     }
   }
+  pruneThin()
 
   // 穴を開ける：大きい穴から順に、形（HOLE_SHAPES）と場所を乱数で選んで開ける
   //   範囲の外側の縁からは 2 マス以上離す（穴のまわり 2 マスが、絵のマスか、もう開けた穴のマス）
@@ -189,6 +193,18 @@ export function createShitabaGround({ terrainGeo, segs, contains, center, tiles 
     const thin = (i, j) => {   // 1 マス幅で飛び出したマスか（上下とも・左右とも空いている）
       const h = (di, dj) => cells.has(key(i + di, j + dj))
       return (!h(0, 1) && !h(0, -1)) || (!h(1, 0) && !h(-1, 0))
+    }
+    // 場所を決めた穴（holes.at）：その地点にいちばん近いマスを 1 マス開ける
+    const cd = new THREE.Vector3()
+    for (const p of holes.at ?? []) {
+      const pd = dirOf(p.lat, p.lon)
+      let best = null, bestDot = -2
+      for (const k of cells.keys()) {
+        const [i, j] = k.split(',').map(Number)
+        const dt = dirAt((i + 0.5) * TILE, (j + 0.5) * TILE, cd).dot(pd)
+        if (dt > bestDot) { bestDot = dt; best = k }
+      }
+      if (best && Math.acos(Math.min(1, bestDot)) * R < TILE) { cells.delete(best); holeCells.add(best) }
     }
     for (const size of ['big', 'small']) {
       const shapes = HOLE_SHAPES[size]
@@ -215,6 +231,8 @@ export function createShitabaGround({ terrainGeo, segs, contains, center, tiles 
       }
     }
   }
+
+  pruneThin()   // 場所を決めた穴のせいで 1 マス幅のところができていたら消す
 
   // マスごとに絵を選ぶ（上下左右のマスと、へこんだ角になるななめ隣のマスを見る）。使う組み合わせだけをテクスチャに並べる
   const atlasIndex = new Map(), quartersList = []
