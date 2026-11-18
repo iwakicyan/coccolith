@@ -1142,12 +1142,13 @@ const jihankiTargets = jihankis.map(j => ({
 }))
 for (const g of _glowSpots) if (g.jihanki) g.enabled = () => !g.jihanki.userData.kanOut
 // 取り出し口に出た缶：光っている缶を選ぶ（タップ・Enter）と sabちゃんが持つ。缶を取ると、その自販機にまたコインを入れられる
+//   取れる範囲は、コインを入れられる範囲（自販機の前の真ん中から 5m。coccolith.js の glowSpot）と同じにする
 for (const j of jihankis) {
   const hit = j.userData.trayHit
-  hit.updateWorldMatrix(true, false)
+  const coinSpot = _glowSpots.find(g => g.jihanki === j)
   _glowSpots.push({
     mesh: hit, hitMesh: j.userData.bodyHit,   // 光るのは取り出し口、タップの当たりは本体全体（缶に当てなくてよい）
-    dir: new THREE.Vector3().setFromMatrixPosition(hit.matrixWorld).normalize(), reach: 4,
+    dir: coinSpot.dir, reach: coinSpot.reach,
     enabled: () => j.userData.hasKan(),
     onTap: () => {
       const k = j.userData.takeKan()
