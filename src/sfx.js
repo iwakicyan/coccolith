@@ -10,7 +10,7 @@
 //  kanTake():     取り出し口の缶・台の上の花を取ったとき（コトッ）
 //  kanGive():     ドット絵のキャラに缶をあげたとき（コトッ → ピロン）
 //  setMoving(k): sabちゃんが動いている強さ（0〜1）を毎フレーム渡す。動いている間「フォン…フォン…」と鳴らす
-//  setAmbience({ wind, wave, water }): 環境音の大きさ（0〜1）を毎フレーム渡す。風（いつも小さくサー…）と波（海の近くでザザー…と寄せては返す）。water（カメラが水中）なら風・波を消してフォーンをこもらせる。silent（俯瞰中）なら風・波を消す
+//  setAmbience({ wind, wave, water }): 環境音の大きさ（0〜1）を毎フレーム渡す。風（いつも小さくサー…と数秒おきに少しふくらむ）と波（海の近くでこもったゴー…がゆっくりふくらんだりしぼんだりする）。water（カメラが水中）なら風・波を消してフォーンをこもらせる。silent（俯瞰中）なら風・波を消す
 //  setMusic(name, k): BGM の曲ごとの大きさ（0〜1）を毎フレーム渡す。ドット絵のキャラの近くで流す（ambient: Abi・ゆっくり重なる和音とベル / light: Rifta・軽い分散和音）
 //  initSoundButton(btn): HUD の歯車の横のスピーカーを、音のオン・オフの切り替えにする（開いたときはいつも消えていて、押すと鳴りはじめる。選んだほうは残さない）
 // ============================================================
@@ -205,13 +205,15 @@ export function setMoving(k) {
 
 // --- 環境音（風・波） ---
 // どちらもノイズを流し続け、フィルタと音量をゆっくり動かして作る。大きさは setAmbience で渡した値へなめらかに寄せる
+//   風は明るめの「サー…」が数秒おきに少しふくらむ、波はこもった低い「ゴー…」がゆっくりふくらんだりしぼんだりする
+//   （はじめは逆の音にしていたが、聞くと風と波があべこべに聞こえたので入れ替えた）
 const WIND_VOL = 0.05     // 風のいちばん大きいときの音量
 const WAVE_VOL = 0.06     // 波のいちばん大きいとき（海のすぐそば）の音量
-const WAVE_LOW = 0.58     // 波が引いたときの大きさ（寄せたときは 0.68〜0.74）。見た目にはほとんど打ち寄せないので、幅は小さく
-const WAVE_GAP = [5.5, 8] // 波が寄せてから次に寄せるまで (s)
+const GUST_LOW = 0.58     // 風がふくらんでいないときの大きさ（ふくらんだときは 0.68〜0.74）
+const GUST_GAP = [5.5, 8] // 風がふくらんでから次にふくらむまで (s)
 const AMB_TAU  = 0.8      // 大きさを寄せる速さ（時定数 s）
-let amb = null            // { windLevel, waveLevel, waveEnv, waveFilter }
-let waveNext = 0
+let amb = null            // { windLevel, waveLevel, gustEnv, gustFilter }
+let gustNext = 0
 
 function loopNoise(buf, offset) {
   const s = ctx.createBufferSource()
@@ -230,29 +232,29 @@ function startAmbience() {
     o.connect(g).connect(param); o.start()
   }
 
-  // 風: こもったサー…。音量と明るさを、周期の違うゆっくりした揺れでふくらませたりしぼめたりする
-  const windFilter = ctx.createBiquadFilter(); windFilter.type = 'bandpass'; windFilter.frequency.value = 300; windFilter.Q.value = 0.7
-  const windSwell = ctx.createGain(); windSwell.gain.value = 0.5   // 0.4〜0.6 で揺れる
+  // 風: 明るめのサー…。ふくらむたびに gustEnv の音量とフィルタを上げて下げる
+  const gustFilter = ctx.createBiquadFilter(); gustFilter.type = 'lowpass'; gustFilter.frequency.value = 500; gustFilter.Q.value = 0.5
+  const gustEnv = ctx.createGain(); gustEnv.gain.value = GUST_LOW
   const windLevel = ctx.createGain(); windLevel.gain.value = 0
-  loopNoise(buf, 0).connect(windFilter).connect(windSwell).connect(windLevel).connect(master)
-  lfo(0.07, 0.067, windSwell.gain)
-  lfo(0.17, 0.033, windSwell.gain)
-  lfo(0.05, 100, windFilter.frequency)
+  loopNoise(buf, 2).connect(gustFilter).connect(gustEnv).connect(windLevel).connect(master)
 
-  // 波: 寄せるたびに waveEnv の音量とフィルタを上げて下げる（ザザー…）
-  const waveFilter = ctx.createBiquadFilter(); waveFilter.type = 'lowpass'; waveFilter.frequency.value = 400; waveFilter.Q.value = 0.5
-  const waveEnv = ctx.createGain(); waveEnv.gain.value = WAVE_LOW
+  // 波: こもった低いゴー…。音量（0.4〜0.6）と明るさ（200〜400Hz）を、周期の違うゆっくりした揺れでふくらませたりしぼめたりする
+  const waveFilter = ctx.createBiquadFilter(); waveFilter.type = 'bandpass'; waveFilter.frequency.value = 300; waveFilter.Q.value = 0.7
+  const waveSwell = ctx.createGain(); waveSwell.gain.value = 0.5
   const waveLevel = ctx.createGain(); waveLevel.gain.value = 0
-  loopNoise(buf, 2).connect(waveFilter).connect(waveEnv).connect(waveLevel).connect(master)
-  amb = { windLevel, waveLevel, waveEnv, waveFilter }
+  loopNoise(buf, 0).connect(waveFilter).connect(waveSwell).connect(waveLevel).connect(master)
+  lfo(0.07, 0.067, waveSwell.gain)
+  lfo(0.17, 0.033, waveSwell.gain)
+  lfo(0.05, 100, waveFilter.frequency)
+  amb = { windLevel, waveLevel, gustEnv, gustFilter }
 }
-// 1 回の波を at（ctx.currentTime）に寄せる。強さは毎回少し変える
-function waveSwash(at) {
+// 風を at（ctx.currentTime）に 1 回ふくらませる。強さは毎回少し変える
+function gust(at) {
   const k = 0.68 + Math.random() * 0.06
-  const { waveEnv: g, waveFilter: f } = amb
-  g.gain.setValueAtTime(WAVE_LOW, at)
-  g.gain.linearRampToValueAtTime(k, at + 1.6)              // 寄せる
-  g.gain.exponentialRampToValueAtTime(WAVE_LOW, at + 1.6 + 3.2) // 引いていく
+  const { gustEnv: g, gustFilter: f } = amb
+  g.gain.setValueAtTime(GUST_LOW, at)
+  g.gain.linearRampToValueAtTime(k, at + 1.6)               // ふくらむ
+  g.gain.exponentialRampToValueAtTime(GUST_LOW, at + 1.6 + 3.2) // おさまる
   f.frequency.setValueAtTime(500, at)
   f.frequency.linearRampToValueAtTime(560 + 150 * k, at + 1.5)
   f.frequency.exponentialRampToValueAtTime(500, at + 1.6 + 3.2)
@@ -276,11 +278,11 @@ export function setAmbience({ wind = 0, wave = 0, water = false, silent = false 
   }
   amb.windLevel.gain.setTargetAtTime(windV, now, AMB_TAU)
   amb.waveLevel.gain.setTargetAtTime(waveV, now, AMB_TAU)
-  // 波は聞こえていてもいなくても寄せ続ける（近づいたとき途中から聞こえるように）
-  if (waveNext <= now + 0.1) {
-    const at = Math.max(waveNext, now + 0.05)
-    waveSwash(at)
-    waveNext = at + WAVE_GAP[0] + Math.random() * (WAVE_GAP[1] - WAVE_GAP[0])
+  // 風は聞こえていてもいなくてもふくらみ続ける（水から出たとき途中から聞こえるように）
+  if (gustNext <= now + 0.1) {
+    const at = Math.max(gustNext, now + 0.05)
+    gust(at)
+    gustNext = at + GUST_GAP[0] + Math.random() * (GUST_GAP[1] - GUST_GAP[0])
   }
 }
 
