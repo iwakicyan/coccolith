@@ -16,7 +16,7 @@ import Alea from 'alea'
 //  tiles: 9 枚のドット絵（＋カケの絵。既定は下葉。光の粒のところは EF）/ name: メッシュの名前
 //  flatOnly: false なら坂（山）にも地形に沿わせて貼る（EF。光の粒の 2 か所は山A・山F の上）
 //  tile: 1 枚の大きさ (m)
-//  holes: { count, seed } 範囲の中に開ける穴の数と、場所・形を決める乱数の種（開くたびには変わらない）。穴は 1〜2 マス角で、
+//  holes: { big, small, seed } 範囲の中に開ける大きい穴・小さい穴の数と、場所・形を決める乱数の種（開くたびには変わらない）。形は HOLE_SHAPES
 //    穴のまわりは 2 マス以上の絵が残るところにだけ開ける（1 マス幅だと端の絵が合わないので）。入りきらなければ数は減る
 //  opacity: 不透明度（1 で透けない。1 より小さいと下の地面が透けて見える）
 //  sub / lift: 1 枚を分ける数と浮かせる高さ。坂に貼るときは細かく分け、少し高く浮かせて地形の折れ目に潜らないようにする
@@ -26,6 +26,9 @@ const TILE_DEFAULT = 6  // 1 枚の大きさ (m)
 const SUB_DEFAULT  = 3          // 1 枚を SUB × SUB に分けて地形に沿わせる（地形の折れ目で板が地面に潜らないように）
 const LIFT_DEFAULT = 0.08       // 地面から浮かせる高さ (m)
 const FLAT_TOL = 0.8    // 平らな陸地とみなす高さの幅 (m)。地形の三角形の中ほどは頂点より最大 0.55m ほど低い
+
+// 穴の形（東西 × 南北のマスの数）。big を先に開けて、あいたところに small を入れる
+const HOLE_SHAPES = { big: [[2, 2], [3, 2], [2, 3], [3, 3]], small: [[1, 1], [2, 1], [1, 2]] }
 
 // へこんだ角に使うカケの絵（tiles に cutTopLeft などがあるときだけ使う。下葉には無い）
 //   角の名前 → 絵の名前。ななめ隣のマスが無く、その角をはさむ 2 辺のマスはあるときに、その角が欠けた絵を使う
@@ -177,25 +180,23 @@ export function createShitabaGround({ terrainGeo, segs, contains, center, tiles 
     }
   }
 
-  // 穴を開ける：穴の形（1×1・2×1・1×2・2×2 マス）と場所を乱数で選び、穴のまわり 2 マスがぜんぶ絵のマスで、
-  //   ほかの穴のまわりとも重ならないところだけに開ける
-  if (holes?.count > 0) {
+  // 穴を開ける：大きい穴から順に、形（HOLE_SHAPES）と場所を乱数で選び、穴のまわり 2 マスがぜんぶ絵のマスのところだけに開ける
+  //   （ほかの穴もまわり 2 マスに入らないので、穴と穴のあいだも 2 マス以上空く）
+  if (holes) {
     const rng = Alea(holes.seed ?? 'holes')
-    const keep = new Set()   // 開けた穴とそのまわり 2 マス（次の穴はここに掛からないように）
-    const list = [...cells.keys()].map(k => k.split(',').map(Number))
-    let made = 0
-    for (let tries = 0; tries < 300 && made < holes.count && list.length; tries++) {
-      const [i0, j0] = list[Math.floor(rng() * list.length)]
-      const w = 1 + Math.floor(rng() * 2), hgt = 1 + Math.floor(rng() * 2)
-      let ok = true
-      for (let a = -2; a < w + 2 && ok; a++) for (let b = -2; b < hgt + 2 && ok; b++) {
-        const kk = key(i0 + a, j0 + b)
-        if (!cells.has(kk) || keep.has(kk)) ok = false
+    for (const size of ['big', 'small']) {
+      const shapes = HOLE_SHAPES[size]
+      for (let made = 0, tries = 0; made < (holes[size] ?? 0) && tries < 500; tries++) {
+        const list = [...cells.keys()]
+        if (!list.length) break
+        const [i0, j0] = list[Math.floor(rng() * list.length)].split(',').map(Number)
+        const [w, hgt] = shapes[Math.floor(rng() * shapes.length)]
+        let ok = true
+        for (let a = -2; a < w + 2 && ok; a++) for (let b = -2; b < hgt + 2 && ok; b++) if (!cells.has(key(i0 + a, j0 + b))) ok = false
+        if (!ok) continue
+        for (let a = 0; a < w; a++) for (let b = 0; b < hgt; b++) cells.delete(key(i0 + a, j0 + b))
+        made++
       }
-      if (!ok) continue
-      for (let a = -2; a < w + 2; a++) for (let b = -2; b < hgt + 2; b++) keep.add(key(i0 + a, j0 + b))
-      for (let a = 0; a < w; a++) for (let b = 0; b < hgt; b++) cells.delete(key(i0 + a, j0 + b))
-      made++
     }
   }
 
