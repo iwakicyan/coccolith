@@ -6,17 +6,19 @@ import { SHITABA_TILES } from './pixelArt/ground/shitaba.js'
 //  下葉 — ドット絵を地面に平らに貼る
 //  範囲の真ん中を中心にした平面（中心からの距離と向きを保つ図法）に TILE (m) 角のマス目を敷き、
 //  範囲に入るマスにドット絵を 1 枚ずつ貼る。上下左右のマスがあるかどうかで 9 枚（中央・端・角）から選ぶ（上 = 北）
-//  板は地形の三角形に沿わせ、LIFT だけ浮かせる。平らな陸地（高さ R_C + LAND_LIFT）だけに貼り、坂（海岸・山）には貼らない
+//  板は地形の三角形に沿わせ、LIFT だけ浮かせる。flatOnly なら平らな陸地（高さ R_C + LAND_LIFT）だけに貼り、坂（海岸・山）には貼らない
 //
 //  terrainGeo: 地表の SphereGeometry（押し出したあとのもの。分割数 segs × segs）
 //  contains(lat, lon): その地点が貼る範囲か
 //  center: { lat, lon } 図法の中心
 //  tiles: 9 枚のドット絵（既定は下葉。光の粒のところは EF）/ name: メッシュの名前
+//  flatOnly: false なら坂（山）にも地形に沿わせて貼る（EF。光の粒の 2 か所は山A・山F の上）
+//  sub / lift: 1 枚を分ける数と浮かせる高さ。坂に貼るときは細かく分け、少し高く浮かせて地形の折れ目に潜らないようにする
 // ============================================================
 
 const TILE = 6          // 1 枚の大きさ (m)
-const SUB  = 3          // 1 枚を SUB × SUB に分けて地形に沿わせる（地形の折れ目で板が地面に潜らないように）
-const LIFT = 0.08       // 地面から浮かせる高さ (m)
+const SUB_DEFAULT  = 3          // 1 枚を SUB × SUB に分けて地形に沿わせる（地形の折れ目で板が地面に潜らないように）
+const LIFT_DEFAULT = 0.08       // 地面から浮かせる高さ (m)
 const FLAT_TOL = 0.8    // 平らな陸地とみなす高さの幅 (m)。地形の三角形の中ほどは頂点より最大 0.55m ほど低い
 
 // 9 枚を並べたテクスチャの中の位置（列, 行）。行 0 が上（北）
@@ -88,7 +90,8 @@ const dirOf = (lat, lon) => {
   return new THREE.Vector3(Math.sin(phi) * Math.cos(theta), Math.cos(phi), Math.sin(phi) * Math.sin(theta))
 }
 
-export function createShitabaGround({ terrainGeo, segs, contains, center, tiles = SHITABA_TILES, name = 'shitaba' }) {
+export function createShitabaGround({ terrainGeo, segs, contains, center, tiles = SHITABA_TILES, name = 'shitaba',
+                                     flatOnly = true, sub: SUB = SUB_DEFAULT, lift: LIFT = LIFT_DEFAULT }) {
   const R = R_C + LAND_LIFT
   const radiusAt = terrainRadiusFn(terrainGeo, segs)
 
@@ -125,7 +128,7 @@ export function createShitabaGround({ terrainGeo, segs, contains, center, tiles 
   const isFlat = (i, j) => {
     for (let a = 0; a <= SUB; a++) for (let b = 0; b <= SUB; b++) {
       const r = vertexR(i * SUB + a, j * SUB + b)
-      if (r === null || r > R + 0.01 || r < R - FLAT_TOL) return false
+      if (r === null || (flatOnly && (r > R + 0.01 || r < R - FLAT_TOL))) return false
     }
     return true
   }
