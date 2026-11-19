@@ -862,10 +862,10 @@ export function createCoccolith({ renderer = null } = {}) {
   }
 
   // --- ランドマーク: 無人販売所 mujin (lat=13.4, lon=-144.8) ------------
-  // 自販機の 1.5 倍の倍率（部品の 1.8m → 4.5m）で高さ約 5m。地面に 0.6m めり込ませる（0.1m では浮いて見えた）
+  // 自販機の 1.5 倍の倍率（部品の 1.8m → 4.5m）で高さ約 5m。地面に 1m めり込ませる（0.1m・0.6m では浮いて見えた）
   // 正面（棚のある側・ローカル +Z）を北西へ向ける。ユーザーの言う「西」は lon が増える向き（コンパスの W とは逆）なので、北西 = [lat+, lon+]
   {
-    const MUJIN_LAT = 13.4, MUJIN_LON = -144.8, MUJIN_SINK = 0.6
+    const MUJIN_LAT = 13.4, MUJIN_LON = -144.8, MUJIN_SINK = 1.0
     const wrapper = new THREE.Group()
     const mujin = createMujin()
     wrapper.add(mujin)
