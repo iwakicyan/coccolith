@@ -861,18 +861,25 @@ export function createCoccolith({ renderer = null } = {}) {
     mergeStatic(jihanki, { keep: o => keepSet.has(o) })
   }
 
-  // --- ランドマーク: 無人販売所 mujin (lat=13.4, lon=-144.8) ------------
+  // --- 無人販売所（my-3d-parts/landmark/mujin.js）: 4 か所に置く ------------
   // 自販機の 1.5 倍の倍率（部品の 1.8m → 4.5m）で高さ約 5m。地面に 1m めり込ませる（0.1m・0.6m では浮いて見えた）
-  // 正面（棚のある側・ローカル +Z）を北西へ向ける。ユーザーの言う「西」は lon が増える向き（コンパスの W とは逆）なので、北西 = [lat+, lon+]
-  {
-    const MUJIN_LAT = 13.4, MUJIN_LON = -144.8, MUJIN_SINK = 1.0
+  //   向き face: 正面（棚のある側・ローカル +Z）を向ける方角。ユーザーの言う「東」は lon が減る向き（コンパスの E とは逆）なので、
+  //   [lat の増える向き, lon の増える向き] で 北 = [1, 0]・南 = [-1, 0]・北東 = [1, -1]・北西 = [1, 1]
+  const MUJIN_SINK = 1.0
+  const MUJIN_SPOTS = [
+    { lat:  13.4, lon: -144.8, face: [1, 1] },    // 北西向き
+    { lat:  50.0, lon:   21.0, face: [-1, 0] },   // 南向き
+    { lat: -68.0, lon:  153.5, face: [1, 0] },    // 北向き
+    { lat: -72.0, lon: -115.0, face: [1, -1] },   // 北東向き
+  ]
+  for (const { lat, lon, face: [fn, fe] } of MUJIN_SPOTS) {
     const wrapper = new THREE.Group()
     const mujin = createMujin()
     wrapper.add(mujin)
     wrapper.scale.setScalar(4.5 / 1.8)
-    placeOnSurface(group, wrapper, MUJIN_LAT, MUJIN_LON, R_C + LAND_LIFT - MUJIN_SINK)
+    placeOnSurface(group, wrapper, lat, lon, R_C + LAND_LIFT - MUJIN_SINK)
     const dDeg = THREE.MathUtils.radToDeg(1 / (R_C + LAND_LIFT))   // 1m ぶんの角度
-    mujin.rotation.y = headingTo(wrapper, MUJIN_LAT + dDeg, MUJIN_LON + dDeg / Math.cos(THREE.MathUtils.degToRad(MUJIN_LAT)))
+    mujin.rotation.y = headingTo(wrapper, lat + fn * dDeg, lon + fe * dDeg / Math.cos(THREE.MathUtils.degToRad(lat)))
     landmarkShadow(mujin, wrapper)
     colliders.push(mujin)
     mergeStatic(mujin)
