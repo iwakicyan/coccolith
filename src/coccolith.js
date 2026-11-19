@@ -861,7 +861,7 @@ export function createCoccolith({ renderer = null } = {}) {
     mergeStatic(jihanki, { keep: o => keepSet.has(o) })
   }
 
-  // --- 無人販売所（my-3d-parts/landmark/mujin.js）: 4 か所に置く ------------
+  // --- 無人販売所（my-3d-parts/landmark/mujin.js）: 6 か所に置く ------------
   // 自販機の 1.5 倍の倍率（部品の 1.8m → 4.5m）で高さ約 5m。地面に 1m めり込ませる（0.1m・0.6m では浮いて見えた）
   //   向き face: 正面（棚のある側・ローカル +Z）を向ける方角。ユーザーの言う「東」は lon が減る向き（コンパスの E とは逆）なので、
   //   [lat の増える向き, lon の増える向き] で 北 = [1, 0]・南 = [-1, 0]・北東 = [1, -1]・北西 = [1, 1]
@@ -871,6 +871,8 @@ export function createCoccolith({ renderer = null } = {}) {
     { lat:  50.0, lon:   21.0, face: [-1, 0] },   // 南向き
     { lat: -68.0, lon:  153.5, face: [1, 0] },    // 北向き
     { lat: -72.0, lon: -115.0, face: [1, -1] },   // 北東向き
+    { lat:  18.0, lon:  -46.0, face: [-1, 0] },   // 南向き
+    { lat: -44.0, lon:  155.6, face: [1, 0] },    // 北向き
   ]
   for (const { lat, lon, face: [fn, fe] } of MUJIN_SPOTS) {
     const wrapper = new THREE.Group()
