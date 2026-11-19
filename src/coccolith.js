@@ -876,7 +876,7 @@ export function createCoccolith({ renderer = null } = {}) {
     { lat:  10.0, lon: -179.0, face: [0, 1] },    // 西向き（lon が増える向き）
     { lat:  -4.0, lon:   21.0, face: [-1, 0] },   // 南向き
     { lat: -68.4, lon:    8.6, face: [0, -1] },   // 東向き（lon が減る向き）
-    { lat:  12.6, lon:  107.7, face: [0, 1] },    // 西向き（lon が増える向き）
+    { lat: -12.6, lon:  107.7, face: [0, 1] },    // 西向き（lon が増える向き）
   ]
   for (const { lat, lon, face: [fn, fe] } of MUJIN_SPOTS) {
     const wrapper = new THREE.Group()
