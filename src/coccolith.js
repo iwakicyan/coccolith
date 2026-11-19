@@ -878,18 +878,44 @@ export function createCoccolith({ renderer = null } = {}) {
     { lat: -68.4, lon:    8.6, face: [0, -1] },   // 東向き（lon が減る向き）
     { lat: -12.6, lon:  107.7, face: [0, 1] },    // 西向き（lon が増える向き）
   ]
+  // 全部の台をまとめて描く：パーツの色を頂点の色へ移して 1 つのマテリアルにそろえ、輪郭線も 1 つのマテリアルにして、
+  // 全部の台を mujins の中で mergeStatic する → 影を落とす台・落とさない台の本体 2 メッシュ＋輪郭線 1 本（描画 3 回）
+  const mujins = new THREE.Group()
+  mujins.name = '無人販売所（まとめ）'
+  group.add(mujins)
+  const mujinMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, side: THREE.DoubleSide })   // 部品のマテリアルと同じ（色だけ頂点へ）
+  const mujinLineMat = new THREE.LineBasicMaterial({ color: 0x4a4f5e })   // 部品の輪郭線と同じ色
+  const mujinColorGeo = new Map()   // 元のジオメトリ＋色 → 頂点の色をつけたジオメトリ（同じ形・同じ色のパーツで使い回す）
   for (const { lat, lon, face: [fn, fe] } of MUJIN_SPOTS) {
     const wrapper = new THREE.Group()
     const mujin = createMujin()
     wrapper.add(mujin)
     wrapper.scale.setScalar(4.5 / 1.8)
-    placeOnSurface(group, wrapper, lat, lon, R_C + LAND_LIFT - MUJIN_SINK)
+    placeOnSurface(mujins, wrapper, lat, lon, R_C + LAND_LIFT - MUJIN_SINK)
     const dDeg = THREE.MathUtils.radToDeg(1 / (R_C + LAND_LIFT))   // 1m ぶんの角度
     mujin.rotation.y = headingTo(wrapper, lat + fn * dDeg, lon + fe * dDeg / Math.cos(THREE.MathUtils.degToRad(lat)))
     landmarkShadow(mujin, wrapper)
-    colliders.push(mujin)
-    mergeStatic(mujin)
+    mujin.traverse(o => {
+      if (o.isLineSegments) { o.material = mujinLineMat; return }
+      if (!o.isMesh) return
+      const c = o.material.color, key = o.geometry.uuid + c.getHexString()
+      if (!mujinColorGeo.has(key)) {
+        const g = o.geometry.clone(), n = g.attributes.position.count, col = new Float32Array(n * 3)
+        for (let i = 0; i < n; i++) { col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b }
+        g.setAttribute('color', new THREE.BufferAttribute(col, 3))
+        mujinColorGeo.set(key, g)
+      }
+      o.geometry = mujinColorGeo.get(key)
+      o.material = mujinMat
+    })
+    // 当たり判定：メッシュはまとめて外れるので、footprint だけ持つ空の Object3D を台の原点に残す（mergeStatic は残す）
+    const hit = new THREE.Object3D()
+    hit.name = '無人販売所の当たり'
+    hit.userData.footprint = mujin.userData.footprint
+    mujin.add(hit)
+    colliders.push(hit)
   }
+  mergeStatic(mujins)
 
   // --- ランドマーク: SShall (lat=27.0, lon=161.0) ------------
   // 2倍で高さ約15m（塔の円錐屋根の先）。原点は塔の中心。正面（扉のある側・ローカル +Z）を西（経度-方向）へ向ける
