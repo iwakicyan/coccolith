@@ -21,6 +21,7 @@ import { createCakestand } from '../my-3d-parts/landmark/cakestand.js'
 import { RASEN } from '../my-3d-parts/landmark/rasen.js'
 import { createRasenPair } from './rasenPair.js'
 import { createJihanki } from '../my-3d-parts/landmark/jihanki.js'
+import { createMujin } from '../my-3d-parts/landmark/mujin.js'
 import { mergeStatic } from '../my-3d-parts/parts/mergeStatic.js'
 import { addDoorGlow, addGroundGlow, addArchDoorGlow } from './doorGlow.js'
 import { openPixelScene } from './pixelScene.js'
@@ -858,6 +859,23 @@ export function createCoccolith({ renderer = null } = {}) {
     const keepSet = new Set([...slotMeshes, slot, tray, base, bodyHit])
     jihankiFlatColors(jihanki, o => keepSet.has(o))
     mergeStatic(jihanki, { keep: o => keepSet.has(o) })
+  }
+
+  // --- ランドマーク: 無人販売所 mujin (lat=13.4, lon=-144.8) ------------
+  // 自販機と同じ倍率（部品の 1.8m → 3m）で高さ約 3.4m。地面に 0.1m めり込ませる
+  // 正面（棚のある側・ローカル +Z）を北西へ向ける。ユーザーの言う「西」は lon が増える向き（コンパスの W とは逆）なので、北西 = [lat+, lon+]
+  {
+    const MUJIN_LAT = 13.4, MUJIN_LON = -144.8, MUJIN_SINK = 0.1
+    const wrapper = new THREE.Group()
+    const mujin = createMujin()
+    wrapper.add(mujin)
+    wrapper.scale.setScalar(3 / 1.8)
+    placeOnSurface(group, wrapper, MUJIN_LAT, MUJIN_LON, R_C + LAND_LIFT - MUJIN_SINK)
+    const dDeg = THREE.MathUtils.radToDeg(1 / (R_C + LAND_LIFT))   // 1m ぶんの角度
+    mujin.rotation.y = headingTo(wrapper, MUJIN_LAT + dDeg, MUJIN_LON + dDeg / Math.cos(THREE.MathUtils.degToRad(MUJIN_LAT)))
+    landmarkShadow(mujin, wrapper)
+    colliders.push(mujin)
+    mergeStatic(mujin)
   }
 
   // --- ランドマーク: SShall (lat=27.0, lon=161.0) ------------
