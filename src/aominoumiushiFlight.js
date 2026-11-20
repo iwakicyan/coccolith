@@ -6,6 +6,7 @@ import { createAominoumiushiSwarm, AOMINOUMIUSHI_FLAP } from '../my-3d-parts/par
 //  欄干の組：COUNT 匹が 1 匹ずつ別の柱の玉の上にとまる（左右の欄干に半分ずつ、間をあけて互い違いに）
 //  ライトの組：LAMP.COUNT 匹が 1 匹ずつ別のライト（light01）の頭のてっぺんにとまり、低い所（頭の高さ＋LAMP.FLY_UP）を周遊する
 //    地面は測らない（軽くするため）。高さは星の中心から一定なので、ライトより高い山や建物があるとめり込む
+//  杖の組：TSUE.COUNT 匹が 1 匹ずつ別の杖（昼の側の道沿いの列）のてっぺんにとまり、ライトの組と同じように杖の高さ＋FLY_UP を周遊する
 //  CYCLE（50 分）ごとに、はじめの PERCH_S 秒（10 分）は玉の上で羽を止めて休み、残り FLY_S 秒（40 分）は星を周遊して、またもとの玉に戻る
 //    時計（Date.now）で決めるので、いつ開いても・だれが見ても同じ所にいる。とまる時刻は 1 匹ずつ 50 分の中でばらばらにずらす（いつ見ても何匹かとまっている）
 //    とまる所: 柱の玉のてっぺん。板から外向き（左の欄干は左、右は右）を ±HEADING まで振った向きを向く
@@ -14,9 +15,10 @@ import { createAominoumiushiSwarm, AOMINOUMIUSHI_FLAP } from '../my-3d-parts/par
 //      飛び立ってから CLIMB_D 進むあいだに FLY_UP だけ上がり、戻りは同じだけ下りる
 //    飛ぶあいだは部品の羽ばたき（飛び立ちで強くなり、降りる前に弱めて止める）
 //  両方の組をまとめて描く（InstancedMesh 5 つ。何匹でも描画 5 回）
-//  createAominoumiushiTour({ plank, lamps }) → { group, update(time) }
+//  createAominoumiushiTour({ plank, lamps, tsues }) → { group, update(time) }
 //    plank: rasenPair.plank（posts に欄干の柱の玉、path.n に板の左）。group は板と同じ置き先（plank.mesh.parent）に入れる
 //    lamps: coccolith.js の lamps（top にライトの頭のてっぺん。板と同じ置き先の座標）
+//    tsues: 杖のてっぺんの位置の列ごとの配列 [[Vector3, ...], ...]（main.js の杖。板と同じ置き先の座標）
 // ============================================================
 
 export const AOMINOUMIUSHI_TOUR = {
@@ -43,6 +45,8 @@ export const AOMINOUMIUSHI_TOUR = {
     HEADING: 180,               // とまる向き・飛び立つ向き（北から ±この角度でばらばら。度）
     CLIMB_D: 25,                // 飛び立ってから FLY_UP まで上がるあいだに進む距離 (m)。降りるときも同じ
   },
+  // 杖の組（数と、列ごとに何本選ぶか以外はライトの組と同じ）
+  TSUE: { COUNT: 8 },
 }
 
 // t 秒でどれだけ進んだか（0〜1）。始めの a 秒で速さが上がり、終わりの a 秒で止まる。あいだは同じ速さ（microraptorFlight.js と同じ）
@@ -57,7 +61,7 @@ const smooth = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a
 const rng = seed => () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296 }
 const DEG = Math.PI / 180
 
-export function createAominoumiushiTour({ plank, lamps = [], count = AOMINOUMIUSHI_TOUR.COUNT, width = AOMINOUMIUSHI_TOUR.WIDTH }) {
+export function createAominoumiushiTour({ plank, lamps = [], tsues = [], count = AOMINOUMIUSHI_TOUR.COUNT, width = AOMINOUMIUSHI_TOUR.WIDTH }) {
   const C = AOMINOUMIUSHI_TOUR
   const CYCLE = C.PERCH_S + C.FLY_S
   const n = plank.path.n
@@ -101,19 +105,30 @@ export function createAominoumiushiTour({ plank, lamps = [], count = AOMINOUMIUS
     return { up0, R0, F, ...makePath(up0, R0, F, LAPS, WAVES, SWAY), FLY_UP, offset, CLIMB_D: C.CLIMB_D }
   })
 
-  // ライトの組：23 本から間をあけて選んだライトの頭のてっぺんにとまり、頭の高さ＋FLY_UP を飛ぶ
+  // 低い所を飛ぶ組（ライト・杖）：tops（とまる所の位置）に 1 匹ずつとまり、とまる所の高さ＋FLY_UP を飛ぶ
+  //   とまる時刻は組の匹の数で 50 分をばらばらに分ける（step つおきに割り当てる。step は匹の数と割り切れない数）
   const L = C.LAMP
-  const lampPerches = [...Array(Math.min(L.COUNT, lamps.length))].map((_, j, a) => lamps[Math.floor((j + 0.5) * lamps.length / a.length)])
   const NORTH = new THREE.Vector3(0, 1, 0)
-  lampPerches.forEach((lamp, j) => {
-    const rand = rng(j * 6151 + 101)
+  const addLow = (tops, seed, step) => tops.forEach((top, j) => {
+    const rand = rng(j * 6151 + seed)
     const LAPS = intIn(rand, L.LAPS), WAVES = intIn(rand, L.WAVES), SWAY = (L.SWAY[0] + (L.SWAY[1] - L.SWAY[0]) * rand()) * DEG
     const FLY_UP = L.FLY_UP[0] + (L.FLY_UP[1] - L.FLY_UP[0]) * rand()
-    const offset = ((j * 5) % lampPerches.length + rand()) / lampPerches.length * CYCLE   // とまる時刻は 12 匹で 50 分をばらばらに分ける
-    const up0 = lamp.top.clone().normalize(), R0 = lamp.top.length()
+    const offset = ((j * step) % tops.length + rand()) / tops.length * CYCLE
+    const up0 = top.clone().normalize(), R0 = top.length()
     const F = NORTH.clone().addScaledVector(up0, -NORTH.dot(up0)).normalize().applyAxisAngle(up0, (rand() * 2 - 1) * L.HEADING * DEG)
     birds.push({ up0, R0, F, ...makePath(up0, R0, F, LAPS, WAVES, SWAY), FLY_UP, offset, CLIMB_D: L.CLIMB_D })
   })
+  // ライトの組：23 本から間をあけて選ぶ
+  addLow([...Array(Math.min(L.COUNT, lamps.length))].map((_, j, a) => lamps[Math.floor((j + 0.5) * lamps.length / a.length)].top), 101, 5)
+  // 杖の組：列ごとに同じ数ずつ（割り切れない分は前の列から 1 本ずつ多く）、列の中で等しい間をあけて選ぶ
+  {
+    const rows = tsues.filter(r => r.length), tops = []
+    rows.forEach((row, ri) => {
+      const k = Math.floor(C.TSUE.COUNT / rows.length) + (ri < C.TSUE.COUNT % rows.length ? 1 : 0)
+      for (let j = 0; j < Math.min(k, row.length); j++) tops.push(row[Math.floor((j + 0.5) * row.length / k)])
+    })
+    addLow(tops, 503, 3)
+  }
 
   const swarm = createAominoumiushiSwarm(birds.length, { width })
   const group = swarm.group

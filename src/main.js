@@ -1776,6 +1776,8 @@ const kurageWander = createKurageWander({
 //   flip: true の線は杖を上の軸まわりに 180° 回して、葉を逆の側へ向ける
 // 高さ TSUE_H (m)。地面に TSUE_SINK だけ埋め、正面（+z）を線の進む向きへそろえる。動かないので 1 本 1 メッシュ
 // 太陽の当たる側（x > 0）にあれば影を落とす。影は受けない（ランドマークと同じ）
+// tsueTops: 杖のてっぺんの位置（列ごと）。アオミノウミウシがとまる（aominoumiushiFlight.js）
+const tsueTops = []
 {
   const TSUE_LINES = [
     { from: { lat: 50, lon: -166 }, to: { lat: 30, lon: -139 } },
@@ -1796,9 +1798,11 @@ const kurageWander = createKurageWander({
     tsue.position.copy(dir).multiplyScalar(getGroundHeight(dir) - 1 - TSUE_SINK)
     tsue.traverse(o => { if (o.isMesh) { o.castShadow = tsue.position.x > 0; o.receiveShadow = false } })
     scene.add(tsue)
+    tsueTops[tsueTops.length - 1].push(tsue.position.clone().addScaledVector(dir, TSUE_H))
   }
   let n = 0
   for (const { from, to, along, flip } of TSUE_LINES) {
+    tsueTops.push([])
     if (along === 'lat') {
       const dLon = to.lon - from.lon, sign = Math.sign(dLon)
       const step = TSUE_GAP / (RL * Math.cos(from.lat * Math.PI / 180)) * 180 / Math.PI   // 40m ぶんの経度（度）
@@ -1848,9 +1852,9 @@ const birdFlocks = [
 
 // 螺旋階段の板にとまるミクロラプトル（microraptorFlight.js）: 毎時 0〜5 分は板の真ん中にとまり、残りの 55 分は星を広く飛び回って戻る。高さ 8m
 const microraptor = createMicroraptorTour({ plank: rasenPair.plank })
-// アオミノウミウシ（aominoumiushiFlight.js）: 50 分ごとに 10 分は休み、40 分は 1 匹ずつ別の道で星を周遊して戻る。幅 2m・32 匹まとめて描く（描画 5 回）
-//   螺旋階段の板の欄干の柱の玉に 20 匹（高く飛ぶ）、地上のライトの頭に 12 匹（頭の高さ＋2m の低い所を飛ぶ。地面は測らない）
-const aominoumiushi = createAominoumiushiTour({ plank: rasenPair.plank, lamps })
+// アオミノウミウシ（aominoumiushiFlight.js）: 50 分ごとに 10 分は休み、40 分は 1 匹ずつ別の道で星を周遊して戻る。幅 2m・40 匹まとめて描く（描画 5 回）
+//   螺旋階段の板の欄干の柱の玉に 20 匹（高く飛ぶ）、地上のライトの頭に 12 匹・昼の側の道沿いの杖のてっぺんに 8 匹（とまる所の高さ＋2m の低い所を飛ぶ。地面は測らない）
+const aominoumiushi = createAominoumiushiTour({ plank: rasenPair.plank, lamps, tsues: tsueTops })
 
 // 空を飛ぶドット絵スプライト（pixelSprite.js）: pixelArt/flyers/ の絵を全部読み込み、雲より上を count 機ずつ飛ばす
 // 絵を足すときは scripts/import-sprite.mjs で書き出す（名前に 真下・下方・水平・上から があれば flyers/ に入る）
