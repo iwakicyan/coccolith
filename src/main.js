@@ -42,6 +42,7 @@ import { createKurage, createKurageWander } from './kurage.js'
 import { createTsue } from '../my-3d-parts/parts/tsue.js'
 import { createEda } from '../my-3d-parts/parts/eda.js'
 import { createBirdFlock } from './birdFlight.js'
+import { createMicroraptorTour } from './microraptorFlight.js'
 import { createIta, ITA_FACE, ITA_WIDTH } from '../my-3d-parts/parts/ita.js'
 import { KAN } from '../my-3d-parts/parts/kan.js'
 import { rasenFloor, RASEN } from '../my-3d-parts/landmark/rasen.js'
@@ -1844,6 +1845,9 @@ const birdFlocks = [
     colors: { '頭': BIRD_PINK, '翼': BIRD_PINK, '尾羽': BIRD_PINK } }),
 ]
 
+// 螺旋階段の板にとまるミクロラプトル（microraptorFlight.js）: 毎時 0〜5 分は板の真ん中にとまり、残りの 55 分は星を広く飛び回って戻る。高さ 8m
+const microraptor = createMicroraptorTour({ plank: rasenPair.plank })
+
 // 空を飛ぶドット絵スプライト（pixelSprite.js）: pixelArt/flyers/ の絵を全部読み込み、雲より上を count 機ずつ飛ばす
 // 絵を足すときは scripts/import-sprite.mjs で書き出す（名前に 真下・下方・水平・上から があれば flyers/ に入る）
 const FLYER_H = R_C + LAND_LIFT + 80   // 飛ぶ高さ（惑星中心から m。陸から 80m、雲生き物より 70m 上）
@@ -2138,6 +2142,7 @@ function animate() {
     awadamas.update(dt, pDir)
     waterRipples.update(dt)
     for (const f of birdFlocks) f.update(dt)
+    microraptor.update()
     for (const f of sparkleFountains) f.update(now / 1000, camera, renderer)
     kurage.update(now / 1000, camera, renderer)
     kurageWander.update(now / 1000, camera, renderer)

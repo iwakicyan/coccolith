@@ -14,7 +14,7 @@ import { BRIDGE01_SIZE } from '../my-3d-parts/landmark/bridge01.js'
 //
 //  返すもの:
 //    stairs: [a, b] それぞれ createRasen() の Group（wrapper の中で向きを決めたもの）
-//    plank:  板のメッシュ（輪郭線つき）と、上を歩くための floor(dir, feetR, up) / keepOn(dir, pad)
+//    plank:  板のメッシュ（輪郭線つき）と、上を歩くための floor(dir, feetR, up) / keepOn(dir, pad)、板の中心線 path
 // ============================================================
 
 export const PLANK = {
@@ -195,5 +195,7 @@ export function createRasenPair(group, a, b, baseR, placeOnSurface) {
     return true
   }
 
-  return { stairs: [A.stair, B.stair], wrappers: [A.wrapper, B.wrapper], plank: { mesh, floor, keepOn, side, setSide, along } }
+  // path: 板の中心線（置き先 group の座標）。角度 phi（0 = ea、span = eb）の向きは u0·cos(phi) + u1·sin(phi)、上面の星の中心からの距離は surfR(phi)。n は a から b へ進むときの左
+  const path = { u0, u1, n, span, surfR }
+  return { stairs: [A.stair, B.stair], wrappers: [A.wrapper, B.wrapper], plank: { mesh, floor, keepOn, side, setSide, along, path } }
 }
