@@ -14,7 +14,7 @@ import { BRIDGE01_SIZE } from '../my-3d-parts/landmark/bridge01.js'
 //
 //  返すもの:
 //    stairs: [a, b] それぞれ createRasen() の Group（wrapper の中で向きを決めたもの）
-//    plank:  板のメッシュ（輪郭線つき）と、上を歩くための floor(dir, feetR, up) / keepOn(dir, pad)、板の中心線 path
+//    plank:  板のメッシュ（輪郭線つき）と、上を歩くための floor(dir, feetR, up) / keepOn(dir, pad)、板の中心線 path、欄干の柱の玉のてっぺん posts
 // ============================================================
 
 export const PLANK = {
@@ -130,6 +130,8 @@ export function createRasenPair(group, a, b, baseR, placeOnSurface) {
   group.add(mesh)
 
   // 欄干：板の両側の縁から INSET だけ内側に、SPACING ごとに星の外向きに立てる（ea から eb まで）
+  //   posts: 柱ごとの先の玉のてっぺん { dir（星の中心からの向き）, r（星の中心からの距離）, side（1 = 左 / -1 = 右）, i（ea からの番号）}
+  const postTops = []
   //   全部で 60 本ほど。1 つのメッシュにまとめる。昼と夜の境をまたぐので、夜の側（x < 0）の棒は法線を星の外向きにして
   //   下から当たる太陽で光らないようにする（昼の側は面ごとの平らな陰影）
   {
@@ -153,6 +155,7 @@ export function createRasenPair(group, a, b, baseR, placeOnSurface) {
         const twist = Math.atan2(new THREE.Vector3().crossVectors(fwd, along).dot(up), fwd.dot(along))
         q.premultiply(new THREE.Quaternion().setFromAxisAngle(up, twist))
         m.compose(d.clone().multiplyScalar(surfR(phi)), q, one)
+        postTops.push({ dir: up.clone(), r: surfR(phi) + (BP.ROD_L - BP.SINK + BP.KNOB_R) * k, side: sd, i })
         const g = post.clone().applyMatrix4(m)
         if (up.x < 0) {
           const nr = g.attributes.normal
@@ -197,5 +200,5 @@ export function createRasenPair(group, a, b, baseR, placeOnSurface) {
 
   // path: 板の中心線（置き先 group の座標）。角度 phi（0 = ea、span = eb）の向きは u0·cos(phi) + u1·sin(phi)、上面の星の中心からの距離は surfR(phi)。n は a から b へ進むときの左
   const path = { u0, u1, n, span, surfR }
-  return { stairs: [A.stair, B.stair], wrappers: [A.wrapper, B.wrapper], plank: { mesh, floor, keepOn, side, setSide, along, path } }
+  return { stairs: [A.stair, B.stair], wrappers: [A.wrapper, B.wrapper], plank: { mesh, floor, keepOn, side, setSide, along, path, posts: postTops } }
 }

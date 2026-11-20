@@ -43,6 +43,7 @@ import { createTsue } from '../my-3d-parts/parts/tsue.js'
 import { createEda } from '../my-3d-parts/parts/eda.js'
 import { createBirdFlock } from './birdFlight.js'
 import { createMicroraptorTour } from './microraptorFlight.js'
+import { createAominoumiushiTour } from './aominoumiushiFlight.js'
 import { createIta, ITA_FACE, ITA_WIDTH } from '../my-3d-parts/parts/ita.js'
 import { KAN } from '../my-3d-parts/parts/kan.js'
 import { rasenFloor, RASEN } from '../my-3d-parts/landmark/rasen.js'
@@ -1847,6 +1848,8 @@ const birdFlocks = [
 
 // 螺旋階段の板にとまるミクロラプトル（microraptorFlight.js）: 毎時 0〜5 分は板の真ん中にとまり、残りの 55 分は星を広く飛び回って戻る。高さ 8m
 const microraptor = createMicroraptorTour({ plank: rasenPair.plank })
+// 螺旋階段の板の欄干にとまるアオミノウミウシ 20 匹（aominoumiushiFlight.js）: 50 分ごとに 10 分は柱の玉の上で休み、40 分は 1 匹ずつ別の道で星を周遊して戻る。幅 2m・まとめて描く（描画 5 回）
+const aominoumiushi = createAominoumiushiTour({ plank: rasenPair.plank })
 
 // 空を飛ぶドット絵スプライト（pixelSprite.js）: pixelArt/flyers/ の絵を全部読み込み、雲より上を count 機ずつ飛ばす
 // 絵を足すときは scripts/import-sprite.mjs で書き出す（名前に 真下・下方・水平・上から があれば flyers/ に入る）
@@ -2143,6 +2146,7 @@ function animate() {
     waterRipples.update(dt)
     for (const f of birdFlocks) f.update(dt)
     microraptor.update()
+    aominoumiushi.update()
     for (const f of sparkleFountains) f.update(now / 1000, camera, renderer)
     kurage.update(now / 1000, camera, renderer)
     kurageWander.update(now / 1000, camera, renderer)
