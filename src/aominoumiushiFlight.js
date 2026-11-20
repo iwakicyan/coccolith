@@ -5,7 +5,7 @@ import { createAominoumiushiSwarm, AOMINOUMIUSHI_FLAP } from '../my-3d-parts/par
 //  螺旋階段の板の欄干にとまるアオミノウミウシの群れ（my-3d-parts/parts/aominoumiushi.js）
 //  COUNT 匹が 1 匹ずつ別の柱の玉の上にとまる（左右の欄干に半分ずつ、間をあけて互い違いに）
 //  CYCLE（50 分）ごとに、はじめの PERCH_S 秒（10 分）は玉の上で羽を止めて休み、残り FLY_S 秒（40 分）は星を周遊して、またもとの玉に戻る
-//    時計（Date.now）で決めるので、いつ開いても・だれが見ても同じ所にいる。飛び立つ時刻は 1 匹ずつ OFFSET_S までずらす
+//    時計（Date.now）で決めるので、いつ開いても・だれが見ても同じ所にいる。とまる時刻は 1 匹ずつ 50 分の中でばらばらにずらす（いつ見ても何匹かとまっている）
 //    とまる所: 柱の玉のてっぺん。板から外向き（左の欄干は左、右は右）を ±HEADING まで振った向きを向く
 //    飛ぶ道: とまる所を通り、正面へ進む大円を LAPS 周する（microraptorFlight.js と同じ作り）。そのあいだ、道に直角に SWAY まで左右へ WAVES 回ゆれる
 //      周の数・ゆれ・高さ・向きは 1 匹ずつ変えて、星じゅうに散らばる。終わりはもとの所へ同じ向きで戻る
@@ -21,7 +21,6 @@ export const AOMINOUMIUSHI_TOUR = {
   WIDTH: 2,                     // 羽を広げた幅 (m)
   PERCH_S: 10 * 60,             // 玉の上で休む時間 (s)
   FLY_S: 40 * 60,               // 周遊する時間 (s)
-  OFFSET_S: 90,                 // 飛び立つ時刻を 1 匹ずつずらす最大 (s)
   ACCEL_S: 8,                   // 飛び立ちで速さが上がりきるまで・降りる前に止まるまでの時間 (s)
   FLAP_IN: 1.5,                 // 飛び立ってから羽ばたきが強くなりきるまで (s)
   FLAP_OUT: 3,                  // 降りる前に羽ばたきを弱めて止めるまで (s)
@@ -64,7 +63,8 @@ export function createAominoumiushiTour({ plank, count = AOMINOUMIUSHI_TOUR.COUN
     const LAPS = Math.round(between([C.LAPS[0] - 0.49, C.LAPS[1] + 0.49]))
     const WAVES = Math.round(between([C.WAVES[0] - 0.49, C.WAVES[1] + 0.49]))
     const SWAY = between(C.SWAY) * DEG, FLY_UP = between(C.FLY_UP)
-    const offset = rand() * C.OFFSET_S
+    // とまる時刻：50 分を匹の数で分けた枠を、となりの柱どうしが続かないよう飛び飛びに（7 つおき）割り当て、枠の中でもばらばらに
+    const offset = ((idx * 7) % perches.length + rand()) / perches.length * CYCLE
     const up0 = post.dir.clone().normalize(), R0 = post.r
     // 正面：板から外向き（左の欄干は +n、右は -n）を、上を軸に ±HEADING 振る
     const F = n.clone().multiplyScalar(post.side).addScaledVector(up0, -n.dot(up0) * post.side).normalize()
