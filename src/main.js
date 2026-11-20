@@ -1848,8 +1848,13 @@ const birdFlocks = [
 
 // 螺旋階段の板にとまるミクロラプトル（microraptorFlight.js）: 毎時 0〜5 分は板の真ん中にとまり、残りの 55 分は星を広く飛び回って戻る。高さ 8m
 const microraptor = createMicroraptorTour({ plank: rasenPair.plank })
-// 螺旋階段の板の欄干にとまるアオミノウミウシ 20 匹（aominoumiushiFlight.js）: 50 分ごとに 10 分は柱の玉の上で休み、40 分は 1 匹ずつ別の道で星を周遊して戻る。幅 2m・まとめて描く（描画 5 回）
-const aominoumiushi = createAominoumiushiTour({ plank: rasenPair.plank })
+// アオミノウミウシ（aominoumiushiFlight.js）: 50 分ごとに 10 分は休み、40 分は 1 匹ずつ別の道で星を周遊して戻る。幅 2m・32 匹まとめて描く（描画 5 回）
+//   螺旋階段の板の欄干の柱の玉に 20 匹（高く飛ぶ）、地上のライトの頭に 12 匹（地面すれすれを飛ぶ）
+//   getGroundHeight は乗り物に乗っているかの判定用に _groundHitObj を書き換えるので戻しておく
+const aominoumiushi = createAominoumiushiTour({
+  plank: rasenPair.plank, lamps,
+  groundAt: dir => { const keep = _groundHitObj; const g = Math.max(getGroundHeight(dir) - 1, R_OCEAN); _groundHitObj = keep; return g },
+})
 
 // 空を飛ぶドット絵スプライト（pixelSprite.js）: pixelArt/flyers/ の絵を全部読み込み、雲より上を count 機ずつ飛ばす
 // 絵を足すときは scripts/import-sprite.mjs で書き出す（名前に 真下・下方・水平・上から があれば flyers/ に入る）

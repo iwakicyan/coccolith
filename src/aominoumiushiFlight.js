@@ -2,8 +2,10 @@ import * as THREE from 'three'
 import { createAominoumiushiSwarm, AOMINOUMIUSHI_FLAP } from '../my-3d-parts/parts/aominoumiushi.js'
 
 // ============================================================
-//  螺旋階段の板の欄干にとまるアオミノウミウシの群れ（my-3d-parts/parts/aominoumiushi.js）
-//  COUNT 匹が 1 匹ずつ別の柱の玉の上にとまる（左右の欄干に半分ずつ、間をあけて互い違いに）
+//  螺旋階段の板の欄干と、地上のライトにとまるアオミノウミウシの群れ（my-3d-parts/parts/aominoumiushi.js）
+//  欄干の組：COUNT 匹が 1 匹ずつ別の柱の玉の上にとまる（左右の欄干に半分ずつ、間をあけて互い違いに）
+//  ライトの組：LAMP.COUNT 匹が 1 匹ずつ別のライト（light01）の頭のてっぺんにとまり、地面すれすれ（LAMP.FLY_UP）を周遊する
+//    地面の高さは groundAt で測る。毎フレーム MEASURE 匹ずつ順に、少し先（LAMP.LOOK）の地面を測り直し、高さをなめらかに合わせる（kurage.js のうろうろクラゲと同じ）
 //  CYCLE（50 分）ごとに、はじめの PERCH_S 秒（10 分）は玉の上で羽を止めて休み、残り FLY_S 秒（40 分）は星を周遊して、またもとの玉に戻る
 //    時計（Date.now）で決めるので、いつ開いても・だれが見ても同じ所にいる。とまる時刻は 1 匹ずつ 50 分の中でばらばらにずらす（いつ見ても何匹かとまっている）
 //    とまる所: 柱の玉のてっぺん。板から外向き（左の欄干は左、右は右）を ±HEADING まで振った向きを向く
@@ -11,9 +13,10 @@ import { createAominoumiushiSwarm, AOMINOUMIUSHI_FLAP } from '../my-3d-parts/par
 //      周の数・ゆれ・高さ・向きは 1 匹ずつ変えて、星じゅうに散らばる。終わりはもとの所へ同じ向きで戻る
 //      飛び立ってから CLIMB_D 進むあいだに FLY_UP だけ上がり、戻りは同じだけ下りる
 //    飛ぶあいだは部品の羽ばたき（飛び立ちで強くなり、降りる前に弱めて止める）
-//  まとめて描く（InstancedMesh 5 つ。何匹でも描画 5 回）
-//  createAominoumiushiTour({ plank }) → { group, update(time) }
+//  両方の組をまとめて描く（InstancedMesh 5 つ。何匹でも描画 5 回）
+//  createAominoumiushiTour({ plank, lamps, groundAt }) → { group, update(time) }
 //    plank: rasenPair.plank（posts に欄干の柱の玉、path.n に板の左）。group は板と同じ置き先（plank.mesh.parent）に入れる
+//    lamps: coccolith.js の lamps（top にライトの頭のてっぺん。板と同じ置き先の座標）/ groundAt(dir): その向きの地面の高さ（星の中心から m。海なら海面）
 // ============================================================
 
 export const AOMINOUMIUSHI_TOUR = {
@@ -30,6 +33,19 @@ export const AOMINOUMIUSHI_TOUR = {
   FLY_UP: [12, 30],             // 飛ぶときに玉の上から上がる高さ (m)
   HEADING: 50,                  // とまる向き・飛び立つ向きを板から外向きから振る最大（度）
   CLIMB_D: 60,                  // 飛び立ってから FLY_UP まで上がるあいだに進む距離 (m)。降りるときも同じ
+  // ライトの組（休む時間・周遊する時間・羽ばたき・幅は上と同じ）
+  LAMP: {
+    COUNT: 12,                  // 匹の数（ライト 23 本から間をあけて選ぶ）
+    LAPS: [1, 2],               // 大円を回る周の数
+    WAVES: [3, 7],              // 左右へゆれる回数
+    SWAY: [20, 50],             // 左右へゆれる大きさ（度）
+    FLY_UP: [4, 8],             // 飛ぶときの地面からの高さ (m)
+    HEADING: 180,               // とまる向き・飛び立つ向き（北から ±この角度でばらばら。度）
+    CLIMB_D: 25,                // 飛び立ってから地面すれすれの高さになるまでに進む距離 (m)。降りるときも同じ
+    LOOK: 12,                   // 地面を測る所（いまの所から進む向きへこれだけ先。m）
+    MEASURE: 2,                 // 1 フレームに地面を測り直す匹の数
+    RISE: 3, FALL: 0.8,         // 測った地面の高さに寄せる速さ（1 秒あたりの割合。上りは速く、下りはゆっくり）
+  },
 }
 
 // t 秒でどれだけ進んだか（0〜1）。始めの a 秒で速さが上がり、終わりの a 秒で止まる。あいだは同じ速さ（microraptorFlight.js と同じ）
@@ -44,7 +60,7 @@ const smooth = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a
 const rng = seed => () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296 }
 const DEG = Math.PI / 180
 
-export function createAominoumiushiTour({ plank, count = AOMINOUMIUSHI_TOUR.COUNT, width = AOMINOUMIUSHI_TOUR.WIDTH }) {
+export function createAominoumiushiTour({ plank, lamps = [], groundAt = null, count = AOMINOUMIUSHI_TOUR.COUNT, width = AOMINOUMIUSHI_TOUR.WIDTH }) {
   const C = AOMINOUMIUSHI_TOUR
   const CYCLE = C.PERCH_S + C.FLY_S
   const n = plank.path.n
@@ -56,6 +72,22 @@ export function createAominoumiushiTour({ plank, count = AOMINOUMIUSHI_TOUR.COUN
     const k = sd > 0 ? Math.ceil(count / 2) : Math.floor(count / 2)
     for (let j = 0; j < k; j++) perches.push(row[Math.min(row.length - 1, Math.floor((j + (sd > 0 ? 0.25 : 0.75)) * row.length / k))])
   }
+
+  // 道（とまる所 up0 を通って正面 F へ進む大円を LAPS 周、道に直角に SWAY まで WAVES 回ゆれる）と、その長さ（高さは R0 で測る）
+  const makePath = (up0, R0, F, LAPS, WAVES, SWAY) => {
+    const G = new THREE.Vector3().crossVectors(up0, F).normalize()
+    const dirAt = (s, out) => {
+      const th = 2 * Math.PI * LAPS * s
+      const b = SWAY * Math.sin(2 * Math.PI * WAVES * s) * Math.sin(Math.PI * s)
+      return out.copy(up0).multiplyScalar(Math.cos(th)).addScaledVector(F, Math.sin(th))
+        .multiplyScalar(Math.cos(b)).addScaledVector(G, Math.sin(b)).normalize()
+    }
+    const N = 2000, a = new THREE.Vector3(), b = new THREE.Vector3()
+    let LEN = 0; dirAt(0, a)
+    for (let i = 1; i <= N; i++) { dirAt(i / N, b); LEN += a.angleTo(b) * R0; a.copy(b) }
+    return { dirAt, LEN }
+  }
+  const intIn = (rand, [a, b]) => Math.round(a - 0.49 + (b - a + 0.98) * rand())
 
   const birds = perches.map((post, idx) => {
     const rand = rng(idx * 7919 + 13)
@@ -69,21 +101,23 @@ export function createAominoumiushiTour({ plank, count = AOMINOUMIUSHI_TOUR.COUN
     // 正面：板から外向き（左の欄干は +n、右は -n）を、上を軸に ±HEADING 振る
     const F = n.clone().multiplyScalar(post.side).addScaledVector(up0, -n.dot(up0) * post.side).normalize()
       .applyAxisAngle(up0, (rand() * 2 - 1) * C.HEADING * DEG)
-    const G = new THREE.Vector3().crossVectors(up0, F).normalize()
-    const dirAt = (s, out) => {
-      const th = 2 * Math.PI * LAPS * s
-      const b = SWAY * Math.sin(2 * Math.PI * WAVES * s) * Math.sin(Math.PI * s)
-      return out.copy(up0).multiplyScalar(Math.cos(th)).addScaledVector(F, Math.sin(th))
-        .multiplyScalar(Math.cos(b)).addScaledVector(G, Math.sin(b)).normalize()
-    }
-    const LEN = (() => {
-      const N = 2000, a = new THREE.Vector3(), b = new THREE.Vector3()
-      let len = 0; dirAt(0, a)
-      for (let i = 1; i <= N; i++) { dirAt(i / N, b); len += a.angleTo(b) * R0; a.copy(b) }
-      return len
-    })()
-    return { up0, R0, F, dirAt, LEN, FLY_UP, offset }
+    return { up0, R0, F, ...makePath(up0, R0, F, LAPS, WAVES, SWAY), FLY_UP, offset, CLIMB_D: C.CLIMB_D }
   })
+
+  // ライトの組：23 本から間をあけて選んだライトの頭のてっぺんにとまり、地面すれすれを飛ぶ
+  const L = C.LAMP
+  const lampPerches = groundAt ? [...Array(Math.min(L.COUNT, lamps.length))].map((_, j, a) => lamps[Math.floor((j + 0.5) * lamps.length / a.length)]) : []
+  const NORTH = new THREE.Vector3(0, 1, 0)
+  lampPerches.forEach((lamp, j) => {
+    const rand = rng(j * 6151 + 101)
+    const LAPS = intIn(rand, L.LAPS), WAVES = intIn(rand, L.WAVES), SWAY = (L.SWAY[0] + (L.SWAY[1] - L.SWAY[0]) * rand()) * DEG
+    const FLY_UP = L.FLY_UP[0] + (L.FLY_UP[1] - L.FLY_UP[0]) * rand()
+    const offset = ((j * 5) % lampPerches.length + rand()) / lampPerches.length * CYCLE   // とまる時刻は 12 匹で 50 分をばらばらに分ける
+    const up0 = lamp.top.clone().normalize(), R0 = lamp.top.length()
+    const F = NORTH.clone().addScaledVector(up0, -NORTH.dot(up0)).normalize().applyAxisAngle(up0, (rand() * 2 - 1) * L.HEADING * DEG)
+    birds.push({ up0, R0, F, ...makePath(up0, R0, F, LAPS, WAVES, SWAY), FLY_UP, offset, CLIMB_D: L.CLIMB_D, low: true, ground: null, target: null })
+  })
+  const lows = birds.filter(b => b.low)
 
   const swarm = createAominoumiushiSwarm(birds.length, { width })
   const group = swarm.group
@@ -100,15 +134,37 @@ export function createAominoumiushiTour({ plank, count = AOMINOUMIUSHI_TOUR.COUN
     return basis.makeBasis(x, dir, fwd).setPosition(dir.x * r, dir.y * r, dir.z * r)
   }
 
+  // 地面すれすれの組：いまの所から LOOK 先の地面を測る
+  const look = new THREE.Vector3()
+  const measure = (b, s) => groundAt(b.dirAt(Math.min(1, s + L.LOOK / b.LEN), look))
+  let nextLow = 0, lastClock = null
+
   // time は使わない（どこにいるか・羽の角度は時計 Date.now で決める）。ほかの update とそろえて受け取るだけ
   const update = () => {
     const clock = Date.now() / 1000
-    birds.forEach((b, i) => {
+    const dt = lastClock === null ? 0 : Math.min(0.1, Math.max(0, clock - lastClock)); lastClock = clock
+    const at = b => {   // いまの飛んでいる時間（休んでいるあいだは null）と道の進み s
       const tt = ((clock - b.offset) % CYCLE + CYCLE) % CYCLE
-      if (tt < C.PERCH_S) { swarm.set(i, place(b, 0, b.R0), 0, 0); return }   // 玉の上で休む（羽を止める）
+      if (tt < C.PERCH_S) return null
       const tf = tt - C.PERCH_S
-      const s = progress(tf, C.FLY_S, C.ACCEL_S), d = s * b.LEN
-      const r = b.R0 + b.FLY_UP * smooth(0, C.CLIMB_D, d) * smooth(0, C.CLIMB_D, b.LEN - d)
+      return { tf, s: progress(tf, C.FLY_S, C.ACCEL_S) }
+    }
+    // 地面を測り直す（飛んでいる低い組から MEASURE 匹ずつ順に。はじめて飛ぶのを見る匹はすぐ測る）
+    for (let m = 0; m < L.MEASURE && lows.length; m++) {
+      const b = lows[nextLow]; nextLow = (nextLow + 1) % lows.length
+      const a = at(b); if (a) b.target = measure(b, a.s)
+    }
+    birds.forEach((b, i) => {
+      const a = at(b)
+      if (!a) { b.ground = null; swarm.set(i, place(b, 0, b.R0), 0, 0); return }   // 玉・ライトの上で休む（羽を止める）
+      const { tf, s } = a, d = s * b.LEN
+      const w = smooth(0, b.CLIMB_D, d) * smooth(0, b.CLIMB_D, b.LEN - d)   // 飛び立ち・降りるところでとまる所の高さへ寄せる
+      let r
+      if (b.low) {
+        if (b.ground === null) b.ground = b.target = measure(b, s)
+        b.ground += (b.target - b.ground) * Math.min(1, dt * (b.target > b.ground ? L.RISE : L.FALL))
+        r = b.R0 * (1 - w) + (b.ground + b.FLY_UP) * w
+      } else r = b.R0 + b.FLY_UP * w
       const k = Math.min(1, tf / C.FLAP_IN, (C.FLY_S - tf) / C.FLAP_OUT)
       swarm.set(i, place(b, s, r), tf, Math.max(0, k))
     })

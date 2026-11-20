@@ -215,7 +215,7 @@ export function createCoccolith({ renderer = null } = {}) {
   const terrainMeshes = []
   const colliders = []   // sabちゃんが侵入できない建物（userData.footprint を持つ Object3D）
   const jihankis = []    // 自販機（my-3d-parts/landmark/jihanki.js。コインを入れると取り出し口に缶が出る → main.js）
-  const lamps = []       // ライト { pos: 光の位置（group のローカル座標）, glow: 頭の発光マテリアル }。main.js が近いものだけ点ける
+  const lamps = []       // ライト { pos: 光の位置（group のローカル座標）, glow: 頭の発光マテリアル, top: 頭のてっぺん（group のローカル座標）}。main.js が近いものだけ点ける
 
   const noise3D = createNoise3D(Alea('coccolith'))
 
@@ -1114,7 +1114,12 @@ export function createCoccolith({ renderer = null } = {}) {
         if (o.material?.emissive?.getHex()) { glow = o.material = o.material.clone(); glow.emissiveIntensity = 0; lightGlows.push(o) }
       })
       light.updateMatrix()
-      lamps.push({ pos: light.userData.lamp.clone().applyMatrix4(light.matrix), glow })
+      // 頭のてっぺん：光の位置の真上から下へレイを飛ばして、ライトに当たった所（アオミノウミウシがとまる。aominoumiushiFlight.js）
+      const pos = light.userData.lamp.clone().applyMatrix4(light.matrix)
+      lightGroup.updateMatrixWorld(true)
+      ray.set(pos.clone().addScaledVector(d, 20), d.clone().negate())
+      const top = ray.intersectObject(light, true)[0]?.point.clone() ?? pos.clone()
+      lamps.push({ pos, glow, top })
     }
     mergeStatic(lightGroup, { keep: o => lightGlows.includes(o) })
   }
