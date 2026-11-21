@@ -2150,7 +2150,7 @@ function animate() {
   updateDoorGlow(now)
   if (!interior) {
     camera.updateMatrixWorld()
-    updateLedBoards(now / 1000, camera, pDir, R_C)
+    updateLedBoards(now / 1000, camera)
     for (const k in migrations) migrations[k].tick(dt)
     sabStillT = R_C * pDir.angleTo(_sabPrevDir) < SAB_STILL_SPEED * dt ? sabStillT + dt : 0
     _sabPrevDir.copy(pDir)
