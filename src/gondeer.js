@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import { rideHeights } from './rideHeights.js'
 import { createGondeer } from '../my-3d-parts/parts/gondeer.js'
 import { dirOf } from './coccolith.js'
 
@@ -29,7 +30,7 @@ export function gondeerLatPath(lat) {
 
 // path: { lat, lon } の並び（道の中心線。隣どうしを大円で結ぶ）・loop: 閉じた道を周遊するか（false なら往復）
 // getGround(dir): 惑星中心から地面までの距離。waterLevel: 海面の高さ（惑星中心から）。speed: 進む速さ (m/s)
-export function createGondeerRide({ scene, radius, getGround, waterLevel, speed, path, loop = false }) {
+export function createGondeerRide({ scene, radius, getGround, waterLevel, speed, path, loop = false, bakeKey }) {
   // 道を STEP (m) おきの点に分ける（pts[i] は単位ベクトル）
   const ways = path.map(p => dirOf(p.lat, p.lon))
   if (loop) ways.push(ways[0].clone())
@@ -71,12 +72,12 @@ export function createGondeerRide({ scene, radius, getGround, waterLevel, speed,
   }
   const FOOT = [[0, 0], [hx * 0.5, hz * 0.5], [-hx * 0.5, hz * 0.5], [hx * 0.5, tz * 0.5], [-hx * 0.5, tz * 0.5], [0, hz * 0.7], [0, tz * 0.7]]
   const footMax = (up, fwd) => { let g = -Infinity; for (const [x, z] of FOOT) g = Math.max(g, groundAt(up, fwd, x, z)); return g }
-  const raw = new Float32Array(N)
-  for (let i = 0; i < N; i++) {
+  //   測った高さは書き出しておいたもの（rideHeights.js）を使う
+  const raw = rideHeights(bakeKey, N, i => {
     let g = footMax(pts[i], fwds[i])
     if (!loop && (i === 0 || i === N - 1)) for (const deg of [45, 90, 135]) g = Math.max(g, footMax(pts[i], _f.copy(fwds[i]).applyAxisAngle(pts[i], THREE.MathUtils.degToRad(deg))))
-    raw[i] = g - mid
-  }
+    return g - mid
+  })
   const heights = new Float32Array(N)
   for (let i = 0; i < N; i++) {
     let s = 0

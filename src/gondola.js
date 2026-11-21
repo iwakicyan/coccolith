@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import { rideHeights } from './rideHeights.js'
 import { createGondola, GONDOLA_BOUNDS } from '../my-3d-parts/parts/gondola.js'
 import { dirOf } from './coccolith.js'
 
@@ -34,7 +35,7 @@ function thetaAt(ms) {
 }
 
 // getGround(dir): 惑星中心から地面までの距離。waterLevel: 海面の高さ（惑星中心から）
-export function createGondolaRide({ scene, radius, getGround, waterLevel }) {
+export function createGondolaRide({ scene, radius, getGround, waterLevel, bakeKey = 'gondola' }) {
   const a = dirOf(GONDOLA_A.lat, GONDOLA_A.lon), b = dirOf(GONDOLA_B.lat, GONDOLA_B.lon)
   const half = a.angleTo(b) / 2
   const mid = a.clone().add(b).normalize()                                    // 楕円の中心
@@ -66,19 +67,19 @@ export function createGondolaRide({ scene, radius, getGround, waterLevel }) {
   }
 
   // 軌道に沿って、真ん中と四隅・前後の下の地面を測り、いちばん高いところに天面をそろえた原点の高さを入れておく（天面が地面より下に潜らない）
-  const heights = new Float32Array(SAMPLES + 1)
   const _p = new THREE.Vector3()
   const groundAt = (up, fwd, x, z) => {
     _r.crossVectors(up, fwd)
     _p.copy(up).multiplyScalar(radius).addScaledVector(_r, x).addScaledVector(fwd, z).normalize()
     return Math.max(getGround(_p), waterLevel)
   }
-  for (let i = 0; i <= SAMPLES; i++) {
+  //   測った高さは書き出しておいたもの（rideHeights.js）を使う
+  const heights = rideHeights(bakeKey, SAMPLES + 1, i => {
     frameAt((i / SAMPLES) * Math.PI * 2, _d1, _f)
     let g = groundAt(_d1, _f, 0, 0)
     for (const [x, z] of [[hx * 0.7, hz * 0.7], [-hx * 0.7, hz * 0.7], [hx * 0.7, tz * 0.7], [-hx * 0.7, tz * 0.7], [0, hz], [0, tz]]) g = Math.max(g, groundAt(_d1, _f, x, z))
-    heights[i] = g - top + GONDOLA_LIFT
-  }
+    return g - top + GONDOLA_LIFT
+  })
   const heightAt = (theta) => {
     const u = (((theta / (Math.PI * 2)) % 1 + 1) % 1) * SAMPLES, i = Math.floor(u)
     return heights[i] + (heights[i + 1] - heights[i]) * (u - i)
@@ -120,7 +121,7 @@ const TOUR_TURN = 12                    // 曲がり角で向きを急に変え�
 const TOUR_SMOOTH = 6                   // 測った高さを前後この点数ずつでならす
 const TOUR_TURN_MS = 80 * 1000          // 道の端で 180° 振り返るのにかける時間
 
-export function createGondolaTourRide({ scene, radius, getGround, waterLevel, speed, path }) {
+export function createGondolaTourRide({ scene, radius, getGround, waterLevel, speed, path, bakeKey }) {
   // 道を TOUR_STEP (m) おきの点に分ける（pts[i] は単位ベクトル）
   const ways = path.map(p => dirOf(p.lat, p.lon))
   const pts = []
@@ -160,12 +161,12 @@ export function createGondolaTourRide({ scene, radius, getGround, waterLevel, sp
   const FOOT = [[0, 0], [hx * 0.7, hz * 0.7], [-hx * 0.7, hz * 0.7], [hx * 0.7, tz * 0.7], [-hx * 0.7, tz * 0.7], [0, hz], [0, tz]]
   const footMax = (up, fwd) => { let g = -Infinity; for (const [x, z] of FOOT) g = Math.max(g, groundAt(up, fwd, x, z)); return g }
   const _f = new THREE.Vector3()
-  const raw = new Float32Array(N)
-  for (let i = 0; i < N; i++) {
+  //   測った高さは書き出しておいたもの（rideHeights.js）を使う
+  const raw = rideHeights(bakeKey, N, i => {
     let g = footMax(pts[i], fwds[i])
     if (i === 0 || i === N - 1) for (const deg of [45, 90, 135]) g = Math.max(g, footMax(pts[i], _f.copy(fwds[i]).applyAxisAngle(pts[i], THREE.MathUtils.degToRad(deg))))
-    raw[i] = g - top + GONDOLA_LIFT
-  }
+    return g - top + GONDOLA_LIFT
+  })
   const top2 = new Float32Array(N), heights = new Float32Array(N)
   for (let i = 0; i < N; i++) {
     let m = -Infinity                                                          // 天面が地面に潜らないよう、まず前後の最大を取り

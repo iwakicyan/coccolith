@@ -469,7 +469,7 @@ function getSmoothGroundHeight(dir, dt) {
 }
 
 // --- 上に乗れる動く台（rides）: gondola・gondeer ---
-// どちらも地面の高さを軌道に沿って測ってから、自分を地形のレイキャスト対象に加える（先に加えると自分の上を測ってしまう）
+// どちらも地面の高さを軌道に沿って測ってから（測った高さは scripts/bake-rides.mjs で書き出しておき、起動時は読むだけ。rideHeights.js）、自分を地形のレイキャスト対象に加える（先に加えると自分の上を測ってしまう）
 //   gondola: A・B の停留所のあいだの細い楕円を、停泊せずに回り続ける（gondola.js）
 //     2・3 台目は GONDOLA_TOURS の地点を結んだ道を GONDOLA_TOUR_SPEED で往復する（端で 80 秒かけて 180° 振り返る。createGondolaTourRide）
 //   gondeer: GONDEER_SPEED (m/s) で道に沿って動く（gondeer.js）。体の高さの 70% を地面に埋める
@@ -481,9 +481,9 @@ const GONDEER_SPEED = 8   // gondeer の速さ (m/s)。sabちゃんの速さ（S
 const gondeerOpts = { scene, radius: R_C + LAND_LIFT, getGround: rideGround, waterLevel: R_OCEAN + TIDE_SHIFT, speed: GONDEER_SPEED }
 const routeOf = name => ROUTES.find(r => r.name === name).waypoints
 const gondeers = [
-  createGondeerRide({ ...gondeerOpts, path: gondeerLatPath(58), loop: true }),
-  createGondeerRide({ ...gondeerOpts, path: routeOf('Route1') }),
-  createGondeerRide({ ...gondeerOpts, path: routeOf('Route2') }),
+  createGondeerRide({ ...gondeerOpts, path: gondeerLatPath(58), loop: true, bakeKey: 'gondeerLat58' }),
+  createGondeerRide({ ...gondeerOpts, path: routeOf('Route1'), bakeKey: 'gondeerRoute1' }),
+  createGondeerRide({ ...gondeerOpts, path: routeOf('Route2'), bakeKey: 'gondeerRoute2' }),
 ]
 const GONDOLA_TOURS = [
   [
@@ -496,7 +496,7 @@ const GONDOLA_TOURS = [
   ],
 ]
 const GONDOLA_TOUR_SPEED = GONDEER_SPEED * 0.8   // 道を往復する gondola の速さ (m/s)。gondeer より少しゆっくり
-const gondolaTours = GONDOLA_TOURS.map(path => createGondolaTourRide({ ...gondeerOpts, speed: GONDOLA_TOUR_SPEED, path }))
+const gondolaTours = GONDOLA_TOURS.map((path, i) => createGondolaTourRide({ ...gondeerOpts, speed: GONDOLA_TOUR_SPEED, path, bakeKey: `gondolaTour${i + 1}` }))
 const rides = [gondola, ...gondolaTours, ...gondeers]
 const rideOfMesh = new Map()   // 上を歩けるメッシュ → その台
 for (const ride of rides) {
