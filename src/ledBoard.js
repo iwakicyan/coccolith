@@ -23,9 +23,9 @@ const COLOR_LATEST = [255, 230, 90]   // 最新の行の本文
 const COLOR_OFF    = [40, 18, 6]      // 消えているドット（ほんのり見える）
 const FONT = `bold ${FONT_PX}px "Hiragino Sans", "Noto Sans JP", "Yu Gothic", sans-serif`
 const SMILE_ROWS = 30    // 笑顔を出すときの縦のドット数（更新履歴より粗い）。笑顔の絵の 1 マスが 1 ドット
-const SMILE_TOP  = 1     // 笑顔の絵（20×20）の上端の行
+const SMILE_TOP  = 6     // 笑顔の絵（20×20）の上端の行
 const SMILE_DOT  = 8     // 笑顔の 1 ドットのテクスチャ上の大きさ (px)
-const GAUGE_TOP  = 19    // ゲージの上端の行
+const GAUGE_TOP  = 24    // ゲージの上端の行
 const GAUGE_H    = 5     // ゲージの縦のドット数
 const GAUGE_X0   = 2, GAUGE_X1 = 18   // ゲージの左右の端（笑顔の絵の中の列。X1 は含まない）
 const GAUGE_TIME = 6     // ゲージが埋まるまで、看板が画面に映っている時間 (s)
@@ -52,7 +52,6 @@ function drawDotMask(ctx, w, h, dot) {
 }
 
 // 笑顔とゲージを描くキャンバス。drawSmile で filled 列ぶんゲージを埋めて描き直す
-const hexRGB = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16))
 function createSmile(aspect) {
   const rows = SMILE_ROWS, cols = Math.round(rows * aspect)
   const low = document.createElement('canvas')
@@ -80,8 +79,9 @@ function drawSmile(smile, filled) {
   for (let i = 0; i < img.data.length; i += 4) {
     img.data[i] = COLOR_OFF[0]; img.data[i + 1] = COLOR_OFF[1]; img.data[i + 2] = COLOR_OFF[2]; img.data[i + 3] = 255
   }
-  SMILE.grid.forEach((row, y) => row.forEach((p, x) => { const c = SMILE.palette[p]; if (c) put(x0 + x, SMILE_TOP + y, hexRGB(c)) }))
-  const on = hexRGB(SMILE.palette[1])
+  // 笑顔とゲージのドットは、絵の色ではなく更新履歴の本文と同じ色で点ける
+  const on = COLOR_TEXT
+  SMILE.grid.forEach((row, y) => row.forEach((p, x) => { if (SMILE.palette[p]) put(x0 + x, SMILE_TOP + y, on) }))
   for (let x = GAUGE_X0; x < GAUGE_X1; x++) for (let y = 0; y < GAUGE_H; y++) {
     put(x0 + x, GAUGE_TOP + y, x - GAUGE_X0 < filled ? on : COLOR_GAUGE_EMPTY)
   }
