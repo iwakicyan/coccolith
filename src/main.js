@@ -285,6 +285,17 @@ function hitGlowSpot(e) {
   _iconRay.setFromCamera(_pointer, camera)
   return _iconRay.intersectObject(g.hitMesh ?? g.mesh, false).length > 0 ? g : null   // hitMesh: 光るものと別にタップの当たりがあればそれ
 }
+// 光っているコイン箱・自販機の本体のタップ → 1 枚入れる（Enter と同じ。コインを持っていなければ何もしない）
+function hitCoinSpot(e) {
+  const g = nearGlowSpot()
+  if (!(g?.coinbox || g?.jihanki)) return null
+  _pointer.set((e.clientX / window.innerWidth) * 2 - 1, -(e.clientY / window.innerHeight) * 2 + 1)
+  _iconRay.setFromCamera(_pointer, camera)
+  return _iconRay.intersectObject(g.owner, true).length > 0 ? g : null
+}
+function dropCoinAt(g) {
+  return g.coinbox ? coinDrop.dropOne() : coinDrop.dropInto(jihankiTargets[jihankis.indexOf(g.jihanki)])
+}
 // 光っているものを使う（タップでも Enter でも同じ）
 function openGlowSpot(g) {
   g.onTap()
@@ -296,6 +307,7 @@ canvas.addEventListener('pointerdown', e => {
   tapUsed = true
   if (hitDoor(e)) useDoor()
   else if ((g = hitGlowSpot(e))) openGlowSpot(g)
+  else if ((g = hitCoinSpot(e)) && dropCoinAt(g)) { /* コインを入れた */ }
   else if (giveKanByTap(e)) { /* 缶をあげた */ }
   else if (hitLightIcon(e)) toggleSabLight()
   else if ((g = hitAwadama(e))) { awadamas.pop(g); sfx.bubblePop() }
@@ -303,7 +315,7 @@ canvas.addEventListener('pointerdown', e => {
   else tapUsed = false
 })
 canvas.addEventListener('pointermove', e => {
-  if (e.pointerType === 'mouse') canvas.style.cursor = hitDoor(e) || hitLightIcon(e) || hitAwadama(e) || hitWater(e) ? 'pointer' : ''
+  if (e.pointerType === 'mouse') canvas.style.cursor = hitDoor(e) || (coinCount > 0 && hitCoinSpot(e)) || hitLightIcon(e) || hitAwadama(e) || hitWater(e) ? 'pointer' : ''
 })
 
 // --- 3人称カメラ定数 -------------------------------------------
@@ -726,7 +738,7 @@ const _doors = colliders.filter(o => o.userData.door).map(o => {
 // 近づくとドアのように輪郭が光るだけのもの（入れない。colliders のうち userData.glowSpot = { mesh, local, reach } を持つもの）
 const _glowSpots = colliders.filter(o => o.userData.glowSpot).map(o => {
   o.updateWorldMatrix(true, false)
-  return { ...o.userData.glowSpot, dir: o.userData.glowSpot.local.clone().applyMatrix4(o.matrixWorld).normalize() }
+  return { ...o.userData.glowSpot, owner: o, dir: o.userData.glowSpot.local.clone().applyMatrix4(o.matrixWorld).normalize() }   // owner: glowSpot を持つもの（コイン箱・自販機の本体のタップの当たり）
 })
 const _interiorCache = {}
 let interior = null          // 室内にいる間 { def, door }
@@ -1037,8 +1049,7 @@ window.addEventListener('keydown', e => {
     // くぐれるドアがあれば出入り、なければ近くで光っているものを使う（キャンバス・ツリーハウスの扉は開く、コイン箱は 1 枚入れる）
     const g = activeDoorMesh() ? null : nearGlowSpot()
     if (g?.onTap) openGlowSpot(g)
-    else if (g?.coinbox) coinDrop.dropOne()
-    else if (g?.jihanki) coinDrop.dropInto(jihankiTargets[jihankis.indexOf(g.jihanki)])
+    else if (g?.coinbox || g?.jihanki) dropCoinAt(g)
     else if (!activeDoorMesh() && giveKanNearest()) { /* 缶をあげた */ }
     else useDoor()
     e.preventDefault()
