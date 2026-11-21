@@ -26,7 +26,7 @@ const SMILE_ROWS = 30    // 笑顔を出すときの縦のドット数（更新�
 const SMILE_TOP  = 6     // 笑顔の絵（20×20）の上端の行
 const SMILE_DOT  = 8     // 笑顔の 1 ドットのテクスチャ上の大きさ (px)
 const GAUGE_TOP  = 24    // ゲージの上端の行
-const GAUGE_H    = 5     // ゲージの縦のドット数
+const GAUGE_H    = 3     // ゲージの縦のドット数
 const GAUGE_X0   = 2, GAUGE_X1 = 18   // ゲージの左右の端（笑顔の絵の中の列。X1 は含まない）
 const GAUGE_TIME = 6     // ゲージが埋まるまで、看板が画面に映っている時間 (s)
 const COLOR_GAUGE_EMPTY = [70, 64, 58]   // ゲージのまだ埋まっていないところ
