@@ -57,7 +57,7 @@ function createSmileTexture(aspect) {
   for (let y = 0; y < rows; y++) for (let x = 0; x < cols; x++) {
     const u = (x + 0.5 - cx) / R, v = (y + 0.5 - cy) / R   // 顔の半径を 1 とした位置（v は下が正）
     // 顔の輪郭は描かず、目と口だけを点ける
-    const eye = [-0.36, 0.36].some(ex => ((u - ex) / 0.12) ** 2 + ((v + 0.3) / 0.22) ** 2 <= 1)
+    const eye = [-0.36, 0.36].some(ex => Math.hypot(u - ex, v + 0.3) <= 0.15)   // 丸い目
     const m = Math.hypot(u, v + 0.05)
     const mouth = v > 0.12 && m >= 0.5 && m <= 0.66 && Math.abs(u) < 0.58
     const c = eye || mouth ? COLOR_SMILE : COLOR_OFF
@@ -86,7 +86,7 @@ export function addLedBoard(mesh, aspect, entries) {
   mat.emissiveMap = smile
   mat.emissiveIntensity = 1.4
   mesh.material = mat
-  boards.push({ mesh, mat, aspect, entries, smile, dir: null, full: null, showing: 'smile' })
+  boards.push({ mesh, aspect, entries, smile, dir: null, full: null, showing: 'smile' })
 }
 
 // 更新履歴の電光掲示板を作る
@@ -200,7 +200,7 @@ export function updateLedBoards(t, camera, sabDir, radius) {
     const show = d < NEAR ? 'full' : 'smile'
     if (show !== b.showing) {
       b.showing = show
-      b.mat.emissiveMap = show === 'full' ? b.full.tex : b.smile
+      b.mesh.material.emissiveMap = show === 'full' ? b.full.tex : b.smile   // 起動時に Lambert へ置き換わる（lambert.js）ので、今付いているマテリアルを切り替える
     }
     if (show !== 'full') continue
     if (_frustum.intersectsSphere(_sphere.copy(g.boundingSphere).applyMatrix4(b.mesh.matrixWorld))) draw(b.full, t)
