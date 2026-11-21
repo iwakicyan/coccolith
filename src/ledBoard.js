@@ -46,7 +46,7 @@ function drawDotMask(ctx, w, h, dot) {
   ctx.fillRect(0, 0, w, h)
 }
 
-// 粗いドットの大きな笑顔のテクスチャ（ドットごとに顔・目・口の中かを計算して塗る）
+// 粗いドットの大きな笑顔のテクスチャ（ドットごとに目・口の中かを計算して塗る。顔の輪郭は描かない）
 function createSmileTexture(aspect) {
   const rows = SMILE_ROWS, cols = Math.round(rows * aspect)
   const low = document.createElement('canvas')
@@ -56,11 +56,11 @@ function createSmileTexture(aspect) {
   const cx = cols / 2, cy = rows / 2, R = rows * 0.44
   for (let y = 0; y < rows; y++) for (let x = 0; x < cols; x++) {
     const u = (x + 0.5 - cx) / R, v = (y + 0.5 - cy) / R   // 顔の半径を 1 とした位置（v は下が正）
-    const face = u * u + v * v <= 1
+    // 顔の輪郭は描かず、目と口だけを点ける
     const eye = [-0.36, 0.36].some(ex => ((u - ex) / 0.12) ** 2 + ((v + 0.3) / 0.22) ** 2 <= 1)
     const m = Math.hypot(u, v + 0.05)
     const mouth = v > 0.12 && m >= 0.5 && m <= 0.66 && Math.abs(u) < 0.58
-    const c = face && !eye && !mouth ? COLOR_SMILE : COLOR_OFF
+    const c = eye || mouth ? COLOR_SMILE : COLOR_OFF
     const i = (y * cols + x) * 4
     img.data[i] = c[0]; img.data[i + 1] = c[1]; img.data[i + 2] = c[2]; img.data[i + 3] = 255
   }
