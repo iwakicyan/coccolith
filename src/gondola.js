@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import { rideHeights } from './rideHeights.js'
+import { rideHeights } from './bake.js'
 import { createGondola, GONDOLA_BOUNDS } from '../my-3d-parts/parts/gondola.js'
 import { dirOf } from './coccolith.js'
 
@@ -73,7 +73,7 @@ export function createGondolaRide({ scene, radius, getGround, waterLevel, bakeKe
     _p.copy(up).multiplyScalar(radius).addScaledVector(_r, x).addScaledVector(fwd, z).normalize()
     return Math.max(getGround(_p), waterLevel)
   }
-  //   測った高さは書き出しておいたもの（rideHeights.js）を使う
+  //   測った高さは書き出しておいたもの（bake.js）を使う
   const heights = rideHeights(bakeKey, SAMPLES + 1, i => {
     frameAt((i / SAMPLES) * Math.PI * 2, _d1, _f)
     let g = groundAt(_d1, _f, 0, 0)
@@ -161,7 +161,7 @@ export function createGondolaTourRide({ scene, radius, getGround, waterLevel, sp
   const FOOT = [[0, 0], [hx * 0.7, hz * 0.7], [-hx * 0.7, hz * 0.7], [hx * 0.7, tz * 0.7], [-hx * 0.7, tz * 0.7], [0, hz], [0, tz]]
   const footMax = (up, fwd) => { let g = -Infinity; for (const [x, z] of FOOT) g = Math.max(g, groundAt(up, fwd, x, z)); return g }
   const _f = new THREE.Vector3()
-  //   測った高さは書き出しておいたもの（rideHeights.js）を使う
+  //   測った高さは書き出しておいたもの（bake.js）を使う
   const raw = rideHeights(bakeKey, N, i => {
     let g = footMax(pts[i], fwds[i])
     if (i === 0 || i === N - 1) for (const deg of [45, 90, 135]) g = Math.max(g, footMax(pts[i], _f.copy(fwds[i]).applyAxisAngle(pts[i], THREE.MathUtils.degToRad(deg))))

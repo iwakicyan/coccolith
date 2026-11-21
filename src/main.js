@@ -469,7 +469,7 @@ function getSmoothGroundHeight(dir, dt) {
 }
 
 // --- 上に乗れる動く台（rides）: gondola・gondeer ---
-// どちらも地面の高さを軌道に沿って測ってから（測った高さは scripts/bake-rides.mjs で書き出しておき、起動時は読むだけ。rideHeights.js）、自分を地形のレイキャスト対象に加える（先に加えると自分の上を測ってしまう）
+// どちらも地面の高さを軌道に沿って測ってから（測った高さは scripts/bake.mjs で書き出しておき、起動時は読むだけ。bake.js）、自分を地形のレイキャスト対象に加える（先に加えると自分の上を測ってしまう）
 //   gondola: A・B の停留所のあいだの細い楕円を、停泊せずに回り続ける（gondola.js）
 //     2・3 台目は GONDOLA_TOURS の地点を結んだ道を GONDOLA_TOUR_SPEED で往復する（端で 80 秒かけて 180° 振り返る。createGondolaTourRide）
 //   gondeer: GONDEER_SPEED (m/s) で道に沿って動く（gondeer.js）。体の高さの 70% を地面に埋める
@@ -2150,7 +2150,7 @@ function animate() {
   updateDoorGlow(now)
   if (!interior) {
     camera.updateMatrixWorld()
-    updateLedBoards(now / 1000, camera)
+    updateLedBoards(now / 1000, camera, pDir, R_C)
     for (const k in migrations) migrations[k].tick(dt)
     sabStillT = R_C * pDir.angleTo(_sabPrevDir) < SAB_STILL_SPEED * dt ? sabStillT + dt : 0
     _sabPrevDir.copy(pDir)

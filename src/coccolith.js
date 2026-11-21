@@ -1,6 +1,7 @@
 import * as THREE from 'three'
 import { createNoise3D } from 'simplex-noise'
 import Alea from 'alea'
+import { bakeBits } from './bake.js'
 import { R_C, LAND_LIFT, SPARKLE_AT } from './constants.js'
 import { createTORCH } from '../my-3d-parts/landmark/TORCH.js'
 import { createChairTree } from '../my-3d-parts/landmark/chairtree.js'
@@ -546,13 +547,13 @@ export function createCoccolith({ renderer = null } = {}) {
     [{lat:66,lon:-145},{lat:56,lon:-176.5},{lat:42,lon:-145},{lat:53.6,lon:-128.4}],
     [{lat:59.9,lon:157.6},{lat:59.9,lon:80.2},{lat:44.4,lon:117.3}],
   ]
-  for (const poly of GRASS_AREAS) group.add(createGrassField(poly, noise3D, GRASS_KIND_1, [gojunotoHole, rasenHole]))
+  for (const [n, poly] of GRASS_AREAS.entries()) group.add(createGrassField(poly, noise3D, GRASS_KIND_1, [gojunotoHole, rasenHole], `grass${n + 1}`))
 
   // --- 下葉: forest1 ×3 のあたりの草地は、立てた草の代わりにドット絵を地面に貼る（pixelGround.js） ---
   //   範囲は前の草地と同じポリゴンを 5m 内側へ寄せたところ（草地の境目のぼかしの真ん中くらい）
   const SHITABA_AREA = [{lat:73.3,lon:7.2},{lat:42.4,lon:-33.8},{lat:42.4,lon:-16.6},{lat:56.3,lon:62.4}]
   //   立てた草も、ほかの草地の 3 割の密度でこの草地全体（下葉の上と、lon 25 より先）に残す
-  group.add(createGrassField(SHITABA_AREA, noise3D, { ...GRASS_KIND_1, density: GRASS_KIND_1.density * 0.3 }))
+  group.add(createGrassField(SHITABA_AREA, noise3D, { ...GRASS_KIND_1, density: GRASS_KIND_1.density * 0.3 }, [], 'grassShitaba'))
   //   草地の外にある森（lat 54.6・lon -36.6。コンパスでいちばん東）の下にも、森の中心から半径 r (m) の円で足す（草地の範囲とつながる）
   //   lon 25 より lon の大きい側（コンパスでは西）は森が無いので貼らない
   const SHITABA_LON_MAX = 25
@@ -560,7 +561,7 @@ export function createCoccolith({ renderer = null } = {}) {
   const SHITABA_CIRCLES = [{ lat: 54.6, lon: -36.6, r: 70 }]
     .map(c => ({ dir: dirOf(c.lat, c.lon), cosR: Math.cos(c.r / (R_C + LAND_LIFT)) }))
   group.add(createPixelGround({
-    terrainGeo: geo, segs: TERRAIN_SEGS, tiles: SHITABA_TILES, name: 'shitaba',
+    terrainGeo: geo, segs: TERRAIN_SEGS, tiles: SHITABA_TILES, name: 'shitaba', bakeKey: 'shitaba',
     center: { lat: 54, lon: -5 },
     contains: (lat, lon) => lon <= SHITABA_LON_MAX && ((_polyContains(lat, lon, SHITABA_AREA) &&
       SHITABA_AREA.every((a, i) => { const b = SHITABA_AREA[(i + 1) % SHITABA_AREA.length]
@@ -581,12 +582,12 @@ export function createCoccolith({ renderer = null } = {}) {
     { at: SPARKLE_AT[1], tile: 6, opacity: 0.8, edgeAmp: 0.55, edgeFreq: 4,    // 夜の側（lat -11・lon -31、山F）
       holes: { small: 16, seed: 'ef-hole-night' } },
   ]
-  for (const { at: { lat, lon, edgeSeed }, tile, opacity, edgeAmp, edgeFreq, holes } of EF_AREAS) {
+  for (const [n, { at: { lat, lon, edgeSeed }, tile, opacity, edgeAmp, edgeFreq, holes }] of EF_AREAS.entries()) {
     const inArea = sparkleAreaContainsFn(dirOf(lat, lon), R_C + LAND_LIFT, { edgeSeed, edgeAmp, edgeFreq })
     group.add(createPixelGround({
       terrainGeo: geo, segs: TERRAIN_SEGS, center: { lat, lon },
       contains: (la, lo) => inArea(dirOf(la, lo)),
-      tiles: EF_TILES, name: 'ef', tile, sub: tile, lift: 0.15, flatOnly: false, opacity, holes,
+      tiles: EF_TILES, name: 'ef', tile, sub: tile, lift: 0.15, flatOnly: false, opacity, holes, bakeKey: `ef${n + 1}`,
     }))
   }
 
@@ -595,7 +596,7 @@ export function createCoccolith({ renderer = null } = {}) {
     [{lat:-21.7,lon:23.4},{lat:-37.7,lon:15},{lat:-20.5,lon:10.6}],
     [{lat:-44,lon:-134},{lat:-67,lon:-114},{lat:-67,lon:-151.6}],
   ]
-  for (const poly of FIELD01_AREAS) group.add(createGrassField(poly, noise3D, GRASS_KIND_2, [cakestandHole]))
+  for (const [n, poly] of FIELD01_AREAS.entries()) group.add(createGrassField(poly, noise3D, GRASS_KIND_2, [cakestandHole], `field01-${n + 1}`))
 
   // --- ランドマーク: ChairTree (lat=65, lon=-180) ---------------
   const chairTreeWrapper = new THREE.Group()
@@ -1673,7 +1674,8 @@ function createFlowerStemGeometry() {
 
 // ポリゴン境界をパーリンノイズでぼかして草地を配置（y軸ランダム回転・位置ランダムずらし）
 // holes: 草を生やさない矩形 { lat, lon, halfW, halfD } の配列（中心の緯度経度と、東西・南北の半分の幅 m。建物の下敷きを除く）
-function createGrassField(poly, noise3D, kind, holes = []) {
+// bakeKey: あれば、格子のどの点に草を置くか（陸か・海岸から離れているか・縁のギザギザ）を書き出しておいたもの（bake.js）から読む
+function createGrassField(poly, noise3D, kind, holes = [], bakeKey = null) {
   const DEG            = Math.PI / 180
   const GRASS_SCALE    = kind.scale
   const FOOTPRINT      = 1.6                 // 配置間隔の基準 (m)
@@ -1699,50 +1701,59 @@ function createGrassField(poly, noise3D, kind, holes = []) {
     return landNoise(noise3D, d.x, d.y, d.z)
   }
 
-  // グリッド位置を収集（境界外EDGE_WIDTH分まで走査）
-  const posBuf = []
-  const jitRng = Alea(kind.seed + '-jitter')   // 格子の列が見えないよう、間隔の±半分ずらす
+  // 格子の点に草を置くか（ずらしと穴の前）
+  const keep = (lat, lon) => {
+    const dlon20  = COAST_DEG / Math.cos(lat * DEG)
+    // ポリゴン境界からの符号付き距離（内側=正、外側=負）
+    const np = poly.length
+    let minDist = Infinity
+    for (let i = 0; i < np; i++) {
+      const a = poly[i], b = poly[(i + 1) % np]
+      const d = _distToSeg(lat, lon, a.lat, a.lon, b.lat, b.lon)
+      if (d < minDist) minDist = d
+    }
+    const inside      = _polyContains(lat, lon, poly)
+    const edgeFactor  = ((inside ? 1 : -1) * minDist - SHRINK_DEG) / EDGE_WIDTH
+
+    if (edgeFactor <= -NOISE_STRENGTH) return false
+
+    const phi   = (90 - lat) * DEG
+    const theta = (lon + 180) * DEG
+    const nx    = Math.sin(phi) * Math.cos(theta)
+    const ny    = Math.cos(phi)
+    const nz    = Math.sin(phi) * Math.sin(theta)
+
+    // 地形と同じノイズ式で陸地判定 — 海の点はスキップ
+    if (landNoise(noise3D, nx, ny, nz) < LAND_THRESHOLD) return false
+
+    // 4近傍20m以内に海があれば海岸バッファとしてスキップ
+    if (landN(lat + COAST_DEG, lon        ) < LAND_THRESHOLD ||
+        landN(lat - COAST_DEG, lon        ) < LAND_THRESHOLD ||
+        landN(lat,             lon + dlon20) < LAND_THRESHOLD ||
+        landN(lat,             lon - dlon20) < LAND_THRESHOLD) return false
+
+    if (edgeFactor < NOISE_STRENGTH) {
+      const nv = edgeNoise(nx * NOISE_FREQ, ny * NOISE_FREQ, nz * NOISE_FREQ)
+      if (edgeFactor + nv * NOISE_STRENGTH <= 0) return false
+    }
+    return true
+  }
+  // グリッド位置を収集（境界外EDGE_WIDTH分まで走査）。どの点に置くかは書き出しておいたもの（bake.js）から読む
+  const grid = []   // [lat, lon, dlonDeg, ...]
   for (let lat = latMin - EDGE_WIDTH; lat <= latMax + EDGE_WIDTH + 1e-9; lat += dlatDeg) {
     const dlonDeg = dlatDeg / Math.cos(lat * DEG)
-    const dlon20  = COAST_DEG / Math.cos(lat * DEG)
-    for (let lon = lonMin - EDGE_WIDTH; lon <= lonMax + EDGE_WIDTH + 1e-9; lon += dlonDeg) {
-      // ポリゴン境界からの符号付き距離（内側=正、外側=負）
-      const np = poly.length
-      let minDist = Infinity
-      for (let i = 0; i < np; i++) {
-        const a = poly[i], b = poly[(i + 1) % np]
-        const d = _distToSeg(lat, lon, a.lat, a.lon, b.lat, b.lon)
-        if (d < minDist) minDist = d
-      }
-      const inside      = _polyContains(lat, lon, poly)
-      const edgeFactor  = ((inside ? 1 : -1) * minDist - SHRINK_DEG) / EDGE_WIDTH
-
-      if (edgeFactor <= -NOISE_STRENGTH) continue
-
-      const phi   = (90 - lat) * DEG
-      const theta = (lon + 180) * DEG
-      const nx    = Math.sin(phi) * Math.cos(theta)
-      const ny    = Math.cos(phi)
-      const nz    = Math.sin(phi) * Math.sin(theta)
-
-      // 地形と同じノイズ式で陸地判定 — 海の点はスキップ
-      if (landNoise(noise3D, nx, ny, nz) < LAND_THRESHOLD) continue
-
-      // 4近傍20m以内に海があれば海岸バッファとしてスキップ
-      if (landN(lat + COAST_DEG, lon        ) < LAND_THRESHOLD ||
-          landN(lat - COAST_DEG, lon        ) < LAND_THRESHOLD ||
-          landN(lat,             lon + dlon20) < LAND_THRESHOLD ||
-          landN(lat,             lon - dlon20) < LAND_THRESHOLD) continue
-
-      if (edgeFactor < NOISE_STRENGTH) {
-        const nv = edgeNoise(nx * NOISE_FREQ, ny * NOISE_FREQ, nz * NOISE_FREQ)
-        if (edgeFactor + nv * NOISE_STRENGTH <= 0) continue
-      }
-      const plat = lat + (jitRng() - 0.5) * dlatDeg, plon = lon + (jitRng() - 0.5) * dlonDeg
-      if (holes.some(h => Math.abs(plat - h.lat) * DEG * R_C < h.halfD &&
-                          Math.abs(plon - h.lon) * DEG * R_C * Math.cos(h.lat * DEG) < h.halfW)) continue
-      posBuf.push(plat, plon)
-    }
+    for (let lon = lonMin - EDGE_WIDTH; lon <= lonMax + EDGE_WIDTH + 1e-9; lon += dlonDeg) grid.push(lat, lon, dlonDeg)
+  }
+  const use = bakeBits(bakeKey && `grass:${bakeKey}`, grid.length / 3, k => keep(grid[3 * k], grid[3 * k + 1]))
+  const posBuf = []
+  const jitRng = Alea(kind.seed + '-jitter')   // 格子の列が見えないよう、間隔の±半分ずらす
+  for (let k = 0; k < grid.length / 3; k++) {
+    if (!use(k)) continue
+    const lat = grid[3 * k], lon = grid[3 * k + 1], dlonDeg = grid[3 * k + 2]
+    const plat = lat + (jitRng() - 0.5) * dlatDeg, plon = lon + (jitRng() - 0.5) * dlonDeg
+    if (holes.some(h => Math.abs(plat - h.lat) * DEG * R_C < h.halfD &&
+                        Math.abs(plon - h.lon) * DEG * R_C * Math.cos(h.lat * DEG) < h.halfW)) continue
+    posBuf.push(plat, plon)
   }
   const count = posBuf.length / 2
 

@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import { rideHeights } from './rideHeights.js'
+import { rideHeights } from './bake.js'
 import { createGondeer } from '../my-3d-parts/parts/gondeer.js'
 import { dirOf } from './coccolith.js'
 
@@ -72,7 +72,7 @@ export function createGondeerRide({ scene, radius, getGround, waterLevel, speed,
   }
   const FOOT = [[0, 0], [hx * 0.5, hz * 0.5], [-hx * 0.5, hz * 0.5], [hx * 0.5, tz * 0.5], [-hx * 0.5, tz * 0.5], [0, hz * 0.7], [0, tz * 0.7]]
   const footMax = (up, fwd) => { let g = -Infinity; for (const [x, z] of FOOT) g = Math.max(g, groundAt(up, fwd, x, z)); return g }
-  //   測った高さは書き出しておいたもの（rideHeights.js）を使う
+  //   測った高さは書き出しておいたもの（bake.js）を使う
   const raw = rideHeights(bakeKey, N, i => {
     let g = footMax(pts[i], fwds[i])
     if (!loop && (i === 0 || i === N - 1)) for (const deg of [45, 90, 135]) g = Math.max(g, footMax(pts[i], _f.copy(fwds[i]).applyAxisAngle(pts[i], THREE.MathUtils.degToRad(deg))))

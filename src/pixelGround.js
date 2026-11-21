@@ -1,6 +1,7 @@
 import * as THREE from 'three'
 import { R_C, LAND_LIFT } from './constants.js'
 import Alea from 'alea'
+import { bakeBits } from './bake.js'
 
 // ============================================================
 //  ドット絵の地面 — 40×40 などのドット絵を、地面に平らに並べて貼る（下葉・EF）
@@ -20,6 +21,7 @@ import Alea from 'alea'
 //    big / small: 乱数で開ける大きい穴・小さい穴の数（形は HOLE_SHAPES）。seed: 場所と形を決める乱数の種（開くたびには変わらない）
 //      範囲の縁からは 2 マス以上離す。穴同士はくっついてもよい（1 つの大きい穴になる）。1 マス幅のところができる置き方はしない。入りきらなければ数は減る
 //    at: 場所を決めて開ける 1 マスの穴 [{ lat, lon }]（その地点にいちばん近いマス）
+//  bakeKey: あれば、範囲に入るマスのどれが平らで貼れるかを書き出しておいたもの（bake.js）から読む（地面の高さを測らずに済む）
 const TILE_DEFAULT = 6      // 1 枚の大きさ (m)
 const SUB_DEFAULT  = 3      // 1 枚を分ける数
 const LIFT_DEFAULT = 0.08   // 地面から浮かせる高さ (m)
@@ -116,7 +118,7 @@ const dirOf = (lat, lon) => {
 
 export function createPixelGround({ terrainGeo, segs, contains, center, tiles, name,
                                    tile: TILE = TILE_DEFAULT, sub: SUB = SUB_DEFAULT, lift: LIFT = LIFT_DEFAULT,
-                                   flatOnly = true, opacity = 1, holes = null }) {
+                                   flatOnly = true, opacity = 1, holes = null, bakeKey = null }) {
   const R = R_C + LAND_LIFT
   const radiusAt = terrainRadiusFn(terrainGeo, segs)
 
@@ -157,7 +159,9 @@ export function createPixelGround({ terrainGeo, segs, contains, center, tiles, n
     }
     return true
   }
+  //   まず範囲に入るマスを中心から輪の順に集め、そのうち平らなマス（isFlat）を貼る。どれが平らかは書き出しておいたもの（bake.js）から読む
   const MAX = Math.ceil(Math.PI / 2 * R / TILE)   // 中心から 90° まで
+  const cand = []
   for (let ring = 0, foundAny = true; ring <= MAX && (foundAny || ring < 3); ring++) {
     foundAny = false
     for (let i = -ring; i < ring; i++) for (let j = -ring; j < ring; j++) {
@@ -165,9 +169,11 @@ export function createPixelGround({ terrainGeo, segs, contains, center, tiles, n
       const { lat, lon } = latLonOf(dirAt((i + 0.5) * TILE, (j + 0.5) * TILE, dirTmp))
       if (!contains(lat, lon)) continue
       foundAny = true
-      if (isFlat(i, j)) cells.set(key(i, j), true)
+      cand.push(i, j)
     }
   }
+  const flat = bakeBits(bakeKey && `pixelGround:${bakeKey}`, cand.length / 2, k => isFlat(cand[2 * k], cand[2 * k + 1]))
+  for (let k = 0; k < cand.length / 2; k++) if (flat(k)) cells.set(key(cand[2 * k], cand[2 * k + 1]), true)
 
   // 1 マス幅で飛び出したところは、端の絵が合わないので消す
   const isThin = (i, j) => {   // 上下とも・左右とも空いているマスか

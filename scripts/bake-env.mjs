@@ -21,7 +21,8 @@ const files = {
   'kanban.png': { type: 'image/png', body: await readFile(SRC) },
 }
 
-const browser = await chromium.launch({ args: ['--ignore-gpu-blocklist'] })
+const args = ['--ignore-gpu-blocklist']
+const browser = await chromium.launch({ args }).catch(() => chromium.launch({ args, channel: 'chrome' }))   // Playwright の Chromium が入っていなければ、この Mac の Chrome を使う
 try {
   const page = await browser.newPage()
   page.on('pageerror', e => console.error('[page]', e.message))
@@ -38,7 +39,16 @@ try {
     gl.getExtension('EXT_color_buffer_float')   // 半精度のレンダーターゲットを float で読み出すため
 
     // nightEnv.js が実行時にしていたのと同じ設定で PMREM を作る
-    const tex = await new THREE.TextureLoader().loadAsync('kanban.png')
+    //   画像として見せるわけではない（金属にぼんやり映るだけ）ので、PMREM が作れるいちばん小さい幅 ENV_W まで縮めてから作る
+    //   （幅の 1/4 が立方体の 1 面の大きさになる。16px 未満では作れない）→ 書き出す画像が数 KB になり、起動時に待たずに済む
+    const ENV_W = 64
+    const src = await new THREE.TextureLoader().loadAsync('kanban.png')
+    const small = document.createElement('canvas')
+    small.width = ENV_W; small.height = ENV_W / 2
+    const sctx = small.getContext('2d')
+    sctx.imageSmoothingQuality = 'high'
+    sctx.drawImage(src.image, 0, 0, small.width, small.height)
+    const tex = new THREE.CanvasTexture(small)
     tex.mapping = THREE.EquirectangularReflectionMapping
     tex.colorSpace = THREE.SRGBColorSpace
     const rt = new THREE.PMREMGenerator(renderer).fromEquirectangular(tex)
