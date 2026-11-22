@@ -11,7 +11,8 @@ import { t, LANGS, getLang, setLang, onLangChange } from './i18n.js'
 const STORAGE_KEY = 'coccolith.handleInvert'
 const SPEED_KEY   = 'coccolith.moveSpeed'
 const OUTVIEW_KEY = 'coccolith.outdoorFp'
-const SPEED_STEPS = [0.5, 1, 1.5]   // 移動速度の倍率の選択肢
+// 移動速度の倍率の段。0.5〜1 と 1〜2 をそれぞれ 3 等分する（全部で 6 刻み・7 か所）
+const SPEED_STEPS = [0.5, 2/3, 5/6, 1, 4/3, 5/3, 2]
 
 const ICON_GEAR = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M13.27 6.82 L15.14 7.07 L15.14 8.93 L13.27 9.18 L12.56 10.89 L13.71 12.39 L12.39 13.71 L10.89 12.56 L9.18 13.27 L8.93 15.14 L7.07 15.14 L6.82 13.27 L5.11 12.56 L3.61 13.71 L2.29 12.39 L3.44 10.89 L2.73 9.18 L0.86 8.93 L0.86 7.07 L2.73 6.82 L3.44 5.11 L2.29 3.61 L3.61 2.29 L5.11 3.44 L6.82 2.73 L7.07 0.86 L8.93 0.86 L9.18 2.73 L10.89 3.44 L12.39 2.29 L13.71 3.61 L12.56 5.11Z"/><circle cx="8" cy="8" r="2.2"/></svg>'
 
@@ -42,8 +43,9 @@ function load() {
     }
   } catch { /* 読めなければ初期設定のまま */ }
   try {
+    // 前の選択肢（1.5 倍など）が残っていたら、いちばん近い段にそろえる
     const k = Number(localStorage.getItem(SPEED_KEY))
-    if (SPEED_STEPS.includes(k)) moveSpeed.k = k
+    if (k > 0) moveSpeed.k = SPEED_STEPS.reduce((a, b) => Math.abs(b - k) < Math.abs(a - k) ? b : a)
   } catch { /* 読めなければ 1 倍のまま */ }
   try {
     outdoorView.fp = localStorage.getItem(OUTVIEW_KEY) === '1'
@@ -116,30 +118,34 @@ export function initSettings(btn, panel, { onOutdoorView } = {}) {
   title.className = 'set-title'
   relabel(() => { title.textContent = t('handleInvert') })
 
-  // 移動速度（0.5 / 1 / 1.5 倍から1つ選ぶ）
+  // 移動速度（0.5〜2 倍のスライダー。SPEED_STEPS の段に止まる）。右に今の倍率を出す
   const speedTitle = document.createElement('div')
   speedTitle.className = 'set-title'
   relabel(() => { speedTitle.textContent = t('moveSpeed') })
   const speedRow = document.createElement('div')
   speedRow.className = 'set-row'
-  const speedBtns = SPEED_STEPS.map(k => {
-    const b = document.createElement('button')
-    b.className = 'set-speed'
-    b.textContent = `×${k}`
-    relabel(() => b.setAttribute('aria-label', t('moveSpeedK', k)))
-    b.addEventListener('click', () => {
-      moveSpeed.k = k
-      syncSpeed(); save(); b.blur()
-    })
-    return b
+  const speedSlider = document.createElement('input')
+  speedSlider.type = 'range'
+  speedSlider.className = 'set-slider'
+  speedSlider.min = 0
+  speedSlider.max = SPEED_STEPS.length - 1
+  speedSlider.step = 1
+  const speedVal = document.createElement('span')
+  speedVal.className = 'set-val'
+  const fmtK = k => `×${Math.round(k * 100) / 100}`
+  const syncSpeed = () => {
+    speedSlider.value = SPEED_STEPS.indexOf(moveSpeed.k)
+    speedVal.textContent = fmtK(moveSpeed.k)
+    speedSlider.setAttribute('aria-valuetext', t('moveSpeedK', Math.round(moveSpeed.k * 100) / 100))
+  }
+  speedSlider.addEventListener('input', () => {
+    moveSpeed.k = SPEED_STEPS[Number(speedSlider.value)]
+    syncSpeed(); save()
   })
-  const syncSpeed = () => speedBtns.forEach((b, i) => {
-    const on = SPEED_STEPS[i] === moveSpeed.k
-    b.classList.toggle('on', on)
-    b.setAttribute('aria-pressed', on)
-  })
+  speedSlider.addEventListener('change', () => speedSlider.blur())   // 離したらフォーカスを外し、矢印キーが移動に戻るように
+  relabel(() => { speedSlider.setAttribute('aria-label', t('moveSpeed')); syncSpeed() })
   syncSpeed()
-  speedRow.append(...speedBtns)
+  speedRow.append(speedSlider, speedVal)
 
   // 屋外の視点（後ろから / 主観から1つ選ぶ）。室内の視点は 俯瞰ボタンで切り替えるので、屋外にいるときだけ出す
   const viewTitle = document.createElement('div')

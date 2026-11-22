@@ -87,6 +87,9 @@
       -webkit-tap-highlight-color: transparent;
     }
     #settings button.set-speed { flex: 1; font: 12px monospace; white-space: nowrap; }   /* 倍率は矢印ほど大きくしなくてよい。English の長い字も折り返さずパネルを広げる */
+    /* 移動速度のスライダー。つまみは選んだボタンと同じ色 */
+    #settings .set-slider { flex: 1; min-width: 120px; margin: 0; accent-color: rgba(186,205,216,1); cursor: pointer; touch-action: none; }
+    #settings .set-row span.set-val { flex: none; width: 3.5em; margin: 0; text-align: right; font: 12px monospace; }
     #settings button.on { background: rgba(186,205,216,0.85); border-color: rgba(186,205,216,1); color: #00000a; }
     .hud-icon {
       width: 22px; height: 22px; margin: -6px 0 -6px -4px;
