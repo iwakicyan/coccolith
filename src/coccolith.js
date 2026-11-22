@@ -1,4 +1,6 @@
 import * as THREE from 'three'
+import { createWallSprite } from './wallSprite.js'
+import NEUSAGI from './pixelArt/neusagi.js'
 import { createNoise3D } from 'simplex-noise'
 import Alea from 'alea'
 import { bakeBits } from './bake.js'
@@ -867,9 +869,12 @@ export function createCoccolith({ renderer = null } = {}) {
   //   向き face: 正面（棚のある側・ローカル +Z）を向ける方角。ユーザーの言う「東」は lon が減る向き（コンパスの E とは逆）なので、
   //   [lat の増える向き, lon の増える向き] で 北 = [1, 0]・南 = [-1, 0]・東 = [0, -1]・西 = [0, 1]・北東 = [1, -1]・北西 = [1, 1]
   const MUJIN_SINK = 1.0
+  // ねうさぎ（pixelArt/neusagi.js、44×40 マス）を貼る位置。単位は販売所の部品のまま（1 = 1m、置くときに 2.5 倍）
+  //   奥の黒い背板は高さ 0.64〜1.82・手前の面が z = -0.185。絵の高さ 1.09（幅 1.2）で、下端を棚の上あたりに置き、背板から 0.01 浮かせる
+  const NEUSAGI_H = 1.09, NEUSAGI_BOTTOM = 0.70, NEUSAGI_Z = -0.175
   const MUJIN_SPOTS = [
     { lat:  13.4, lon: -144.8, face: [1, 1] },    // 北西向き
-    { lat:  50.0, lon:   21.0, face: [-1, 0] },   // 南向き
+    { lat:  50.0, lon:   21.0, face: [-1, 0], neusagi: true },   // 南向き。奥の壁にねうさぎのドット絵
     { lat: -68.0, lon:  153.5, face: [1, 0] },    // 北向き
     { lat: -72.0, lon: -115.0, face: [1, -1] },   // 北東向き
     { lat:  18.0, lon:  -46.0, face: [-1, 0] },   // 南向き
@@ -887,7 +892,8 @@ export function createCoccolith({ renderer = null } = {}) {
   const mujinMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, side: THREE.DoubleSide })   // 部品のマテリアルと同じ（色だけ頂点へ）
   const mujinLineMat = new THREE.LineBasicMaterial({ color: 0x4a4f5e })   // 部品の輪郭線と同じ色
   const mujinColorGeo = new Map()   // 元のジオメトリ＋色 → 頂点の色をつけたジオメトリ（同じ形・同じ色のパーツで使い回す）
-  for (const { lat, lon, face: [fn, fe] } of MUJIN_SPOTS) {
+  const neusagiAnchors = []   // ねうさぎを貼る位置（中身のない Object3D は mergeStatic で残るので、まとめたあとに絵を足す）
+  for (const { lat, lon, face: [fn, fe], neusagi } of MUJIN_SPOTS) {
     const wrapper = new THREE.Group()
     const mujin = createMujin()
     wrapper.add(mujin)
@@ -915,8 +921,16 @@ export function createCoccolith({ renderer = null } = {}) {
     hit.userData.footprint = mujin.userData.footprint
     mujin.add(hit)
     colliders.push(hit)
+    if (neusagi) {
+      const anchor = new THREE.Object3D()
+      anchor.name = 'ねうさぎの位置'
+      anchor.position.set(0, NEUSAGI_BOTTOM, NEUSAGI_Z)
+      mujin.add(anchor)
+      neusagiAnchors.push(anchor)
+    }
   }
   mergeStatic(mujins)
+  for (const anchor of neusagiAnchors) anchor.add(createWallSprite(NEUSAGI, NEUSAGI_H))
 
   // --- ランドマーク: SShall (lat=27.0, lon=161.0) ------------
   // 2倍で高さ約15m（塔の円錐屋根の先）。原点は塔の中心。正面（扉のある側・ローカル +Z）を西（経度-方向）へ向ける

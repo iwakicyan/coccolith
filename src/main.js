@@ -25,6 +25,7 @@ import { createGummo } from '../my-3d-parts/parts/gummo.jsx'
 import { createSabchan } from '../my-3d-parts/parts/sabchan.jsx'
 import { setDoorGlow } from './doorGlow.js'
 import { updateLedBoards } from './ledBoard.js'
+import { updateWallSprites } from './wallSprite.js'
 import { createCoinIntro } from './coinIntro.js'
 import { createCoinDrop, INSERT_TIME as COIN_INSERT_TIME } from './coinDrop.js'
 import { whenNightEnvReady } from './nightEnv.js'
@@ -2152,6 +2153,7 @@ function animate() {
   if (!interior) {
     camera.updateMatrixWorld()
     updateLedBoards(now / 1000, camera)
+    updateWallSprites(now / 1000, camera)
     for (const k in migrations) migrations[k].tick(dt)
     sabStillT = R_C * pDir.angleTo(_sabPrevDir) < SAB_STILL_SPEED * dt ? sabStillT + dt : 0
     _sabPrevDir.copy(pDir)
