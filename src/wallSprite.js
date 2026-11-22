@@ -3,7 +3,7 @@ import * as THREE from 'three'
 // ============================================================
 //  壁に貼るドット絵（販売所の奥の壁のねうさぎ など）
 //  art = { front: [コマ…], left: [コマ…], right: [コマ…] }（各コマは書き出しの { palette, width, height, grid }）
-//    left = 絵の左前（壁に向かって右側）から見た絵、right = 絵の右前（壁に向かって左側）から見た絵
+//    left = 壁に向かって左側から見た絵、right = 壁に向かって右側から見た絵
 //  見る向きを、壁の正面から ±30° の内なら front、その外は left / right に切り替える（60° ずつ）
 //  コマは 1 → 2 → 3 → 2 → 1 → 2 → 3 … と往復させる
 //  絵は 1 枚のテクスチャに並べ、テクスチャの offset だけを毎フレーム変える（マテリアルは pixelSprite.js と同じ設定）
@@ -17,7 +17,7 @@ const walls = []
 const _cam = new THREE.Vector3()
 
 // height: 絵 1 マスの高さ (m、parent のローカル単位)。返す板の原点は絵の下端の真ん中、+Z が壁から手前
-export function createWallSprite(art, height, { fps = 4 } = {}) {
+export function createWallSprite(art, height, { fps = 1 / 0.4 } = {}) {   // 1 コマ 0.4 秒
   const f0 = art.front[0]
   const cw = f0.width, ch = f0.height
   const frames = art.front.length
@@ -56,8 +56,8 @@ export function updateWallSprites(t, camera) {
     if (!s.mesh.visible) continue
     _cam.setFromMatrixPosition(camera.matrixWorld)
     s.mesh.worldToLocal(_cam)
-    const a = Math.atan2(_cam.x, _cam.z)   // 0 = 正面、+ = 絵の左側（ローカル +X）から
-    const row = a > SIDE_ANGLE ? 1 : a < -SIDE_ANGLE ? 2 : 0
+    const a = Math.atan2(_cam.x, _cam.z)   // 0 = 正面、+ = 壁に向かって右側（ローカル +X）から
+    const row = a > SIDE_ANGLE ? 2 : a < -SIDE_ANGLE ? 1 : 0
     const col = s.order[Math.floor(t * s.fps) % s.order.length]
     // テクスチャは上下反転して貼られるので、v は下から数える
     s.tex.offset.set(col * (s.cw + 1) / s.cvW, 1 - (row * (s.ch + 1) + s.ch) / s.cvH)
