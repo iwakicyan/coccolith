@@ -130,10 +130,10 @@
     }
     #coin-ghost.over { transform: scale(1.4); }
     #compass {
-      position: fixed; top: 10px; right: 12px;   /* 直径 59px。下の JUMP と一覧も右端を 12px にそろえる */
+      position: fixed; top: 10px; right: 12px;   /* 直径 59px。下の JUMP ボタンは真ん中を、一覧は右端をそろえる */
       pointer-events: none;
     }
-    /* JUMP: コンパスの下。押すと行き先の一覧が開き、選ぶと施設内へワープ。JUMP と一覧はコンパスと右端をそろえて右揃え */
+    /* JUMP: コンパスの下。押すと行き先の一覧が開き、選ぶと施設内へワープ。一覧はコンパスと右端をそろえて右揃え */
     #jump {
       position: fixed; top: 75px; right: 12px; z-index: 20;
       display: flex; flex-direction: column; align-items: flex-end; gap: 4px;
@@ -153,6 +153,8 @@
       -webkit-tap-highlight-color: transparent;
     }
     #jump #jump-btn { letter-spacing: 0.25em; padding: 0 calc(8px - 0.25em) 0 8px; }   /* 字間を広げ、末尾の余白ぶん右を詰めて中央に */
+    /* JUMP ボタンだけはコンパス（直径 59px）と真ん中をそろえる。右端から半径ぶん左へ動かし、自分の幅の半分だけ右へ戻す（:active の scale と重ならないよう translate を使う） */
+    #jump #jump-btn { position: relative; right: 29.5px; translate: 50% 0; }
     #jump button:hover { border-color: rgba(255,255,255,0.7); color: #fff; }
     #jump button:active { transform: scale(0.94); }
     #jump-list { display: none; flex-direction: column; align-items: flex-end; gap: 4px; }
