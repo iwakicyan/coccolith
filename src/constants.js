@@ -1,5 +1,3 @@
-import * as THREE from 'three'
-
 // ============================================================
 //  定数 — 全モジュール共有
 //  単位: 1 unit = 1m
@@ -16,10 +14,3 @@ export const SPARKLE_AT = [
   { lat: -11, lon: -136, edgeSeed: 7 },
   { lat: -11, lon: -31, edgeSeed: 23 },
 ]
-
-// veth の位置（北から30°傾いた方向）
-export const VETH_POS = new THREE.Vector3(
-  ORBIT * Math.sin(Math.PI / 6),
-  ORBIT * Math.cos(Math.PI / 6),
-  0
-)

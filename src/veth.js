@@ -140,16 +140,3 @@ export function createVeth() {
   return group
 }
 
-// veth 球面上にオブジェクトを配置するユーティリティ
-export function placeOnVeth(group, object, lat, lon) {
-  const phi   = (90 - lat)  * (Math.PI / 180)
-  const theta = (lon + 180) * (Math.PI / 180)
-
-  const x = R_V * Math.sin(phi) * Math.cos(theta)
-  const y = R_V * Math.cos(phi)
-  const z = R_V * Math.sin(phi) * Math.sin(theta)
-
-  object.position.set(x, y, z)
-  object.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), new THREE.Vector3(x, y, z).normalize())
-  group.add(object)
-}

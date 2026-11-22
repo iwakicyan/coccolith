@@ -124,9 +124,10 @@ scene.add(coccolith)
 
 const VETH_ORBIT_PERIOD = 2 * 3600            // 2時間（秒）
 const TIDE_SHIFT = 1.5                        // 潮汐: 海面球を veth の方向へずらす量 (m)。veth 側が満潮、反対側が干潮
-const vethOrbitAxis = new THREE.Vector3(0.2, 1, 0).normalize()
-
+// 公転面は赤道から約 11° 傾ける。傾けた group の中で veth を自分の Y 軸まわりに回すので、軌道は惑星を中心にした大円になり、
+// veth の自転軸（＝リングの面）も公転軸と同じ向きのまま動かない
 const vethOrbitGroup = new THREE.Group()
+vethOrbitGroup.rotation.z = -Math.atan(0.2)
 scene.add(vethOrbitGroup)
 
 const veth = createVeth()
@@ -1890,13 +1891,13 @@ function animate() {
 
   // veth 自転 + 公転（2時間で1周）
   veth.rotation.y += 0.003 * k30
-  vethOrbitGroup.rotateOnWorldAxis(vethOrbitAxis, (Math.PI * 2 / VETH_ORBIT_PERIOD) * dt)
+  vethOrbitGroup.rotateY((Math.PI * 2 / VETH_ORBIT_PERIOD) * dt)
 
   // 海面球: veth方向へ TIDE_SHIFT ずらす（潮汐効果）
   veth.getWorldPosition(_vethWorldPos)
   oceanMesh.position.copy(_vethWorldPos).normalize().multiplyScalar(TIDE_SHIFT)
 
-  // 雲: 地表上を周回（veth 自転と同速）
+  // 雲: 地表上を周回
   cloudGroup.rotateOnWorldAxis(cloudOrbitAxis, 0.00075 * k30)
   for (const { grp, axis, speed } of flatCloudGroups) {
     grp.rotateOnWorldAxis(axis, speed * k30)
