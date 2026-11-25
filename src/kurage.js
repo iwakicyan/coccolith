@@ -13,6 +13,7 @@ import { R_C } from './constants.js'
 //    色を足し合わせて光らせる（AdditiveBlending）
 //  うろうろするクラゲ（createKurageWander）：星のあちこちのランダムな所で、地面から ROAM_H (m) の低い所をうろうろする
 //    動きは JS で毎フレーム進める（地面の高さを測りながら進むので）。泳ぎ・触手・形はシェーダーで同じに描く
+//    花壇の花を持った sabちゃんが MEET_DIST 以内に近づくと、そのクラゲが 1 匹だけついてくるようになる（ページを開き直すと戻る）
 // ============================================================
 
 const COUNT    = 100            // クラゲの数
@@ -36,6 +37,12 @@ const GROUND_N = 64             // 道に沿って地面の高さを測る点の
 const ROAM_H   = 2              // うろうろするクラゲの、地面からのかさの高さ (m)
 const ROAM_V   = [0.3, 0.6]     // うろうろする速さ (m/s)
 const ROAM_R   = 25             // 出た所からこれより離れたら戻ってくる (m)
+const MEET_DIST   = 5           // 花を持った sabちゃんがこれより近づくと、そのクラゲが 1 匹ついてくるようになる (m)
+const FOLLOW_DIST = 4           // ついてくるクラゲは、sabちゃんからこれより離れたら追いかけ、内側ではふわふわうろうろする (m)
+const FOLLOW_GAIN = 2           // FOLLOW_DIST より離れた分 × これ (m/s) で追いかける（FOLLOW_V まで）
+const FOLLOW_V    = 23          // 追いかける速さの上限 (m/s)。sabちゃん（20 m/s）より少し速い
+const FOLLOW_WARP = 200         // これより離れたら（JUMP したときなど）、sabちゃんのそばへ移る (m)
+const TRAIL_V     = 1.5         // 触手がなびく長さに使う速さの上限 (m/s)。速く追いかけても触手が伸びすぎないように
 const COLORS   = [0xbfeeff, 0xffd0f0, 0xdcd0ff, 0xc8fff0, 0xfff0d8]   // クラゲの色（順番に使う）
 
 const rand = ([a, b]) => a + Math.random() * (b - a)
@@ -311,27 +318,53 @@ export function createKurageWander({ scene, count, groundAt }) {
   scene.add(points)
 
   const _size = new THREE.Vector2(), _toHome = new THREE.Vector3(), _p = new THREE.Vector3(), _v = new THREE.Vector3()
+  const _toSab = new THREE.Vector3(), _axis = new THREE.Vector3()
   let last = null, next = 0
+  let follower = null   // ついてきているクラゲ（1 匹だけ）
   // timeSec: 秒 / camera・renderer: 粒の大きさを画面に合わせる
-  function update(timeSec, camera, renderer) {
+  // sab: { dir, flower }（sabちゃんの足元の向き・花を持っているか）。なければ見ない
+  function update(timeSec, camera, renderer, sab = null) {
     const dt = last === null ? 0 : Math.min(timeSec - last, 0.1)
     last = timeSec
     // 地面の高さは、毎フレーム 2 匹ずつ測り直す（あいだはなめらかに追いかける）
     for (let n = 0; n < 2; n++) { const J = jellies[next]; J.target = groundAt(J.dir); next = (next + 1) % jellies.length }
+    // 花を持った sabちゃんが近づいたら、いちばん近いクラゲが 1 匹ついてくるようになる
+    if (sab?.flower && !follower) {
+      let best = MEET_DIST
+      for (const J of jellies) { const d = J.dir.angleTo(sab.dir) * J.ground; if (d < best) { best = d; follower = J } }
+    }
     jellies.forEach((J, j) => {
+      let speed = J.speed
+      if (J === follower) {
+        // ついていく: sabちゃんのまわりをうろうろし（出た所を sabちゃんの所にする）、FOLLOW_DIST より離れたら追いかける（離れているほど速く）
+        J.home.copy(sab.dir)
+        let over = J.dir.angleTo(sab.dir) * J.ground - FOLLOW_DIST
+        if (over > FOLLOW_WARP) {   // 遠すぎる（JUMP したなど）: sabちゃんのそばへ移る
+          _axis.randomDirection().cross(sab.dir).normalize()
+          J.dir.copy(sab.dir).applyAxisAngle(_axis, FOLLOW_DIST / J.ground)
+          J.ground = J.target = groundAt(J.dir)
+          over = 0
+        }
+        if (over > 0) {
+          _toSab.copy(sab.dir).addScaledVector(J.dir, -sab.dir.dot(J.dir)).normalize()
+          J.fwd.lerp(_toSab, Math.min(1, 8 * dt)).normalize()
+          speed = Math.max(J.speed, Math.min(FOLLOW_V, over * FOLLOW_GAIN))
+        }
+        J.target = groundAt(J.dir)   // 速く動くので毎フレーム測る
+      }
       // ゆっくり向きを変えながら進む。出た所から ROAM_R より離れたら、戻る向きへ曲がる
       const turn = 0.5 * Math.sin(timeSec * 0.23 + J.ph) + 0.3 * Math.sin(timeSec * 0.071 + J.ph * 2.3)
       J.fwd.applyAxisAngle(J.dir, turn * dt)
       const away = J.dir.angleTo(J.home) * J.ground
-      if (away > ROAM_R) {
+      if (away > (J === follower ? FOLLOW_DIST - 1 : ROAM_R)) {
         _toHome.copy(J.home).addScaledVector(J.dir, -J.home.dot(J.dir)).normalize()
         J.fwd.lerp(_toHome, Math.min(1, 0.4 * dt)).normalize()
       }
-      J.dir.addScaledVector(J.fwd, J.speed * dt / J.ground).normalize()
+      J.dir.addScaledVector(J.fwd, speed * dt / J.ground).normalize()
       J.fwd.addScaledVector(J.dir, -J.fwd.dot(J.dir)).normalize()
-      J.ground += (J.target - J.ground) * Math.min(1, 2 * dt)
+      J.ground += (J.target - J.ground) * Math.min(1, (J === follower ? 8 : 2) * dt)
       _p.copy(J.dir).multiplyScalar(J.ground + ROAM_H)
-      _v.copy(J.fwd).multiplyScalar(J.speed)
+      _v.copy(J.fwd).multiplyScalar(Math.min(speed, TRAIL_V))
       for (let k = 0; k < per; k++) {
         const o = (j * per + k) * 3
         center[o] = _p.x; center[o + 1] = _p.y; center[o + 2] = _p.z

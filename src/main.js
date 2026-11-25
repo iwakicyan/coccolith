@@ -1778,6 +1778,7 @@ const kurage = createKurage({
   groundAt: dir => Math.max(getGroundHeight(dir) - 1, R_OCEAN),
 })
 // うろうろするクラゲ（kurage.js）: 星のあちこちのランダムな所で、地面から 2m の低い所をうろうろする
+//   花壇の花を持った sabちゃんが近づくと、1 匹ついてくる
 //   地面は毎フレーム少しずつ測り直す。getGroundHeight は乗り物に乗っているかの判定用に _groundHitObj を書き換えるので戻しておく
 const kurageWander = createKurageWander({
   scene, count: 20,
@@ -2168,7 +2169,7 @@ function animate() {
     aominoumiushi.update()
     for (const f of sparkleFountains) f.update(now / 1000, camera, renderer)
     kurage.update(now / 1000, camera, renderer)
-    kurageWander.update(now / 1000, camera, renderer)
+    kurageWander.update(now / 1000, camera, renderer, { dir: pDir, flower: !!held.flower })
     for (const f of spriteFlyers) f.update(dt, camera)
     horizonCull.update(camera)
   }
