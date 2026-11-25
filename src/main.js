@@ -40,6 +40,7 @@ import { createWaterRipples } from './waterRipple.js'
 import * as sfx from './sfx.js'
 import { createSparkleFountain } from './sparkleFountain.js'
 import { createKurage, createKurageWander } from './kurage.js'
+import { createYanagi } from './yanagi.js'
 import { createTsue } from '../my-3d-parts/parts/tsue.js'
 import { createEda } from '../my-3d-parts/parts/eda.js'
 import { createBirdFlock } from './birdFlight.js'
@@ -1785,6 +1786,14 @@ const kurageWander = createKurageWander({
   groundAt: dir => { const keep = _groundHitObj; const g = Math.max(getGroundHeight(dir) - 1, R_OCEAN); _groundHitObj = keep; return g },
 })
 
+// 光の粒のヤナギ（yanagi.js）: クラゲの触手と同じ作りの、光の粒のヤナギ。sabちゃんが通るとすだれがよける。まずスポーン地点の近くに 1 本（YANAGI_AT）
+const YANAGI_AT = { lat: 87.5, lon: -178 }
+const yanagi = (() => {
+  const dir = dirOf(YANAGI_AT.lat, YANAGI_AT.lon)
+  return createYanagi({ scene, dir, ground: getGroundHeight(dir) - 1 })
+})()
+const _yanFeet = new THREE.Vector3(), _yanTop = new THREE.Vector3()
+
 // 杖（my-3d-parts/parts/tsue.js）: TSUE_LINES の線ごとに、始点から TSUE_GAP (m) ごとに植える
 //   線は 2 点を結ぶ大円。along: 'lat' の線は大円でなく、緯度の円に沿って経度を進める（両端の緯度は同じにする）
 //   flip: true の線は杖を上の軸まわりに 180° 回して、葉を逆の側へ向ける
@@ -2170,6 +2179,9 @@ function animate() {
     for (const f of sparkleFountains) f.update(now / 1000, camera, renderer)
     kurage.update(now / 1000, camera, renderer)
     kurageWander.update(now / 1000, camera, renderer, { dir: pDir, flower: !!held.flower })
+    _yanFeet.copy(sabchan.group.position).addScaledVector(pDir, -SAB_FOOT_OFFSET)
+    _yanTop.copy(sabchan.group.position).addScaledVector(pDir, 2.63 * SAB_SCALE)   // 頭のてっぺん
+    yanagi.update(now / 1000, dt, camera, renderer, _yanFeet, _yanTop)
     for (const f of spriteFlyers) f.update(dt, camera)
     horizonCull.update(camera)
   }
