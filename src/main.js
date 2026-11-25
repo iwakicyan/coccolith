@@ -1786,12 +1786,34 @@ const kurageWander = createKurageWander({
   groundAt: dir => { const keep = _groundHitObj; const g = Math.max(getGroundHeight(dir) - 1, R_OCEAN); _groundHitObj = keep; return g },
 })
 
-// 光の粒のヤナギ（yanagi.js）: クラゲの触手と同じ作りの、光の粒のヤナギ。sabちゃんが通るとすだれがよける。まずスポーン地点の近くに 1 本（YANAGI_AT）
-const YANAGI_AT = { lat: 87.5, lon: -178 }
-const yanagi = (() => {
-  const dir = dirOf(YANAGI_AT.lat, YANAGI_AT.lon)
-  return createYanagi({ scene, dir, ground: getGroundHeight(dir) - 1 })
-})()
+// 光の粒のヤナギ（yanagi.js）: クラゲの触手と同じ作りの、光の粒のヤナギ。sabちゃんが通るとすだれがよける
+//   YANAGI_ROWS の列ごとに、点を順に大円で結んだ線の上へ、始点から YANAGI_GAP (m) ごとに植える
+//   海（地面が海面 + YANAGI_SHORE より低い所）には植えない。木の形は読み込むたびにランダム
+const YANAGI_ROWS = [
+  [{ lat: 44, lon: -116 }, { lat: 29, lon: -116 }, { lat: 23, lon: -131 }],
+  [{ lat: 40, lon: 114 }, { lat: 46, lon: 120 }, { lat: 54, lon: 137 }, { lat: 54, lon: 159 }, { lat: 38, lon: 159 }],
+  [{ lat: 30, lon: -95 }, { lat: 44, lon: -95 }],
+  [{ lat: -29, lon: 114 }, { lat: -39, lon: 96 }],
+  [{ lat: 73, lon: 11 }, { lat: 63, lon: 71 }],
+  [{ lat: -16, lon: 6 }, { lat: -36, lon: 6 }, { lat: -56, lon: 25 }, { lat: -60, lon: 25 }, { lat: -60, lon: 42 }],
+]
+const YANAGI_GAP = 20, YANAGI_SHORE = 0.5
+const yanagis = []
+for (const row of YANAGI_ROWS) {
+  let next = 0, start = 0   // 次に植える所・この区間の始まり（列の始点から線に沿って m）
+  for (let i = 0; i + 1 < row.length; i++) {
+    const A = dirOf(row[i].lat, row[i].lon), B = dirOf(row[i + 1].lat, row[i + 1].lon)
+    const arc = A.angleTo(B), len = arc * R_C
+    const end = start + len + (i + 2 === row.length ? 0.01 : -0.01)   // 終点にはぴったり植わるように
+    for (; next <= end; next += YANAGI_GAP) {
+      const s = (next - start) / len
+      const dir = A.clone().multiplyScalar(Math.sin((1 - s) * arc)).addScaledVector(B, Math.sin(s * arc)).normalize()
+      const ground = getGroundHeight(dir) - 1
+      if (ground >= R_OCEAN + YANAGI_SHORE) yanagis.push(createYanagi({ scene, dir, ground, windAxis: cloudOrbitAxis }))   // 雲の流れていく向きになびく
+    }
+    start += len
+  }
+}
 const _yanFeet = new THREE.Vector3(), _yanTop = new THREE.Vector3()
 
 // 杖（my-3d-parts/parts/tsue.js）: TSUE_LINES の線ごとに、始点から TSUE_GAP (m) ごとに植える
@@ -2181,7 +2203,7 @@ function animate() {
     kurageWander.update(now / 1000, camera, renderer, { dir: pDir, flower: !!held.flower })
     _yanFeet.copy(sabchan.group.position).addScaledVector(pDir, -SAB_FOOT_OFFSET)
     _yanTop.copy(sabchan.group.position).addScaledVector(pDir, 2.63 * SAB_SCALE)   // 頭のてっぺん
-    yanagi.update(now / 1000, dt, camera, renderer, _yanFeet, _yanTop)
+    for (const y of yanagis) y.update(now / 1000, dt, camera, renderer, _yanFeet, _yanTop)
     for (const f of spriteFlyers) f.update(dt, camera)
     horizonCull.update(camera)
   }

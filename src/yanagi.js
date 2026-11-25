@@ -8,6 +8,8 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 //    枝：幹の上の方から BRANCHES 本、外へのびて先が垂れる弧
 //    すだれ：枝に沿って STRAND_GAP (m) ごとに 1 本垂らす。1 本 STRAND_DOTS 粒（本ごとにまちまち）を DOT_GAP (m) おきに。先は地面から CLEAR (m) より下へは垂らさない
 //    ゆれ：風で、下（先）ほど大きくゆれる。上の時刻を遅れてなぞるので、波が上から下へ伝わる（シェーダーで時刻から計算）
+//    風：星じゅうで 1 つの風。雲の回る向き（windAxis まわり）に吹くので、どの木も雲が流れていく向きへなびき、回る軸の近くほど少し弱い
+//        いつも一定になびいていて、強さは風下へ流れていく突風の波で、となりの木へ時間をずらして伝わる（木 1 本につき向き・強さ・風に沿った位置を 1 回測るだけ。毎フレームの JS はない）
 //    よける：sabちゃんが入ると、すだれが 1 本ずつばねでふわっと押しのけられ、出ると揺れながら戻る（JS で毎フレーム、近いときだけ）
 //  位置はヤナギの根元を原点、上を +y にしたローカル座標で作り、根元の地面に置く
 // ============================================================
@@ -26,7 +28,10 @@ const LEAF_HARD  = 0.5            // すだれの粒の硬さ（0 = ふんわり
 const LEAF_SIZE  = 0.34           // すだれの粒の大きさ (m)
 const CLEAR      = 0.15           // すだれの先は、地面からこれより下へは垂らさない (m)
 const SWAY       = 0.07           // ゆれの大きさ（垂れた長さ (m) の 1.3 乗に掛ける）
-const LAG        = 0.55           // 1m 下がるごとのゆれの遅れ (rad)
+const LAG        = 0.55           // 1m 下がるごとのゆれの遅れ (s)
+const LEAN       = 0.24           // 風下へなびく大きさ（垂れた長さ (m) の 1.3 乗に掛ける。突風がいちばん強いとき）
+const GUST_L     = [70, 23]       // 突風の波の長さ（大きい波・小さい波）(m)
+const GUST_V     = 5              // 突風が風下へ流れていく速さ (m/s)
 const PUSH_R     = 0.8            // sabちゃんの真ん中からこれより近いすだれを押しのける (m)
 const PUSH_NEAR  = 12             // sabちゃんがこれより遠いときは、押しのけの計算をしない (m)
 const SPRING     = 30             // 押しのけのばねの強さ
@@ -41,6 +46,10 @@ const f2 = v => v.toFixed(3)
 const vertexShader = /* glsl */ `
   uniform float uTime;
   uniform float uPixel;   // 画面の高さ / (2 tan(fov/2))。m の大きさを画面のピクセルにする
+  uniform vec2 uWind;     // 風下の向き（ローカルの x, z。長さ 1）
+  uniform float uWindK;   // 風の強さ 0〜1（雲の回る軸の近くほど弱い）
+  uniform vec3 uGustK;    // 突風の波の数（x: 大きい波, y: 小さい波。1 m あたり rad）, z: 風に沿った根元の位置 (m)
+  uniform float uAcross;  // 風を横切る向きの、根元の位置 (m)。列ごとに突風を少しずらす
   attribute vec3 aBase;   // 粒のもとの位置（ローカル）。すだれは垂らす所から t だけ下
   attribute vec4 aInfo;   // x: 1 = すだれ, y: すだれの垂れた長さ t (m), z: ゆれの位相, w: 粒の大きさ (m)
   attribute vec3 aPush;   // すだれの押しのけ（x, z）と、押しのけがいっぱいになる垂れた長さ（y）
@@ -52,10 +61,21 @@ const vertexShader = /* glsl */ `
     float t = aInfo.y, ph = aInfo.z;
     {
       // 風のゆれ：先ほど大きく、上から遅れて波が下へ伝わる
-      float a = ${f2(SWAY)} * pow(t, 1.3);
       float tt = uTime - t * ${f2(LAG)};
-      p.x += a * (0.7 * sin(tt * 0.8 + ph) + 0.3 * sin(tt * 1.7 + ph * 2.3));
-      p.z += a * 0.5 * sin(tt * 1.1 + ph * 3.1);
+      float tp = pow(t, 1.3);
+      // 突風：風に沿った位置 s で、風下へ GUST_V で流れていく波（-1〜1）
+      float s = uGustK.z + dot(aBase.xz, uWind);
+      float g = 0.6 * sin(s * uGustK.x - tt * ${f2(GUST_V)} * uGustK.x + uAcross * 0.03)
+              + 0.4 * sin(s * uGustK.y - tt * ${f2(GUST_V)} * uGustK.y + uAcross * 0.11 + 1.7);
+      float gust = uWindK * (0.7 + 0.4 * g);   // いつもなびいていて（0.3〜1.1）、突風で強まり、合間で弱まる
+      vec2 perp = vec2(-uWind.y, uWind.x);
+      // 風下へなびく（なびいた分だけ先が少し持ち上がる）＋ 突風が強いほど大きくなるゆれ
+      float lean = ${f2(LEAN)} * tp * gust;
+      float a = ${f2(SWAY)} * tp * (0.5 + 0.8 * gust);
+      float along = lean + a * (0.7 * sin(tt * 0.8 + ph) + 0.3 * sin(tt * 1.7 + ph * 2.3));
+      float side = a * 0.5 * sin(tt * 1.1 + ph * 3.1);
+      p.xz += uWind * along + perp * side;
+      p.y += 0.5 * along * along / max(t, 0.3);
       // 押しのけ：垂らす所は動かず、sabちゃんの頭の高さまででいっぱいになる
       float w = smoothstep(0.0, 1.0, clamp(t / max(aPush.y, 0.3), 0.0, 1.0));
       p.x += aPush.x * w;
@@ -84,7 +104,8 @@ const fragmentShader = /* glsl */ `
 `
 
 // dir: 根元の向き（星の中心から。長さ 1）/ ground: 根元の地面の高さ（星の中心から m）
-export function createYanagi({ scene, dir, ground }) {
+// windAxis: 風の回る軸（雲が周回する軸。長さ 1）。風下はこの軸まわりに + へ回る向き
+export function createYanagi({ scene, dir, ground, windAxis }) {
   const base = [], info = [], color = [], strands = []
   const c = new THREE.Color()
   const dot = (x, y, z, kind, t, ph, size, col) => {
@@ -152,9 +173,26 @@ export function createYanagi({ scene, dir, ground }) {
   const pushAttr = new THREE.BufferAttribute(push, 3).setUsage(THREE.DynamicDrawUsage)
   geo.setAttribute('aPush', pushAttr)
   geo.computeBoundingSphere()
-  geo.boundingSphere.radius += 1.5   // ゆれ・押しのけの分
+  geo.boundingSphere.radius += 2.5   // ゆれ・押しのけの分
 
-  const uniforms = { uTime: { value: 0 }, uPixel: { value: 500 } }
+  // 風：この木の所の風下の向き・強さと、風に沿った位置・横切る位置を 1 回だけ測る
+  //   風に沿った位置は windAxis まわりの角度 × 半径。1 周でつながるよう、突風の波の数は 1 周に整数個にする
+  const wW = new THREE.Vector3().crossVectors(windAxis, dir)
+  const windK = 0.6 + 0.4 * Math.min(1, wW.length() * 1.5)   // 軸の近くでも止まりはしない
+  const qInv = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir).invert()
+  const wL = wW.clone().applyQuaternion(qInv)
+  const wind = new THREE.Vector2(wL.x, wL.z)
+  if (wind.lengthSq() < 1e-8) wind.set(1, 0); else wind.normalize()
+  const e1 = new THREE.Vector3(1, 0, 0).addScaledVector(windAxis, -windAxis.x).normalize(), e2 = new THREE.Vector3().crossVectors(windAxis, e1)
+  const ring = ground * Math.sqrt(Math.max(1e-4, 1 - dir.dot(windAxis) ** 2))   // この木の所の、軸まわりの円の半径 (m)
+  const along = Math.atan2(dir.dot(e2), dir.dot(e1)) * ring
+  const waves = l => Math.max(1, Math.round(2 * Math.PI * ring / l)) / ring
+  const uniforms = {
+    uTime: { value: 0 }, uPixel: { value: 500 },
+    uWind: { value: wind }, uWindK: { value: windK },
+    uGustK: { value: new THREE.Vector3(waves(GUST_L[0]), waves(GUST_L[1]), along) },
+    uAcross: { value: Math.asin(Math.max(-1, Math.min(1, dir.dot(windAxis)))) * ground },
+  }
   const mat = new THREE.ShaderMaterial({
     uniforms, vertexShader, fragmentShader,
     transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
