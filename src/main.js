@@ -41,6 +41,7 @@ import * as sfx from './sfx.js'
 import { createSparkleFountain } from './sparkleFountain.js'
 import { createKurage, createKurageWander } from './kurage.js'
 import { createYanagi } from './yanagi.js'
+import { createKaniWalker } from './kani.js'
 import { createTsue } from '../my-3d-parts/parts/tsue.js'
 import { createEda } from '../my-3d-parts/parts/eda.js'
 import { createBirdFlock } from './birdFlight.js'
@@ -1786,6 +1787,15 @@ const kurageWander = createKurageWander({
   groundAt: dir => { const keep = _groundHitObj; const g = Math.max(getGroundHeight(dir) - 1, R_OCEAN); _groundHitObj = keep; return g },
 })
 
+// 海辺のカニ（kani.js）: スポーン地点から北へ 80m ほどの海辺（KANI_AT）のまわりを縦歩きでうろうろする。sabちゃんが近づくと止まって、はさみを上げてチョキチョキする
+//   getGroundHeight は乗り物に乗っているかの判定用に _groundHitObj を書き換えるので戻しておく
+const KANI_AT = { lat: 76.9, lon: -84 }
+const kani = createKaniWalker({
+  scene, home: dirOf(KANI_AT.lat, KANI_AT.lon),
+  groundAt: dir => { const keep = _groundHitObj; const g = getGroundHeight(dir) - 1; _groundHitObj = keep; return g },
+  seaAt: dir => R_OCEAN + dir.dot(oceanMesh.position),
+})
+
 // 光の粒のヤナギ（yanagi.js）: クラゲの触手と同じ作りの、光の粒のヤナギ。sabちゃんが通るとすだれがよける
 //   YANAGI_ROWS の列ごとに、点を順に大円で結んだ線の上へ、始点から YANAGI_GAP (m) ごとに植える
 //   海（地面が海面 + YANAGI_SHORE より低い所）には植えない。木の形は読み込むたびにランダム
@@ -2201,6 +2211,7 @@ function animate() {
     for (const f of sparkleFountains) f.update(now / 1000, camera, renderer)
     kurage.update(now / 1000, camera, renderer)
     kurageWander.update(now / 1000, camera, renderer, { dir: pDir, flower: !!held.flower })
+    kani.update(dt, pDir)
     _yanFeet.copy(sabchan.group.position).addScaledVector(pDir, -SAB_FOOT_OFFSET)
     _yanTop.copy(sabchan.group.position).addScaledVector(pDir, 2.63 * SAB_SCALE)   // 頭のてっぺん
     for (const y of yanagis) y.update(now / 1000, dt, camera, renderer, _yanFeet, _yanTop)
