@@ -9,10 +9,10 @@ import { createKani, createKaniMotion } from '../my-3d-parts/parts/kani.js'
 //    地面の高さは毎フレーム測る（1 匹だけなので）
 // ============================================================
 
-const HEIGHT = 0.4          // カニの高さ (m)。sabちゃん（1.2m）の膝くらい
+const HEIGHT = 0.8          // カニの高さ (m)。sabちゃん（1.2m）の 3 分の 2 くらい
 const ROAM_R = 6            // 置いた所からこれより離れたら戻ってくる (m)
 const SHORE  = 0.3          // 地面が海面からこれより低い所へは行かない (m)
-const LOOK   = 0.6          // 海かどうかを見る、進む向きの少し先 (m)
+const LOOK   = 1.2          // 海かどうかを見る、進む向きの少し先 (m)
 const NEAR   = 3            // sabちゃんがこれより近いとチョキチョキする (m)
 const WALK   = [4, 9]       // 1 回に歩く時間 (s)
 const REST   = [1.5, 4]     // 1 回に休む時間 (s)
