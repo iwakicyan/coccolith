@@ -1788,7 +1788,7 @@ const kurageWander = createKurageWander({
 })
 
 // カニ（my-3d-parts/parts/kani.js の 3D モデル。kani.js）: 高さ 0.8m、開くたびに星の x プラス側（昼側）の陸のランダムな地点に 20 匹出して縦歩きでうろうろさせる
-//   sabちゃんが 3m まで近づいたカニは止まってそちらを向き、はさみを上げてチョキチョキする
+//   sabちゃんが 8m まで近づいたカニは止まってそちらを向き、はさみを上げてチョキチョキする
 //   getGroundHeight は乗り物に乗っているかの判定用に _groundHitObj を書き換えるので戻しておく
 const kanis = createKaniWalkers({
   scene, count: 20, height: 0.8, radius: R_C,

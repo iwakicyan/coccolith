@@ -16,7 +16,7 @@ const TURN_CHANGE = 1.0         // 曲がる速さが変わる時間のめやす
 const WALK_TIME   = [4, 9]      // 歩く時間 (s)
 const REST_TIME   = [1.5, 4]    // 休む時間 (s)
 const PROBE_STEP  = 0.5         // 先の地面を測る間隔 (m)
-const NEAR        = 3           // sabちゃんがこれより近いとチョキチョキする (m)
+const NEAR        = 8           // sabちゃんがこれより近いとチョキチョキする (m)
 const FACE        = 3           // sabちゃんや昼側のほうへ向きを変える速さ (rad/s)
 
 // 影の板の形：前（+z）がはさみ側。高さ 1 のときの点（x, z）
