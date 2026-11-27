@@ -41,7 +41,7 @@ import * as sfx from './sfx.js'
 import { createSparkleFountain } from './sparkleFountain.js'
 import { createKurage, createKurageWander } from './kurage.js'
 import { createYanagi } from './yanagi.js'
-import { createKaniWalker } from './kani.js'
+import { createKaniWalkers } from './kani.js'
 import { createTsue } from '../my-3d-parts/parts/tsue.js'
 import { createEda } from '../my-3d-parts/parts/eda.js'
 import { createBirdFlock } from './birdFlight.js'
@@ -1787,13 +1787,13 @@ const kurageWander = createKurageWander({
   groundAt: dir => { const keep = _groundHitObj; const g = Math.max(getGroundHeight(dir) - 1, R_OCEAN); _groundHitObj = keep; return g },
 })
 
-// 海辺のカニ（kani.js）: スポーン地点から北へ 80m ほどの海辺（KANI_AT）のまわりを縦歩きでうろうろする。sabちゃんが近づくと止まって、はさみを上げてチョキチョキする
+// カニ（my-3d-parts/parts/kani.js の 3D モデル。kani.js）: 高さ 0.8m、開くたびに星の x プラス側（昼側）の陸のランダムな地点に 20 匹出して縦歩きでうろうろさせる
+//   sabちゃんが 3m まで近づいたカニは止まってそちらを向き、はさみを上げてチョキチョキする
 //   getGroundHeight は乗り物に乗っているかの判定用に _groundHitObj を書き換えるので戻しておく
-const KANI_AT = { lat: 76.9, lon: -84 }
-const kani = createKaniWalker({
-  scene, home: dirOf(KANI_AT.lat, KANI_AT.lon),
-  groundAt: dir => { const keep = _groundHitObj; const g = getGroundHeight(dir) - 1; _groundHitObj = keep; return g },
-  seaAt: dir => R_OCEAN + dir.dot(oceanMesh.position),
+const kanis = createKaniWalkers({
+  scene, count: 20, height: 0.8, radius: R_C,
+  getGround: dir => { const keep = _groundHitObj; const g = getGroundHeight(dir) - 1; _groundHitObj = keep; return g },
+  waterLevel: R_OCEAN + TIDE_SHIFT,
 })
 
 // 光の粒のヤナギ（yanagi.js）: クラゲの触手と同じ作りの、光の粒のヤナギ。sabちゃんが通るとすだれがよける
@@ -2211,7 +2211,7 @@ function animate() {
     for (const f of sparkleFountains) f.update(now / 1000, camera, renderer)
     kurage.update(now / 1000, camera, renderer)
     kurageWander.update(now / 1000, camera, renderer, { dir: pDir, flower: !!held.flower })
-    kani.update(dt, pDir)
+    kanis.update(dt, pDir)
     _yanFeet.copy(sabchan.group.position).addScaledVector(pDir, -SAB_FOOT_OFFSET)
     _yanTop.copy(sabchan.group.position).addScaledVector(pDir, 2.63 * SAB_SCALE)   // 頭のてっぺん
     for (const y of yanagis) y.update(now / 1000, dt, camera, renderer, _yanFeet, _yanTop)
