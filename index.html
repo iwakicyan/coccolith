@@ -232,6 +232,15 @@
     .pic-arrow:hover { border-color: rgba(255,255,255,0.7); color: #fff; }
     .pic-arrow[hidden] { display: none; }
     body.shot .pic-arrow { display: none; }
+    /* 主観モードの上下のフレーム（画面の上下 10% を端へ行くほど #000 へ）。main.js の updateSabHidden で .show を付け外し */
+    #fp-frame {
+      position: fixed; inset: 0; z-index: 10; pointer-events: none;
+      background:
+        linear-gradient(to bottom, #000, rgba(0,0,0,0)) top    / 100% 10% no-repeat,
+        linear-gradient(to top,    #000, rgba(0,0,0,0)) bottom / 100% 10% no-repeat;
+      opacity: 0; transition: opacity 0.3s;
+    }
+    #fp-frame.show { opacity: 1; }
     /* 室内⇄屋外の切り替え時の暗転 */
     #fade {
       position: fixed; inset: 0; z-index: 30; background: #000;
@@ -428,6 +437,7 @@
 <button id="tab-btn" aria-label="俯瞰"></button>
 <button id="pic-prev" class="pic-arrow" aria-label="前の作品" data-i18n-aria="picPrev" hidden>‹</button>
 <button id="pic-next" class="pic-arrow" aria-label="次の作品" data-i18n-aria="picNext" hidden>›</button>
+<div id="fp-frame"></div>
 <div id="fade"></div>
   <script type="module" src="/src/main.js"></script>
 </body>

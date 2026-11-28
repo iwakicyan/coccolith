@@ -815,6 +815,7 @@ function updateSabHidden() {
   if (hide === sabHidden) return
   sabHidden = hide
   outFpPitch = 0
+  document.getElementById('fp-frame')?.classList.toggle('show', hide)   // 主観のときだけ上下に黒へ溶けるフレームを出す
   sabchan.group.traverse(o => { if (o.isMesh || o.isLine) o.visible = !hide })
   sabBeam.visible = sabLightOn && !hide
 }
