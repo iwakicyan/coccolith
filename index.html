@@ -235,9 +235,12 @@
     /* 主観モードの上下のフレーム（画面の上下 10% を端へ行くほど #000 へ）。main.js の updateSabHidden で .show を付け外し */
     #fp-frame {
       position: fixed; inset: 0; z-index: 10; pointer-events: none;
+      /* 端の濃さ 55%。真ん中側へなめらかに消えるよう、なだらかなカーブで段を刻む */
+      --fp-g: rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.47) 15%, rgba(0,0,0,0.36) 30%, rgba(0,0,0,0.25) 45%,
+              rgba(0,0,0,0.15) 60%, rgba(0,0,0,0.07) 75%, rgba(0,0,0,0.02) 90%, rgba(0,0,0,0) 100%;
       background:
-        linear-gradient(to bottom, #000, rgba(0,0,0,0)) top    / 100% 10% no-repeat,
-        linear-gradient(to top,    #000, rgba(0,0,0,0)) bottom / 100% 10% no-repeat;
+        linear-gradient(to bottom, var(--fp-g)) top    / 100% 10% no-repeat,
+        linear-gradient(to top,    var(--fp-g)) bottom / 100% 10% no-repeat;
       opacity: 0; transition: opacity 0.3s;
     }
     #fp-frame.show { opacity: 1; }
