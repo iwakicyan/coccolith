@@ -10,7 +10,25 @@ export const LANGS = [['ja', '日本語'], ['en', 'English']]
 
 const TEXT = {
   ja: {
-    ctrl: 'W/S/A/D 移動 &nbsp;|&nbsp; Q/E 旋回 &nbsp;|&nbsp; ↑↓ 見上げ/見下ろし &nbsp;|&nbsp; Tab 俯瞰切替（室内: 主観） &nbsp;|&nbsp; L ライト &nbsp;|&nbsp; Enter 決定',
+    help: '操作方法',
+    helpKeysTitle: 'キーボード',
+    helpKeys: [
+      ['W / S', '前へ / 後ろへ'],
+      ['A / D', '左右へ'],
+      ['Q / E', '旋回'],
+      ['↑ / ↓', '見上げ / 見下ろし'],
+      ['← / →', '隣の作品へ（室内の主観）'],
+      ['Tab', '俯瞰切替（室内: 主観）'],
+      ['L', 'ライト'],
+      ['Enter', '決定'],
+    ],
+    helpTouchTitle: 'タッチ',
+    helpTouch: [
+      ['左のボタン', '押している間 前へ（下に引くと後ろへ）'],
+      ['右のハンドル', '旋回・見上げ / 見下ろし'],
+      ['真ん中の目', '俯瞰切替（室内: 主観）'],
+      ['ジャイロ', '設定で ON にすると端末の傾きで見回す（主観）'],
+    ],
     settings: '設定',
     drive: '直進',
     picPrev: '前の作品',
@@ -58,7 +76,25 @@ const TEXT = {
     noteErrOrigin: 'ここからは書けません',
   },
   en: {
-    ctrl: 'W/S/A/D Move &nbsp;|&nbsp; Q/E Turn &nbsp;|&nbsp; ↑↓ Look up/down &nbsp;|&nbsp; Tab Overview (indoors: first-person) &nbsp;|&nbsp; L Light &nbsp;|&nbsp; Enter Select',
+    help: 'Controls',
+    helpKeysTitle: 'Keyboard',
+    helpKeys: [
+      ['W / S', 'Forward / back'],
+      ['A / D', 'Left / right'],
+      ['Q / E', 'Turn'],
+      ['↑ / ↓', 'Look up / down'],
+      ['← / →', 'Next work (indoor first-person)'],
+      ['Tab', 'Overview (indoors: first-person)'],
+      ['L', 'Light'],
+      ['Enter', 'Select'],
+    ],
+    helpTouchTitle: 'Touch',
+    helpTouch: [
+      ['Left button', 'Hold to go forward (pull down to go back)'],
+      ['Right handle', 'Turn / look up and down'],
+      ['Center eye', 'Overview (indoors: first-person)'],
+      ['Gyro', 'Turn on in settings to look around by tilting (first-person)'],
+    ],
     settings: 'Settings',
     drive: 'Go forward',
     picPrev: 'Previous work',

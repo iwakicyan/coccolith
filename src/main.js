@@ -7,6 +7,7 @@ import { vJoy, initJoysticks } from './joystick.js'
 import { createCompass, createVethIndicator } from './hud.js'
 import { initFullscreenButton } from './fullscreen.js'
 import { initSettings, showSettingsFor, handleInvert, invSign, moveSpeed, outdoorView } from './settings.js'
+import { initHelp } from './help.js'
 import { takeGyroDelta } from './gyro.js'
 import { initVisitCounter } from './visitCounter.js'
 import { isFlowerCutOpen } from './flowerCut.js'
@@ -1092,6 +1093,7 @@ initJoysticks()
 // --- HUD ----------------------------------------------------
 initFullscreenButton(document.getElementById('fs-btn'))
 sfx.initSoundButton(document.getElementById('sound-btn'))
+initHelp(document.getElementById('help-btn'), document.getElementById('help'))
 initSettings(document.getElementById('settings-btn'), document.getElementById('settings'), { onOutdoorView: updateTabBtn })
 onLangChange(updateTabBtnLabel)
 updateTabBtn()   // 前回の設定が屋外の主観なら、始めから sabちゃんを隠す
